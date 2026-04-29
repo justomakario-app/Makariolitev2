@@ -1,0 +1,40 @@
+# Macario Lite — gitignore raíz
+
+# === MCP / secrets ===
+# .mcp.json contiene SUPABASE_ACCESS_TOKEN hardcodeado.
+# NO commitear nunca. Cada dev tiene su propio PAT y arma su .mcp.json local.
+.mcp.json
+
+# === Env vars ===
+.env
+.env.local
+.env.*.local
+*.env
+
+# === Dependencias / build (Vite + React + TS) ===
+node_modules/
+dist/
+build/
+.vite/
+
+# === Supabase CLI local (cuando lo agreguemos) ===
+.branches/
+.temp/
+supabase/.branches/
+supabase/.temp/
+
+# === Sistema / IDE ===
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# === Logs / coverage ===
+coverage/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
