@@ -1,16 +1,15 @@
 {
   "name": "macario-lite-monorepo",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "workspaces": [
     "shared",
-    "web",
     "mobile"
   ],
   "scripts": {
-    "dev:web": "npm run dev --workspace=web",
+    "dev:web": "echo 'web/ es estático — abrí web/Macario Lite.html con un static server (ej: npx serve web)'",
     "dev:mobile": "npm run dev --workspace=mobile",
-    "build:web": "npm run build --workspace=web",
+    "build:web": "echo 'web/ es estático — no requiere build'",
     "build:mobile": "npm run build --workspace=mobile",
     "typecheck": "npm run typecheck --workspaces --if-present"
   }

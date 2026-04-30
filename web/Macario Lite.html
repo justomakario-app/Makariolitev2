@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Macario Lite · Sistema de Gestión</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="components/styles.css">
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- React + Babel + Supabase JS (UMD) -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
+  <!-- Data layer (Supabase real) — antes era mock.js -->
+  <script src="components/data.js?v=1"></script>
+  <script src="components/xlsx.js?v=10"></script>
+
+  <!-- Componentes (Babel JSX inline) -->
+  <script type="text/babel" src="components/shared.jsx?v=11"></script>
+  <script type="text/babel" src="components/login.jsx?v=11"></script>
+  <script type="text/babel" src="components/sidebar.jsx?v=11"></script>
+  <script type="text/babel" src="components/dashboard.jsx?v=11"></script>
+  <script type="text/babel" src="components/carrier.jsx?v=11"></script>
+  <script type="text/babel" src="components/produccion.jsx?v=11"></script>
+  <script type="text/babel" src="components/modals.jsx?v=11"></script>
+  <script type="text/babel" src="components/pages.jsx?v=11"></script>
+  <script type="text/babel" src="components/app.jsx?v=11"></script>
+
+  <!-- Boot: espera a que los componentes y supabase-js estén listos -->
+  <script>
+    (function boot() {
+      if (
+        window.App && window.LoginScreen && window.Sidebar && window.DashboardPage
+        && window.supabase && window.SUPA
+      ) {
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(React.createElement(App));
+      } else {
+        setTimeout(boot, 40);
+      }
+    })();
+  </script>
+</body>
+</html>

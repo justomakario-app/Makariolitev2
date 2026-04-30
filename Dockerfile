@@ -1,61 +1,55 @@
 # ═══════════════════════════════════════════════════════════════════════════
 # Macario Lite — Dockerfile multi-stage
 # ───────────────────────────────────────────────────────────────────────────
-# Stage 1 (builder): instala deps de monorepo + builda /web/ y /mobile/
-# Stage 2 (nginx):   sirve ambos en paths distintos (/ y /m/) en mismo origin
+# Stage 1 (builder): instala deps + builda mobile (PWA Vite)
+# Stage 2 (nginx):   sirve web/ directo (HTML+JSX estáticos) y mobile/dist
 # ═══════════════════════════════════════════════════════════════════════════
 
 # ──────────────────────────────────────────────────────────────────────────
-# STAGE 1 — builder
+# STAGE 1 — builder (solo mobile)
 # ──────────────────────────────────────────────────────────────────────────
 FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# ARG → recibidos desde EasyPanel (sección "Build args" del service).
-# Vite los embebe en el bundle JS en build time — son públicos.
+# Args públicos para mobile (Vite los embebe)
 ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_ANON_KEY
 ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
 ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
 
-# Copiar SOLO los package.json para cachear el `npm install` mientras
-# no cambien las deps. Si cambia el source pero no las deps, el cache
-# de npm install se reusa.
+# package.json para cache layer (solo workspaces que necesita mobile)
 COPY package.json ./
 COPY shared/package.json ./shared/package.json
-COPY web/package.json ./web/package.json
 COPY mobile/package.json ./mobile/package.json
 
-# Install de todos los workspaces de una.
-# `--include=dev` porque vite/typescript están en devDependencies y
-# son requeridos para el build.
-RUN npm install --include=dev
+RUN npm install --include=dev --ignore-scripts
 
-# Copiar source completo de cada workspace (esto invalida el cache si
-# cambia cualquier .ts/.tsx)
+# Source
 COPY shared ./shared
-COPY web ./web
 COPY mobile ./mobile
 
-# Build ambos frontends.
-# - web/ outputs a /app/web/dist/
-# - mobile/ outputs a /app/mobile/dist/ (con base /m/ del vite.config.ts)
-RUN npm run build:web && npm run build:mobile
+RUN npm run build:mobile
 
 # ──────────────────────────────────────────────────────────────────────────
 # STAGE 2 — nginx production
 # ──────────────────────────────────────────────────────────────────────────
 FROM nginx:alpine
 
-# Copiar los dos builds al document root, en paths separados
-COPY --from=builder /app/web/dist     /usr/share/nginx/html
-COPY --from=builder /app/mobile/dist  /usr/share/nginx/html/m
+# Web: HTML + JSX + CSS estáticos (no se compilan, los sirve nginx tal cual)
+COPY web /usr/share/nginx/html
 
-# Config de nginx con routing /, /m/ y headers correctos para SW + PWA
+# Hacemos un index.html copia exacta de "Macario Lite.html" para que
+# nginx sirva en `/` sin forzar la URL con espacio. El original queda
+# intacto en el filesystem (el cliente quiso conservarlo así).
+RUN cp "/usr/share/nginx/html/Macario Lite.html" /usr/share/nginx/html/index.html
+
+# Mobile (PWA Vite)
+COPY --from=builder /app/mobile/dist /usr/share/nginx/html/m
+
+# Config
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Healthcheck: verifica que nginx responde
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost/ || exit 1
 
