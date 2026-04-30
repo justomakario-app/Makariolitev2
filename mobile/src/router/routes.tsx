@@ -6,9 +6,11 @@ import { HomePage } from '@/components/pages/HomePage';
 import { ProduccionPage } from '@/components/pages/ProduccionPage';
 import { NotificacionesPage } from '@/components/pages/NotificacionesPage';
 import { ScanPage } from '@/components/pages/ScanPage';
+import { CarrierPage } from '@/components/pages/CarrierPage';
+import { ImportarPage } from '@/components/pages/ImportarPage';
 import {
   PerfilPage,
-  CarrierPage, HistoricoPage, CatalogoPage, EquipoPage, ImportarPage,
+  HistoricoPage, CatalogoPage, EquipoPage,
 } from '@/components/pages/StubPages';
 
 export const router = createBrowserRouter(

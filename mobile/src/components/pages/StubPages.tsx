@@ -101,22 +101,14 @@ export function PerfilPage() {
   );
 }
 
-export function CarrierPage() {
-  return <Stub title="Canal" hint="Vista por canal con cierre de jornada (Colecta/Flex). Backend listo via useCarrierTable + rpc_close_jornada. Próxima fase."/>;
-}
-
 export function HistoricoPage() {
-  return <Stub title="Histórico" hint="Calendario mensual + filtros + KPIs. Backend listo via view_historico_dia. Fase 6 Tier 3."/>;
+  return <Stub title="Histórico" hint="Calendario mensual + filtros + KPIs. Backend listo via view_historico_dia. Tier 3 — usar /web por ahora."/>;
 }
 
 export function CatalogoPage() {
-  return <Stub title="Catálogo" hint="Lista de SKUs read-only en mobile. Edición via /web. Fase 6 Tier 3."/>;
+  return <Stub title="Catálogo" hint="Lista de SKUs read-only. ABM completo está en /web (desktop). Tier 3."/>;
 }
 
 export function EquipoPage() {
-  return <Stub title="Equipo" hint="Lista de usuarios read-only. Backend: profiles. Fase 6 Tier 3."/>;
-}
-
-export function ImportarPage() {
-  return <Stub title="Importar Excel" hint="File picker + SheetJS + sha256 + rpc_import_batch. Sebastián importa desde el celular. Fase 8."/>;
+  return <Stub title="Equipo" hint="Lista de usuarios read-only. Backend: profiles. Tier 3."/>;
 }
