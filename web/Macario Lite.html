@@ -7,9 +7,26 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="components/styles.css">
+  <link rel="stylesheet" href="components/styles.css?v=2">
 </head>
 <body>
+  <!-- Auto-redirect a la PWA mobile (/m/) si el viewport es de celular.
+       Corre ANTES de cargar React/Supabase para no consumir recursos en vano.
+       Si el user llegó por bookmark "Add to home screen" del PWA, ya está en /m/
+       y no entra acá. -->
+  <script>
+    (function () {
+      try {
+        var isMobile = window.matchMedia && window.matchMedia('(max-width: 820px)').matches;
+        var alreadyOnMobile = location.pathname.indexOf('/m/') === 0 || location.pathname === '/m';
+        var bypass = location.search.indexOf('desktop=1') >= 0;
+        if (isMobile && !alreadyOnMobile && !bypass) {
+          location.replace('/m/' + location.search + location.hash);
+        }
+      } catch (e) { /* fallback silencioso */ }
+    })();
+  </script>
+
   <div id="root"></div>
 
   <!-- React + Babel + Supabase JS (UMD) -->

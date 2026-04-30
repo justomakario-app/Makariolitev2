@@ -726,6 +726,20 @@ select.field-input { cursor: pointer; }
   .page { padding: 20px 16px 40px; }
   .kpi-grid { grid-template-columns: 1fr 1fr; }
   .page-header { flex-direction: column; gap: 12px; }
+  /* Cards de canales en 2x2 (no 4x1) */
+  .channel-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .channel-card { min-height: 130px; padding: 16px; }
+  .channel-card-num { font-size: clamp(1.6rem, 6vw, 2.4rem); }
+  .carrier-kpis { grid-template-columns: 1fr; }
+  .carrier-header { padding: 14px 16px; }
+  .carrier-banner { margin: 12px 16px 0; padding: 10px 14px; font-size: 12px; }
+  .carrier-body { padding: 16px 16px 32px; }
+  .carrier-actions .btn-ghost,
+  .carrier-actions .btn-primary { padding: 7px 12px; font-size: 10px; }
+  .prod-header-inner { padding: 10px 16px 0; }
+  .prod-tabs-row { padding: 8px 16px; }
+  .data-table { font-size: 11px; }
+  .data-table th, .data-table td { padding: 8px 10px; }
 }
 
 /* ══ DASHBOARD HERO ══ */
