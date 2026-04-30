@@ -1,8 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-import { queryClient } from '@/lib/queryClient';
-import type { Database, Json } from '@/types/database.types';
+import { supabase } from '../lib/supabase';
+import { queryClient } from '../lib/queryClient';
+import type { Database, Json } from '../types/database.types';
 
 type CarrierMeta = Database['public']['Views']['view_carrier_with_meta']['Row'];
 type Order = Database['public']['Tables']['orders']['Row'];

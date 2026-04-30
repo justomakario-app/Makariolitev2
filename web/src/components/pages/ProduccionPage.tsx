@@ -2,11 +2,11 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Icon } from '@/components/shared/Icon';
 import { ProduceModal } from '@/components/modals/ProduceModal';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@macario/shared/lib/supabase';
 import { useQuery } from '@tanstack/react-query';
-import { useChannels } from '@/hooks/useChannels';
-import { queryClient } from '@/lib/queryClient';
-import type { Database } from '@/types/database.types';
+import { useChannels } from '@macario/shared/hooks/useChannels';
+import { queryClient } from '@macario/shared/lib/queryClient';
+import type { Database } from '@macario/shared/types/database.types';
 
 type CarrierMeta = Database['public']['Views']['view_carrier_with_meta']['Row'];
 type ProdLog = Database['public']['Tables']['production_logs']['Row'];

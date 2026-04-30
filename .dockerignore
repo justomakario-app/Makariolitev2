@@ -1,0 +1,43 @@
+# ═════════════════════════════════════════════════════════════════
+# .dockerignore — qué NO copiar al Docker build context
+# ═════════════════════════════════════════════════════════════════
+
+# Dependencias (se instalan dentro del container)
+node_modules
+**/node_modules
+
+# Builds previos (rebuilda en Docker)
+**/dist
+**/build
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Credenciales / config local — NUNCA al container
+.mcp.json
+.env
+.env.local
+.env.*.local
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Editor / OS
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+
+# Lo que el container no necesita en runtime:
+# - app-makario-lite-nueva/: prototipo HTML legacy (referencia, no runtime)
+# - supabase/: migrations SQL (corren contra Supabase, no contra el container)
+# - DEPLOY.md, *.md de docs
+app-makario-lite-nueva/
+supabase/
+DEPLOY.md

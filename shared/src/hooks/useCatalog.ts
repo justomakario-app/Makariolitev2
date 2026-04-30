@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
-import type { Database } from '@/types/database.types';
+import { supabase } from '../lib/supabase';
+import type { Database } from '../types/database.types';
 
 type SkuCatalog = Database['public']['Tables']['sku_catalog']['Row'];
 type SkuCategory = Database['public']['Tables']['sku_categories']['Row'];

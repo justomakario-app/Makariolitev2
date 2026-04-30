@@ -5,12 +5,12 @@ import { useToast } from '@/components/shared/Toast';
 import { ConfirmModal } from '@/components/shared/Modal';
 import { ProduceModal } from '@/components/modals/ProduceModal';
 import { ImportModal } from '@/components/modals/ImportModal';
-import { useChannel } from '@/hooks/useChannels';
+import { useChannel } from '@macario/shared/hooks/useChannels';
 import {
   useCarrierTable, useCarrierOrders, useCarrierBatches,
   useCloseJornada,
-} from '@/hooks/useCarrier';
-import { fmt, skuName } from '@/lib/fmt';
+} from '@macario/shared/hooks/useCarrier';
+import { fmt, skuName } from '@macario/shared/lib/fmt';
 
 export function CarrierPage() {
   const { canal } = useParams<{ canal: string }>();

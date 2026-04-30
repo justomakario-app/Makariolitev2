@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
-import type { Database } from '@/types/database.types';
+import { supabase } from '../lib/supabase';
+import type { Database } from '../types/database.types';
 
 type Channel = Database['public']['Tables']['channels']['Row'];
 

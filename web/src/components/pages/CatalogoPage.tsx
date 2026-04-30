@@ -4,9 +4,9 @@ import { useToast } from '@/components/shared/Toast';
 import { ConfirmModal } from '@/components/shared/Modal';
 import { ProductoEditModal } from '@/components/modals/ProductoEditModal';
 import { QRBatchModal } from '@/components/modals/QRBatchModal';
-import { useSkuCatalog, useToggleSkuActive } from '@/hooks/useCatalog';
-import { useCurrentProfile } from '@/hooks/useAuth';
-import type { Database } from '@/types/database.types';
+import { useSkuCatalog, useToggleSkuActive } from '@macario/shared/hooks/useCatalog';
+import { useCurrentProfile } from '@macario/shared/hooks/useAuth';
+import type { Database } from '@macario/shared/types/database.types';
 
 type Sku = Database['public']['Tables']['sku_catalog']['Row'];
 

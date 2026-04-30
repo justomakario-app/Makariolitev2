@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Icon } from '@/components/shared/Icon';
 import { Logo } from '@/components/shared/Logo';
-import { useLogin, useSession } from '@/hooks/useAuth';
+import { useLogin, useSession } from '@macario/shared/hooks/useAuth';
 
 export function LoginScreen() {
   const [user, setUser] = useState('');

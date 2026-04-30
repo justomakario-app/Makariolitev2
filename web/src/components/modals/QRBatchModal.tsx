@@ -4,7 +4,7 @@ import { jsPDF } from 'jspdf';
 import { Modal } from '@/components/shared/Modal';
 import { Icon } from '@/components/shared/Icon';
 import { useToast } from '@/components/shared/Toast';
-import type { Database } from '@/types/database.types';
+import type { Database } from '@macario/shared/types/database.types';
 
 type Sku = Database['public']['Tables']['sku_catalog']['Row'];
 

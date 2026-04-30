@@ -3,10 +3,10 @@ import * as XLSX from 'xlsx';
 import { Modal } from '@/components/shared/Modal';
 import { Icon } from '@/components/shared/Icon';
 import { useToast } from '@/components/shared/Toast';
-import { useChannels } from '@/hooks/useChannels';
-import { useSkuCatalog } from '@/hooks/useCatalog';
-import { useImportBatch } from '@/hooks/useCarrier';
-import { sha256Hex } from '@/lib/queryClient';
+import { useChannels } from '@macario/shared/hooks/useChannels';
+import { useSkuCatalog } from '@macario/shared/hooks/useCatalog';
+import { useImportBatch } from '@macario/shared/hooks/useCarrier';
+import { sha256Hex } from '@macario/shared/lib/queryClient';
 
 interface Props {
   open: boolean;

@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { Modal } from '@/components/shared/Modal';
 import { Icon } from '@/components/shared/Icon';
 import { useToast } from '@/components/shared/Toast';
-import { useChannels } from '@/hooks/useChannels';
-import { useSkuCatalog } from '@/hooks/useCatalog';
-import { useRegisterProduction } from '@/hooks/useCarrier';
+import { useChannels } from '@macario/shared/hooks/useChannels';
+import { useSkuCatalog } from '@macario/shared/hooks/useCatalog';
+import { useRegisterProduction } from '@macario/shared/hooks/useCarrier';
 
 interface Props {
   open: boolean;

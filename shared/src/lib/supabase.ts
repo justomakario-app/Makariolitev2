@@ -1,5 +1,6 @@
+/// <reference types="vite/client" />
 import { createClient } from '@supabase/supabase-js';
-import type { Database } from '@/types/database.types';
+import type { Database } from '../types/database.types';
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -21,7 +22,14 @@ export const supabase = createClient<Database>(url, anonKey, {
   },
 });
 
-/** Convención decisión B: username → email virtual */
-export function usernameToEmail(username: string): string {
-  return `${username.trim().toLowerCase()}@macario.local`;
+/**
+ * Resuelve el input del campo "Usuario" del login a un email.
+ * - Si el input ya contiene '@', se usa tal cual (acepta emails reales como
+ *   `justomakariotech@gmail.com`).
+ * - Si no, se aplica la convención decisión B: `{username}@macario.local`.
+ */
+export function usernameToEmail(usernameOrEmail: string): string {
+  const trimmed = usernameOrEmail.trim().toLowerCase();
+  if (trimmed.includes('@')) return trimmed;
+  return `${trimmed}@macario.local`;
 }

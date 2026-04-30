@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { User, Session } from '@supabase/supabase-js';
-import { supabase, usernameToEmail } from '@/lib/supabase';
-import type { Database } from '@/types/database.types';
+import { supabase, usernameToEmail } from '../lib/supabase';
+import type { Database } from '../types/database.types';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 type RolePerm = Database['public']['Tables']['role_permissions']['Row'];

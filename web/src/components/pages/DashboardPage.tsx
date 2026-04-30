@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '@/components/shared/Icon';
-import { useDashboardKpis } from '@/hooks/useDashboard';
+import { useDashboardKpis } from '@macario/shared/hooks/useDashboard';
 
 export function DashboardPage() {
   const { data: kpis, isLoading } = useDashboardKpis();
