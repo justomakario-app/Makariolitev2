@@ -1,11 +1,29 @@
 import { useState } from 'react';
 import { Icon } from '@/components/shared/Icon';
-import { useSkuCatalog } from '@/hooks/useCatalog';
+import { useToast } from '@/components/shared/Toast';
+import { ConfirmModal } from '@/components/shared/Modal';
+import { ProductoEditModal } from '@/components/modals/ProductoEditModal';
+import { QRBatchModal } from '@/components/modals/QRBatchModal';
+import { useSkuCatalog, useToggleSkuActive } from '@/hooks/useCatalog';
+import { useCurrentProfile } from '@/hooks/useAuth';
+import type { Database } from '@/types/database.types';
+
+type Sku = Database['public']['Tables']['sku_catalog']['Row'];
 
 export function CatalogoPage() {
+  const { data: profileData } = useCurrentProfile();
   const { data: skus = [] } = useSkuCatalog({ activeOnly: false });
+  const toggleActive = useToggleSkuActive();
+  const toast = useToast();
+
   const [filter, setFilter] = useState('');
   const [cat, setCat] = useState('todas');
+  const [editing, setEditing] = useState<{ open: boolean; sku: Sku | null }>({ open: false, sku: null });
+  const [qrBatch, setQrBatch] = useState(false);
+  const [confirmToggle, setConfirmToggle] = useState<Sku | null>(null);
+
+  const role = profileData?.profile?.role;
+  const canWrite = role === 'owner' || role === 'admin';
 
   const cats = [...new Set(skus.map(s => s.categoria))];
 
@@ -20,12 +38,34 @@ export function CatalogoPage() {
     return true;
   });
 
+  const onToggle = async (s: Sku) => {
+    try {
+      await toggleActive.mutateAsync({ sku: s.sku, activo: !s.activo });
+      toast.success(`${s.sku} ${s.activo ? 'desactivado' : 'reactivado'}`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
   return (
     <div className="page">
       <div className="page-header">
         <div>
           <div className="page-title">Catálogo</div>
           <div className="page-sub">{skus.length} SKUs · {skus.filter(s => s.es_fabricado).length} fabricados</div>
+        </div>
+        <div style={{display:'flex', gap:8}}>
+          <button className="btn-ghost" onClick={() => setQrBatch(true)} disabled={filtered.length === 0}>
+            <Icon n="qr" s={13}/> Generar QR PDF ({filtered.length})
+          </button>
+          {canWrite && (
+            <button
+              className="btn-primary"
+              onClick={() => setEditing({ open: true, sku: null })}
+            >
+              <Icon n="plus" s={13}/> Nuevo producto
+            </button>
+          )}
         </div>
       </div>
 
@@ -48,10 +88,26 @@ export function CatalogoPage() {
 
       <div className="card">
         <table className="data-table">
-          <thead><tr><th>SKU</th><th>Modelo</th><th>Color</th><th>Categoría</th><th>Tipo</th><th>Estado</th></tr></thead>
+          <thead>
+            <tr>
+              <th>SKU</th>
+              <th>Modelo</th>
+              <th>Color</th>
+              <th>Categoría</th>
+              <th>Tipo</th>
+              <th>Estado</th>
+              {canWrite && <th></th>}
+            </tr>
+          </thead>
           <tbody>
-            {filtered.map(c => (
-              <tr key={c.sku}>
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan={canWrite ? 7 : 6} style={{textAlign:'center', padding:'40px 20px', color:'var(--ink-muted)', fontSize:12}}>
+                  Sin productos que coincidan con el filtro.
+                </td>
+              </tr>
+            ) : filtered.map(c => (
+              <tr key={c.sku} style={{opacity: c.activo ? 1 : 0.55}}>
                 <td><span className="order-num">{c.sku}</span></td>
                 <td style={{fontWeight:600}}>{c.modelo}</td>
                 <td>
@@ -77,15 +133,63 @@ export function CatalogoPage() {
                     </span>
                   : <span style={{fontSize:11, color:'var(--ink-muted)'}}>Inactivo</span>}
                 </td>
+                {canWrite && (
+                  <td style={{textAlign:'right', width:1, whiteSpace:'nowrap'}}>
+                    <button
+                      className="btn-ghost"
+                      style={{padding:'5px 10px', fontSize:10, marginRight:4}}
+                      onClick={() => setEditing({ open: true, sku: c })}
+                    >
+                      <Icon n="edit" s={11}/> Editar
+                    </button>
+                    <button
+                      className="btn-ghost"
+                      style={{padding:'5px 10px', fontSize:10}}
+                      onClick={() => setConfirmToggle(c)}
+                      title={c.activo ? 'Desactivar' : 'Reactivar'}
+                    >
+                      <Icon n={c.activo ? 'x' : 'check'} s={11}/>
+                      {c.activo ? ' Desactivar' : ' Activar'}
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      <div style={{marginTop:16, padding:14, background:'var(--paper-off)', border:'1px dashed var(--border-md)', borderRadius:6, fontSize:11, color:'var(--ink-soft)'}}>
-        <Icon n="info" s={12}/> ABM completo (crear / editar / desactivar SKU) — pendiente de portar el modal del frontend mock al esquema TS+RLS. La data ya viene de Supabase con RLS policies activas.
-      </div>
+      {!canWrite && (
+        <div style={{
+          marginTop:16, padding:14, background:'var(--paper-off)',
+          border:'1px dashed var(--border-md)', borderRadius:6,
+          fontSize:11, color:'var(--ink-soft)',
+        }}>
+          <Icon n="info" s={12}/> Solo owner / admin pueden crear o editar SKUs. Estás en modo lectura.
+        </div>
+      )}
+
+      <ProductoEditModal
+        open={editing.open}
+        editing={editing.sku}
+        onClose={() => setEditing({ open: false, sku: null })}
+      />
+      <QRBatchModal
+        open={qrBatch}
+        skus={filtered}
+        onClose={() => setQrBatch(false)}
+      />
+      <ConfirmModal
+        open={!!confirmToggle}
+        title={confirmToggle?.activo ? `Desactivar ${confirmToggle.sku}` : `Reactivar ${confirmToggle?.sku ?? ''}`}
+        message={confirmToggle?.activo
+          ? `El SKU ${confirmToggle.sku} ya no aparecerá en producción ni en imports nuevos. Los registros históricos se preservan. Esta acción es reversible.`
+          : `Reactivar ${confirmToggle?.sku ?? ''} — vuelve a estar disponible para producción e import.`}
+        confirmText={confirmToggle?.activo ? 'Desactivar' : 'Reactivar'}
+        danger={confirmToggle?.activo}
+        onConfirm={() => confirmToggle && onToggle(confirmToggle)}
+        onClose={() => setConfirmToggle(null)}
+      />
     </div>
   );
 }

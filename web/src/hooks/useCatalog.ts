@@ -53,6 +53,39 @@ export function useUpsertSku() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['sku-catalog'] });
       qc.invalidateQueries({ queryKey: ['carrier-table'] });
+      qc.invalidateQueries({ queryKey: ['all-carriers'] });
+    },
+  });
+}
+
+export function useUpsertCategory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (name: string) => {
+      const { error } = await supabase
+        .from('sku_categories')
+        .insert({ name: name.trim() });
+      if (error && error.code !== '23505') throw error; // 23505 = unique violation OK
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['sku-categories'] });
+    },
+  });
+}
+
+export function useToggleSkuActive() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { sku: string; activo: boolean }) => {
+      const { error } = await supabase
+        .from('sku_catalog')
+        .update({ activo: vars.activo })
+        .eq('sku', vars.sku);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['sku-catalog'] });
+      qc.invalidateQueries({ queryKey: ['carrier-table'] });
     },
   });
 }
