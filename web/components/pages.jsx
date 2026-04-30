@@ -869,8 +869,168 @@ function NotificacionesPage() {
   );
 }
 
+/* ══ MODAL: Cambiar contraseña (Seguridad) ══ */
+function SecurityModal({ open, onClose }) {
+  const M = window.useMockData();
+  const toast = useToast();
+  const [pw, setPw] = useState('');
+  const [pw2, setPw2] = useState('');
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => { if (open) { setPw(''); setPw2(''); setShow(false); } }, [open]);
+
+  const submit = async () => {
+    if (pw.length < 6)  { toast.error('La contraseña debe tener al menos 6 caracteres'); return; }
+    if (pw !== pw2)     { toast.error('Las contraseñas no coinciden'); return; }
+    setBusy(true);
+    try {
+      const { error } = await window.SUPA.auth.updateUser({ password: pw });
+      if (error) throw new Error(error.message);
+      toast.success('Contraseña actualizada · usá la nueva en el próximo login');
+      onClose();
+    } catch (e) {
+      toast.error(e.message || 'No se pudo cambiar la contraseña');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title="Seguridad · Cambiar contraseña" footer={
+      <>
+        <button className="btn-ghost" onClick={onClose}>Cancelar</button>
+        <button className="btn-primary" onClick={submit} disabled={busy || !pw || !pw2}>
+          {busy ? <span className="loader" style={{borderColor:'rgba(255,255,255,.3)', borderTopColor:'#fff'}}/> : <><Icon n="check" s={14}/> Cambiar contraseña</>}
+        </button>
+      </>
+    }>
+      <div style={{fontSize:12, color:'var(--ink-soft)', lineHeight:1.6, marginBottom:16, padding:'10px 12px', background:'var(--paper-off)', border:'1px solid var(--border)', borderRadius:6}}>
+        <Icon n="info" s={12}/>{' '}
+        Cambiarás la contraseña de <strong>@{M.user.username}</strong>. Asegurate de recordarla — no podemos recuperarla.
+      </div>
+      <div className="field-group">
+        <label className="field-label">Nueva contraseña</label>
+        <div style={{position:'relative'}}>
+          <input className="field-input" type={show?'text':'password'} value={pw} onChange={e=>setPw(e.target.value)} placeholder="Mínimo 6 caracteres" style={{paddingRight:40, fontFamily:'var(--mono)'}} autoFocus/>
+          <button type="button" onClick={()=>setShow(s=>!s)} style={{position:'absolute', right:6, top:'50%', transform:'translateY(-50%)', background:'none', border:'none', cursor:'pointer', padding:8, color:'var(--ink-muted)'}} tabIndex={-1}>
+            <Icon n={show?'eye-off':'eye'} s={14}/>
+          </button>
+        </div>
+      </div>
+      <div className="field-group">
+        <label className="field-label">Repetir contraseña</label>
+        <input className="field-input" type={show?'text':'password'} value={pw2} onChange={e=>setPw2(e.target.value)} placeholder="Repetí la nueva contraseña" style={{fontFamily:'var(--mono)'}}/>
+      </div>
+    </Modal>
+  );
+}
+
+/* ══ MODAL: Canales de venta (editar horarios) ══ */
+function ChannelsConfigModal({ open, onClose }) {
+  const M = window.useMockData();
+  const toast = useToast();
+  const canEdit = M.user.role === 'owner' || M.user.role === 'admin';
+  const [edits, setEdits] = useState({});
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => { if (open) setEdits({}); }, [open]);
+
+  const setField = (id, k, v) => setEdits(s => ({ ...s, [id]: { ...(s[id] || {}), [k]: v } }));
+
+  const save = async () => {
+    if (!canEdit) { toast.error('Solo owner o admin pueden modificar canales'); return; }
+    setBusy(true);
+    try {
+      for (const [id, patch] of Object.entries(edits)) {
+        const { error } = await window.SUPA.from('channels').update(patch).eq('id', id);
+        if (error) throw new Error(`Error en ${id}: ${error.message}`);
+      }
+      await window.bootstrap?.();
+      toast.success('Canales actualizados');
+      onClose();
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const channels = ['colecta','flex','tiendanube','distribuidor'];
+
+  return (
+    <Modal open={open} onClose={onClose} title="Canales de venta · Horarios" size="lg" footer={
+      <>
+        <button className="btn-ghost" onClick={onClose}>Cerrar</button>
+        {canEdit && (
+          <button className="btn-primary" onClick={save} disabled={busy || !Object.keys(edits).length}>
+            {busy ? <span className="loader"/> : <><Icon n="check" s={14}/> Guardar cambios</>}
+          </button>
+        )}
+      </>
+    }>
+      {!canEdit && (
+        <div style={{padding:'10px 12px', background:'var(--paper-off)', border:'1px dashed var(--border-md)', borderRadius:6, fontSize:11, color:'var(--ink-soft)', marginBottom:14}}>
+          <Icon n="info" s={12}/> Estás en modo lectura. Solo owner / admin pueden editar.
+        </div>
+      )}
+      <div style={{display:'flex', flexDirection:'column', gap:10}}>
+        {channels.map(id => {
+          const C = window.CARRIERS[id] || {};
+          const e = edits[id] || {};
+          const cierreActual = e.cierre_hora ?? (C.cierreHora || '');
+          const tipoActual = e.tipo_cierre ?? C.tipo_cierre;
+          return (
+            <div key={id} style={{padding:14, border:'1px solid var(--border)', borderRadius:6, background:'var(--paper)'}}>
+              <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:10}}>
+                <div style={{width:8, height:8, borderRadius:'50%', background:C.color}}/>
+                <div style={{fontSize:13, fontWeight:700}}>{C.label}</div>
+                <div style={{fontSize:11, color:'var(--ink-muted)', fontFamily:'var(--mono)'}}>· {id}</div>
+              </div>
+              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
+                <div>
+                  <label className="field-label">Tipo de cierre</label>
+                  <select className="field-input" value={tipoActual} disabled={!canEdit} onChange={ev => setField(id,'tipo_cierre', ev.target.value)}>
+                    <option value="horario">Horario diario</option>
+                    <option value="flexible">Flexible (sin cierre obligatorio)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="field-label">Hora de cierre</label>
+                  <input
+                    type="time"
+                    className="field-input"
+                    value={cierreActual.slice(0,5)}
+                    disabled={!canEdit || tipoActual === 'flexible'}
+                    onChange={ev => setField(id,'cierre_hora', ev.target.value || null)}
+                    placeholder="HH:MM"
+                  />
+                  {tipoActual === 'flexible' && (
+                    <div style={{fontSize:10, color:'var(--ink-muted)', marginTop:4}}>No aplica para canales flexibles.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Modal>
+  );
+}
+
 /* ── Configuración ── */
 function ConfigPage() {
+  const toast = useToast();
+  const [openSec, setOpenSec] = useState(false);
+  const [openChannels, setOpenChannels] = useState(false);
+
+  const cards = [
+    { i:'shield',   t:'Seguridad',        s:'Cambiar contraseña',                         action: () => setOpenSec(true) },
+    { i:'bell',     t:'Notificaciones',   s:'Preferencias y umbrales de alerta',          action: () => toast.info('Notificaciones se gestionan desde la sección Notificaciones del menú.') },
+    { i:'truck',    t:'Canales de venta', s:'Horarios de cierre por canal',                action: () => setOpenChannels(true) },
+    { i:'settings', t:'Sistema',          s:'Backup y exportación · próximamente',         action: () => toast.info('Para backup/exportación, usar el panel de Supabase Studio por ahora.') },
+  ];
+
   return (
     <div className="page">
       <div className="page-header">
@@ -881,13 +1041,14 @@ function ConfigPage() {
       </div>
 
       <div style={{display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:12}}>
-        {[
-          { i:'shield',   t:'Seguridad',     s:'Cambiar contraseña, sesiones activas' },
-          { i:'bell',     t:'Notificaciones', s:'Preferencias y umbrales de alerta' },
-          { i:'truck',    t:'Canales de venta', s:'Horarios de cierre, plantillas Excel' },
-          { i:'settings', t:'Sistema',       s:'Backup, exportación, integración' },
-        ].map(c => (
-          <div key={c.t} className="card" style={{padding:20, display:'flex', gap:14, cursor:'pointer'}}>
+        {cards.map(c => (
+          <button
+            key={c.t}
+            type="button"
+            onClick={c.action}
+            className="card"
+            style={{padding:20, display:'flex', gap:14, cursor:'pointer', alignItems:'center', textAlign:'left', border:'1px solid var(--border)', background:'var(--paper)', font:'inherit'}}
+          >
             <div style={{width:40, height:40, background:'var(--paper-dim)', display:'flex', alignItems:'center', justifyContent:'center', borderRadius:6, flexShrink:0}}>
               <Icon n={c.i} s={18}/>
             </div>
@@ -896,11 +1057,14 @@ function ConfigPage() {
               <div style={{fontSize:11, color:'var(--ink-muted)'}}>{c.s}</div>
             </div>
             <Icon n="chev-right" s={16} c="var(--ink-faint)"/>
-          </div>
+          </button>
         ))}
       </div>
+
+      <SecurityModal open={openSec} onClose={() => setOpenSec(false)}/>
+      <ChannelsConfigModal open={openChannels} onClose={() => setOpenChannels(false)}/>
     </div>
   );
 }
 
-Object.assign(window, { QRPage, HistoricoPage, CatalogoPage, EquipoPage, NotificacionesPage, ConfigPage });
+Object.assign(window, { QRPage, HistoricoPage, CatalogoPage, EquipoPage, NotificacionesPage, ConfigPage, SecurityModal, ChannelsConfigModal });

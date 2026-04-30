@@ -56,6 +56,7 @@ function NotificacionesPage() {
 
 function PerfilPage({ onLogout }) {
   const M = window.useMockData();
+  const toast = useToast();
   const u = M.user;
   const initials = (u.name || '?').split(' ').map(s=>s[0]).join('').slice(0,2).toUpperCase();
   const ROLE_COLOR = {
@@ -64,6 +65,27 @@ function PerfilPage({ onLogout }) {
     pino:'#92400e', logistica:'#6366f1', ventas:'#db2777',
   };
   const c = ROLE_COLOR[u.role] || '#888';
+
+  const [pwOpen, setPwOpen] = useState(false);
+  const [pw, setPw] = useState('');
+  const [pw2, setPw2] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const submitPw = async () => {
+    if (pw.length < 6)  { toast.error('Mínimo 6 caracteres'); return; }
+    if (pw !== pw2)     { toast.error('Las contraseñas no coinciden'); return; }
+    setBusy(true);
+    try {
+      const { error } = await window.SUPA.auth.updateUser({ password: pw });
+      if (error) throw new Error(error.message);
+      toast.success('Contraseña actualizada');
+      setPwOpen(false); setPw(''); setPw2('');
+    } catch (e) {
+      toast.error(e.message || 'No se pudo cambiar');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <div className="m-page">
@@ -98,10 +120,32 @@ function PerfilPage({ onLogout }) {
           </div>
         </div>
 
-        <button className="btn-ghost" style={{width:'100%', marginTop:14, padding:'12px', justifyContent:'center', borderColor:'var(--red)', color:'var(--red)'}} onClick={onLogout}>
+        <button className="btn-ghost" style={{width:'100%', marginTop:14, padding:'12px', justifyContent:'center'}} onClick={() => setPwOpen(true)}>
+          <Icon n="lock" s={14}/> Cambiar contraseña
+        </button>
+
+        <button className="btn-ghost" style={{width:'100%', marginTop:8, padding:'12px', justifyContent:'center', borderColor:'var(--red)', color:'var(--red)'}} onClick={onLogout}>
           <Icon n="logout" s={14}/> Cerrar sesión
         </button>
       </div>
+
+      <Modal open={pwOpen} onClose={() => setPwOpen(false)} title="Cambiar contraseña" footer={
+        <>
+          <button className="btn-ghost" onClick={() => setPwOpen(false)}>Cancelar</button>
+          <button className="btn-primary" onClick={submitPw} disabled={busy || !pw || !pw2}>
+            {busy ? <span className="loader"/> : <><Icon n="check" s={14}/> Guardar</>}
+          </button>
+        </>
+      }>
+        <div className="field-group">
+          <label className="field-label">Nueva contraseña</label>
+          <input className="field-input" type="password" value={pw} onChange={e=>setPw(e.target.value)} placeholder="Mínimo 6 caracteres" autoFocus style={{fontFamily:'var(--mono)'}}/>
+        </div>
+        <div className="field-group">
+          <label className="field-label">Repetir contraseña</label>
+          <input className="field-input" type="password" value={pw2} onChange={e=>setPw2(e.target.value)} style={{fontFamily:'var(--mono)'}}/>
+        </div>
+      </Modal>
     </div>
   );
 }
