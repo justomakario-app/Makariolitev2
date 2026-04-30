@@ -1,7 +1,7 @@
 import { RouterProvider } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { router } from './router/routes';
-import { queryClient } from './lib/queryClient';
+import { queryClient } from '@macario/shared/lib/queryClient';
 import { ToastProvider } from './components/shared/Toast';
 
 export function App() {
