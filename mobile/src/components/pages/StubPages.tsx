@@ -29,21 +29,11 @@ function Stub({ title, hint }: StubProps) {
   );
 }
 
-// Stubs para Fase 5 — se reemplazan por implementación real en Fase 6+
-export function HomePage() {
-  return <Stub title="Dashboard" hint="Hero numérico + cards de canal mobile-first. Backend listo via useDashboardKpis. Próxima fase."/>;
-}
-
-export function ProduccionPage() {
-  return <Stub title="Producción" hint="Lista de SKUs con faltante > 0 + FAB para abrir Modal Producir. Backend: useAllCarriers + rpc_register_production. Próxima fase."/>;
-}
+// Stubs restantes — los Tier 1 (Home, Producción, Notificaciones) ya están
+// implementados en archivos propios. Resto se completa en Fase 6 Tier 2-3.
 
 export function ScanPage() {
   return <Stub title="Escáner QR" hint="Cámara fullscreen + viewfinder con @yudiel/react-qr-scanner. Insert en qr_scans con operario_id auto. Fase 7."/>;
-}
-
-export function NotificacionesPage() {
-  return <Stub title="Notificaciones" hint="Lista realtime filtrada por user_id. Backend listo via useNotifications. Próxima fase."/>;
 }
 
 export function PerfilPage() {

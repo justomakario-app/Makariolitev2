@@ -2,8 +2,11 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 import { MobileLayout } from '@/components/layout/MobileLayout';
 import { LoginScreen } from '@/components/pages/LoginScreen';
+import { HomePage } from '@/components/pages/HomePage';
+import { ProduccionPage } from '@/components/pages/ProduccionPage';
+import { NotificacionesPage } from '@/components/pages/NotificacionesPage';
 import {
-  HomePage, ProduccionPage, ScanPage, NotificacionesPage, PerfilPage,
+  ScanPage, PerfilPage,
   CarrierPage, HistoricoPage, CatalogoPage, EquipoPage, ImportarPage,
 } from '@/components/pages/StubPages';
 
