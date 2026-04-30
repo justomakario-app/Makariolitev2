@@ -1,8 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-import { queryClient } from '@/lib/queryClient';
-import type { Database } from '@/types/database.types';
+import { supabase } from '../lib/supabase';
+import { queryClient } from '../lib/queryClient';
+import type { Database } from '../types/database.types';
 import { useSession } from './useAuth';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];

@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-import { queryClient } from '@/lib/queryClient';
-import type { Database } from '@/types/database.types';
+import { supabase } from '../lib/supabase';
+import { queryClient } from '../lib/queryClient';
+import type { Database } from '../types/database.types';
 
 type DashboardKpi = Database['public']['Views']['view_dashboard_kpis']['Row'];
 
