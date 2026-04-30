@@ -95,20 +95,22 @@ window.MOCK_BUS = {
    ───────────────────────────────────────────────────────────────── */
 
 async function loadCatalog() {
-  const { data, error } = await supa.from('sku_catalog').select('*');
-  if (error) { console.error('catalog', error); return; }
-  const map = {};
-  for (const s of data || []) {
-    map[s.sku] = {
-      modelo: s.modelo,
-      color: s.color || '—',
-      colorHex: s.color_hex,
-      categoria: s.categoria,
-      es_fabricado: s.es_fabricado,
-      activo: s.activo,
-    };
-  }
-  window.SKU_DB = map;
+  try {
+    const { data, error } = await supa.from('sku_catalog').select('*');
+    if (error) { console.error('[data.js] catalog:', error); return; }
+    const map = {};
+    for (const s of data || []) {
+      map[s.sku] = {
+        modelo: s.modelo,
+        color: s.color || '—',
+        colorHex: s.color_hex,
+        categoria: s.categoria,
+        es_fabricado: s.es_fabricado,
+        activo: s.activo,
+      };
+    }
+    window.SKU_DB = map;
+  } catch (e) { console.error('[data.js] catalog ex:', e); }
 }
 
 async function loadChannels() {
@@ -511,23 +513,52 @@ function subscribeRealtime() {
    BOOT
    ───────────────────────────────────────────────────────────────── */
 
+/* Boot defensivo: si una query rompe, las demás siguen y la app
+   igual se renderiza. Nunca queda colgado el loader. */
+const _safe = (p, label) => p.catch(e => {
+  console.error(`[data.js] ${label} fail:`, e?.message ?? e);
+});
+
 (async function boot() {
   try {
-    // Bootstrap mínimo (catálogo + canales + perfil) primero, así al
-    // mostrar Login ya tenemos los recursos públicos.
-    await Promise.all([loadCatalog(), loadChannels()]);
-    const has = await loadProfile();
+    // Public: catálogo + canales (no requieren auth)
+    await Promise.allSettled([_safe(loadCatalog(), 'catalog'), _safe(loadChannels(), 'channels')]);
+
+    // Sesión / perfil
+    let has = false;
+    try { has = await loadProfile(); }
+    catch (e) { console.error('[data.js] profile fail:', e?.message ?? e); }
+
     if (has) {
-      await Promise.all([
-        loadProfiles(), loadNotifications(), loadCarriers(),
-        loadOrders(), loadBatches(), loadJornadas(),
-        loadProdLogs(), loadHistorico(),
+      await Promise.allSettled([
+        _safe(loadProfiles(),      'profiles'),
+        _safe(loadNotifications(), 'notifications'),
+        _safe(loadCarriers(),      'carriers'),
+        _safe(loadOrders(),        'orders'),
+        _safe(loadBatches(),       'batches'),
+        _safe(loadJornadas(),      'jornadas'),
+        _safe(loadProdLogs(),      'prodLogs'),
+        _safe(loadHistorico(),     'historico'),
       ]);
     }
-    window.MOCK_BOOTSTRAPPED = true;
-    window.MOCK_BUS.emit();
-    subscribeRealtime();
+
+    try { subscribeRealtime(); } catch (e) { console.error('[data.js] realtime fail:', e); }
   } catch (e) {
-    console.error('Bootstrap fatal:', e);
+    console.error('[data.js] Bootstrap fatal:', e);
+  } finally {
+    // SIEMPRE marcar bootstrapped — si algo falló, igual mostramos Login.
+    window.MOCK.bootstrapped = true;
+    window.MOCK_BUS.emit();
+    console.log('[data.js] Bootstrap done. user=', window.MOCK.user.name || '(no session)');
   }
 })();
+
+/* Failsafe: si el boot tarda más de 8s por algún motivo (red lenta),
+   forzamos que la app se renderice igual. */
+setTimeout(() => {
+  if (!window.MOCK.bootstrapped) {
+    console.warn('[data.js] Bootstrap timeout (8s) — forzando render');
+    window.MOCK.bootstrapped = true;
+    window.MOCK_BUS.emit();
+  }
+}, 8000);
