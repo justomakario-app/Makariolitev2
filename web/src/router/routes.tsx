@@ -7,7 +7,9 @@ import { CarrierPage } from '@/components/pages/CarrierPage';
 import { ProduccionPage } from '@/components/pages/ProduccionPage';
 import { NotificacionesPage } from '@/components/pages/NotificacionesPage';
 import { CatalogoPage } from '@/components/pages/CatalogoPage';
-import { EquipoPage, HistoricoPage, ConfigPage, QRPage } from '@/components/pages/StubPages';
+import { EquipoPage } from '@/components/pages/EquipoPage';
+import { HistoricoPage } from '@/components/pages/HistoricoPage';
+import { ConfigPage, QRPage } from '@/components/pages/StubPages';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginScreen /> },

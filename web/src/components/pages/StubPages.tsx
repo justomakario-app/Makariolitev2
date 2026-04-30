@@ -1,70 +1,4 @@
 import { Icon } from '@/components/shared/Icon';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@macario/shared/lib/supabase';
-import type { Database } from '@macario/shared/types/database.types';
-
-type Profile = Database['public']['Tables']['profiles']['Row'];
-
-const ROLE_COLOR: Record<string, string> = {
-  owner:'#0a0a0a', admin:'#7c3aed', encargado:'#2563eb',
-  embalaje:'#16a34a', cnc:'#d97706', melamina:'#0891b2',
-  pino:'#92400e', logistica:'#6366f1', ventas:'#db2777',
-  carpinteria:'#a16207', marketing:'#0d9488',
-};
-
-const ROLE_LABEL: Record<string, string> = {
-  owner: 'Propietario', admin: 'Administración', encargado: 'Encargado',
-  ventas: 'Ventas', cnc: 'CNC', melamina: 'Melamina', pino: 'Pino',
-  embalaje: 'Embalaje', carpinteria: 'Carpintería',
-  logistica: 'Logística', marketing: 'Marketing',
-};
-
-export function EquipoPage() {
-  const { data: profiles = [] } = useQuery({
-    queryKey: ['profiles'],
-    queryFn: async (): Promise<Profile[]> => {
-      const { data, error } = await supabase.from('profiles').select('*').order('name');
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-
-  return (
-    <div className="page">
-      <div className="page-header">
-        <div>
-          <div className="page-title">Equipo</div>
-          <div className="page-sub">{profiles.filter(u => u.active).length} activos · {profiles.length} en total</div>
-        </div>
-      </div>
-      <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(300px, 1fr))', gap:12}}>
-        {profiles.map(u => {
-          const c = ROLE_COLOR[u.role] ?? '#888';
-          const initials = u.name.split(' ').map(s => s[0]).join('').slice(0,2).toUpperCase();
-          return (
-            <div key={u.id} className="card" style={{padding:18, display:'flex', gap:14, alignItems:'center', opacity: u.active ? 1 : 0.55}}>
-              <div style={{width:44, height:44, background: u.avatar_color ?? c, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:800, borderRadius:6, flexShrink:0}}>{initials}</div>
-              <div style={{flex:1, minWidth:0}}>
-                <div style={{fontSize:14, fontWeight:700}}>{u.name}{!u.active ? <span style={{marginLeft:8, fontSize:9, fontWeight:700, padding:'1px 6px', borderRadius:8, background:'var(--paper-dim)', color:'var(--ink-muted)', textTransform:'uppercase'}}>Inactivo</span> : null}</div>
-                <div style={{fontSize:11, color:'var(--ink-muted)', fontFamily:'var(--mono)'}}>@{u.username}{u.area ? ' · ' + u.area : ''}</div>
-                <div style={{marginTop:6, display:'inline-flex', alignItems:'center', gap:5, fontSize:10, fontWeight:700, textTransform:'uppercase', padding:'2px 8px', borderRadius:10, background:`${c}1a`, color:c}}>
-                  {ROLE_LABEL[u.role] ?? u.role}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <div style={{marginTop:16, padding:14, background:'var(--paper-off)', border:'1px dashed var(--border-md)', borderRadius:6, fontSize:11, color:'var(--ink-soft)'}}>
-        <Icon n="info" s={12}/> Invitar / editar / desactivar usuario — pendiente de portar al modal TS + Edge Function `invite_user`.
-      </div>
-    </div>
-  );
-}
-
-export function HistoricoPage() {
-  return <StubPage title="Histórico" hint="Calendario mensual + filtros + KPIs · pendiente de portar al esquema TS. Data: production_logs + view_historico_dia."/>;
-}
 
 export function ConfigPage() {
   return (
@@ -99,24 +33,20 @@ export function ConfigPage() {
 }
 
 export function QRPage() {
-  return <StubPage title="Scanner QR" hint="Confirmación de embalado · pendiente de portar input + cámara (Html5Qrcode) e insertar en qr_scans (auto operario_id = auth.uid())."/>;
-}
-
-function StubPage({ title, hint }: { title: string; hint: string }) {
   return (
     <div className="page">
       <div className="page-header">
         <div>
-          <div className="page-title">{title}</div>
-          <div className="page-sub">Backend listo · UI completa pendiente de port</div>
+          <div className="page-title">Scanner QR</div>
+          <div className="page-sub">Confirmación de embalado</div>
         </div>
       </div>
       <div className="card" style={{padding:32}}>
         <div className="empty">
-          <Icon n="info" s={28} c="var(--ink-muted)"/>
-          <div style={{fontSize:13, fontWeight:700}}>{title}</div>
+          <Icon n="qr" s={32} c="var(--ink-muted)"/>
+          <div style={{fontSize:13, fontWeight:700}}>QR Scanner desktop</div>
           <div style={{fontSize:12, color:'var(--ink-muted)', textAlign:'center', maxWidth:400, lineHeight:1.5}}>
-            {hint}
+            Para escanear QRs usá la versión mobile (PWA) en tu celular: <code style={{fontFamily:'var(--mono)'}}>/m/scan</code>. Ahí tenés acceso a la cámara del dispositivo. Desde desktop podés ver los escaneos en el histórico.
           </div>
         </div>
       </div>
