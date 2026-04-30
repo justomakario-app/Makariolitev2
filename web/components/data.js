@@ -514,20 +514,15 @@ window.MOCK_ACTIONS = {
   },
 
   async eliminarLote(batchId) {
-    // 1) Borrar las orders del lote — el trigger orders_recompute_state
-    //    se dispara y actualiza carrier_state automáticamente.
-    //    NOTA: si alguna order ya está archivada en una jornada cerrada,
-    //    el FK orders.jornada_id las protege (ON DELETE NO ACTION).
-    //    En ese caso el DELETE falla y NO se borra el batch.
-    const { error: e1 } = await supa.from('orders').delete().eq('import_batch_id', batchId);
-    if (e1) throw new Error('No se pudo borrar las órdenes del lote: ' + e1.message);
-
-    // 2) Borrar el batch en sí
-    const { error: e2 } = await supa.from('import_batches').delete().eq('id', batchId);
-    if (e2) throw new Error('No se pudo borrar el lote: ' + e2.message);
-
-    await Promise.all([loadCarriers(), loadOrders(), loadBatches()]);
+    // RPC backend con SECURITY DEFINER: borra orders + production_logs
+    // de los SKUs del lote (desde su fecha) + el batch + las filas
+    // zombie del carrier_state. Resultado: estado vuelve a "como si
+    // el lote nunca se hubiera subido" — sin requerir SQL manual.
+    const { data, error } = await supa.rpc('rpc_delete_batch_full', { p_batch_id: batchId });
+    if (error) throw new Error(error.message || 'No se pudo eliminar el lote');
+    await Promise.all([loadCarriers(), loadOrders(), loadBatches(), loadProdLogs(), loadHistorico()]);
     window.MOCK_BUS.emit();
+    return data;  // {batch_id, channel_id, orders_deleted, production_logs_deleted, skus_affected}
   },
 
   async marcarNotificacionLeida(id) {
