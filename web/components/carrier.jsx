@@ -103,11 +103,12 @@ function CarrierPage({ channel, onBack, onNav }) {
       ) : null}
 
       <div className="carrier-body">
-        {/* KPIs */}
+        {/* KPIs — "Pedidos activos" = cantidad real de órdenes individuales (no SKUs).
+             Es el mismo número que aparece abajo en "Pedidos individuales · N". */}
         <div className="carrier-kpis">
           <div className="carrier-kpi" style={{borderLeft:`3px solid ${C.color}`}}>
             <div className="carrier-kpi-label">Pedidos activos</div>
-            <div className="carrier-kpi-value" style={{color: data.kpis.activos>0?'var(--ink)':'var(--ink-faint)'}}>{data.kpis.activos}</div>
+            <div className="carrier-kpi-value" style={{color: data.orders.length>0?'var(--ink)':'var(--ink-faint)'}}>{data.orders.length}</div>
           </div>
           <div className="carrier-kpi">
             <div className="carrier-kpi-label">Unidades totales</div>
@@ -136,7 +137,12 @@ function CarrierPage({ channel, onBack, onNav }) {
             <div className="card">
               <div className="card-header">
                 <div className="card-title">Pendiente por SKU</div>
-                <div style={{fontSize:11, color:'var(--ink-muted)', fontWeight:600}}>{data.table.length} productos</div>
+                <div style={{fontSize:11, color:'var(--ink-muted)', fontWeight:600}}>
+                  {data.table.length} producto{data.table.length===1?'':'s'}
+                  {data.table.filter(r => (r.faltante||0) > 0).length !== data.table.length && (
+                    <> · <span style={{color:'var(--red)'}}>{data.table.filter(r => (r.faltante||0) > 0).length} con faltante</span></>
+                  )}
+                </div>
               </div>
               <table className="data-table">
                 <thead>
