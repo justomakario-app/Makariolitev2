@@ -1,5 +1,49 @@
 /* ══ XLSX PARSER (puro JS) — extrae filas de la primera hoja ══ */
 
+/* Helper: convierte cualquier formato común de fecha a ISO YYYY-MM-DD.
+   Soporta: ISO directo, DD/MM/YYYY, DD-MM-YYYY, "20 de abril de 2026 21:24 hs.",
+   Excel serial number, y fallback a Date.parse. Retorna null si no puede. */
+window.parseFechaAR = function(input) {
+  if (input == null || input === '') return null;
+  const s = String(input).trim();
+  if (!s) return null;
+
+  // ISO directo (YYYY-MM-DD o YYYY-MM-DDTHH:mm:ss...)
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+
+  // DD/MM/YYYY o DD-MM-YYYY (formato AR/ES)
+  const m1 = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if (m1) {
+    const dd = m1[1].padStart(2, '0');
+    const mm = m1[2].padStart(2, '0');
+    return `${m1[3]}-${mm}-${dd}`;
+  }
+
+  // Español: "20 de abril de 2026" / "20 de abril de 2026 21:24 hs."
+  const MESES = {
+    enero:'01', febrero:'02', marzo:'03', abril:'04', mayo:'05', junio:'06',
+    julio:'07', agosto:'08', septiembre:'09', setiembre:'09',
+    octubre:'10', noviembre:'11', diciembre:'12',
+  };
+  const m2 = s.toLowerCase().match(/(\d{1,2})\s+de\s+([a-záéíóúñ]+)\s+de\s+(\d{4})/);
+  if (m2 && MESES[m2[2]]) {
+    return `${m2[3]}-${MESES[m2[2]]}-${m2[1].padStart(2, '0')}`;
+  }
+
+  // Excel serial number (días desde 1899-12-30, con bug del 1900)
+  const num = parseFloat(s);
+  if (!isNaN(num) && num > 30000 && num < 80000) {
+    const d = new Date(Math.round((num - 25569) * 86400000));
+    if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  }
+
+  // Último intento: parser nativo (acepta inglés y formatos varios)
+  const d2 = new Date(s);
+  if (!isNaN(d2.getTime())) return d2.toISOString().slice(0, 10);
+
+  return null;
+};
+
 window.parseXLSX = async function(file) {
   const buf = await file.arrayBuffer();
   const u8 = new Uint8Array(buf);

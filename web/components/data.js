@@ -441,24 +441,36 @@ window.MOCK_ACTIONS = {
   },
 
   async importarLote({ channelId, filename, items, fileHash }) {
-    // import_batches.file_hash tiene CHECK ^[a-f0-9]{64}$ (SHA-256).
-    // Calculamos el hash siempre desde acá para garantizar formato correcto
-    // (e idempotencia: mismo contenido → mismo hash).
+    // 1) Normalizar items antes del RPC: el campo `fecha_pedido` debe ser
+    //    ISO date (YYYY-MM-DD) o null. El parser de Excel lo deja como
+    //    string crudo (ej "20 de abril de 2026 21:24 hs.") que Postgres
+    //    rechaza con "invalid input syntax for type date".
+    const normalizedItems = (items || []).map(it => {
+      const fecha = window.parseFechaAR ? window.parseFechaAR(it.fecha_pedido) : null;
+      const cleaned = {
+        sku: (it.sku || '').toString().trim().toUpperCase(),
+        cantidad: parseInt(it.cantidad, 10) || 0,
+      };
+      if (it.order_number) cleaned.order_number = String(it.order_number).trim();
+      if (it.cliente)      cleaned.cliente      = String(it.cliente).trim();
+      if (fecha)           cleaned.fecha_pedido = fecha;  // omit si null → RPC usa current_date
+      return cleaned;
+    }).filter(it => it.sku && it.cantidad > 0);
+
+    // 2) Hash idempotente — sobre los items YA normalizados.
     let p_file_hash = (fileHash || '').toString().toLowerCase();
     if (!/^[a-f0-9]{64}$/.test(p_file_hash)) {
-      p_file_hash = await sha256Hex(filename + '|' + JSON.stringify(items));
+      p_file_hash = await sha256Hex(filename + '|' + JSON.stringify(normalizedItems));
     }
-    // Última red de seguridad: si por alguna razón no es 64 hex, force-fix
-    // recalculando con el fallback determinístico.
     if (!/^[a-f0-9]{64}$/.test(p_file_hash)) {
-      p_file_hash = fnv64Quad(filename + '|' + JSON.stringify(items));
+      p_file_hash = fnv64Quad(filename + '|' + JSON.stringify(normalizedItems));
     }
 
     const { data, error } = await supa.rpc('rpc_import_batch', {
       p_channel_id: channelId,
       p_filename: filename,
       p_file_hash,
-      p_items: items,
+      p_items: normalizedItems,
     });
     if (error) throw new Error(error.message);
     await Promise.all([loadCarriers(), loadOrders(), loadBatches()]);
