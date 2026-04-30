@@ -5,8 +5,9 @@ import { LoginScreen } from '@/components/pages/LoginScreen';
 import { HomePage } from '@/components/pages/HomePage';
 import { ProduccionPage } from '@/components/pages/ProduccionPage';
 import { NotificacionesPage } from '@/components/pages/NotificacionesPage';
+import { ScanPage } from '@/components/pages/ScanPage';
 import {
-  ScanPage, PerfilPage,
+  PerfilPage,
   CarrierPage, HistoricoPage, CatalogoPage, EquipoPage, ImportarPage,
 } from '@/components/pages/StubPages';
 

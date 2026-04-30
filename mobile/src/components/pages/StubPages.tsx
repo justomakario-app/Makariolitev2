@@ -29,12 +29,8 @@ function Stub({ title, hint }: StubProps) {
   );
 }
 
-// Stubs restantes — los Tier 1 (Home, Producción, Notificaciones) ya están
-// implementados en archivos propios. Resto se completa en Fase 6 Tier 2-3.
-
-export function ScanPage() {
-  return <Stub title="Escáner QR" hint="Cámara fullscreen + viewfinder con @yudiel/react-qr-scanner. Insert en qr_scans con operario_id auto. Fase 7."/>;
-}
+// Stubs restantes — los Tier 1 (Home, Producción, Notificaciones, Scan)
+// ya están implementados en archivos propios. Resto se completa en Tier 2-3.
 
 export function PerfilPage() {
   const { data } = useCurrentProfile();
