@@ -119,7 +119,9 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-decoration: none;
 }
+.nav-item:visited { color: var(--ink-muted); }
 .nav-item:hover {
   background: var(--paper-dim);
   color: var(--ink-soft);
