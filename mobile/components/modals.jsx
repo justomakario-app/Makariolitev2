@@ -37,7 +37,7 @@ function ProduceModal({ open, onClose, defaultSku, defaultSubcanal }) {
   const [search, setSearch] = useState('');
   const [subcanal, setSubcanal] = useState(defaultSubcanal || 'colecta');
   const [cantidad, setCantidad] = useState(1);
-  const [fecha, setFecha] = useState('2026-04-25');
+  const [fecha, setFecha] = useState(new Date().toISOString().slice(0,10));
   const [nota, setNota] = useState('');
   const [scanning, setScanning] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -53,7 +53,7 @@ function ProduceModal({ open, onClose, defaultSku, defaultSubcanal }) {
       setSku(defaultSku || skus[0]);
       setSearch('');
       setSubcanal(defaultSubcanal || 'colecta');
-      setCantidad(1); setFecha('2026-04-25');
+      setCantidad(1); setFecha(new Date().toISOString().slice(0,10));
       setNota(''); setScanning(false);
     }
   }, [open, defaultSku, defaultSubcanal]);
@@ -80,7 +80,9 @@ function ProduceModal({ open, onClose, defaultSku, defaultSubcanal }) {
   const submit = async () => {
     setBusy(true);
     try {
-      await window.MOCK_ACTIONS.registrarProduccion({ sku, subcanal, cantidad, fecha, nota });
+      // El backend setea production_logs.fecha = CURRENT_DATE automáticamente.
+      // El campo `fecha` del modal queda como informativo (resumen) — no se envía.
+      await window.MOCK_ACTIONS.registrarProduccion({ sku, subcanal, cantidad, nota });
       onClose();
       toast.success(`${cantidad} × ${sku} → ${window.CARRIERS[subcanal]?.label} registrado`);
     } catch (e) {

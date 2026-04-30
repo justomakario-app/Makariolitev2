@@ -19,6 +19,19 @@ window.usernameToEmail = (u) => {
   return v.includes('@') ? v : `${v.toLowerCase()}@macario.local`;
 };
 
+/* SHA-256 hex (64 chars) — para file_hash de import_batches.
+   Funciona en cualquier browser moderno (Web Crypto API). */
+async function sha256Hex(input) {
+  const buf = typeof input === 'string'
+    ? new TextEncoder().encode(input)
+    : input;
+  const hash = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(hash))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+window.sha256Hex = sha256Hex;
+
 window.skuName = (sku) => {
   const s = window.SKU_DB[sku];
   if (!s) return sku;
@@ -294,8 +307,10 @@ async function loadJornadas() {
 }
 
 async function loadProdLogs() {
+  // JOIN con profiles para traer el nombre del operario (la tabla solo guarda operario_id)
   const { data, error } = await supa
-    .from('production_logs').select('*')
+    .from('production_logs')
+    .select('*, operario:profiles!production_logs_operario_id_fkey(name,username)')
     .order('created_at', { ascending: false }).limit(200);
   if (error) { console.error('production_logs', error); return; }
 
@@ -305,18 +320,18 @@ async function loadProdLogs() {
   window.MOCK.prodLogs = (data || []).map(l => {
     if (l.fecha === today) producidoHoy += l.cantidad;
     const C = window.CARRIERS[l.channel_id] || { label: l.channel_id };
+    // Usar la columna `hora` canónica (time) — no `created_at`
+    const horaStr = l.hora ? String(l.hora).slice(0, 5) : '';
     return {
       id: l.id,
       fecha: l.fecha,
-      hora: l.created_at
-        ? new Date(l.created_at).toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' })
-        : '',
+      hora: horaStr,
       sku: l.sku,
       canal: C.label,
       subcanal: l.channel_id,
       sector: l.sector || '—',
       unidades: l.cantidad,
-      operario: l.operario_name || '—',
+      operario: l.operario?.name || l.operario?.username || '—',
     };
   });
 
@@ -376,10 +391,12 @@ window.bootstrap = bootstrap;
    ───────────────────────────────────────────────────────────────── */
 
 window.MOCK_ACTIONS = {
-  async registrarProduccion({ sku, subcanal, cantidad, fecha, nota }) {
+  async registrarProduccion({ sku, subcanal, cantidad, nota }) {
+    // El RPC NO acepta p_fecha — production_logs.fecha tiene default CURRENT_DATE
+    // (server-side). Si en el futuro se quiere registrar producción retroactiva,
+    // se puede ampliar el RPC. Por ahora siempre se loguea HOY.
     const params = { p_sku: sku, p_channel_id: subcanal, p_cantidad: cantidad };
-    if (fecha) params.p_fecha = fecha;
-    if (nota)  params.p_notas = nota;
+    if (nota) params.p_notas = nota;
     const { error } = await supa.rpc('rpc_register_production', params);
     if (error) throw new Error(error.message);
     await Promise.all([loadCarriers(), loadProdLogs(), loadHistorico()]);
@@ -393,13 +410,18 @@ window.MOCK_ACTIONS = {
     window.MOCK_BUS.emit();
   },
 
-  async importarLote({ channelId, filename, items }) {
-    // file_hash simple por contenido del nombre + timestamp (idempotencia básica)
-    const file_hash = `${filename}-${Date.now()}`;
+  async importarLote({ channelId, filename, items, fileHash }) {
+    // import_batches.file_hash tiene CHECK ^[a-f0-9]{64}$ (SHA-256). Si el
+    // caller no lo calculó, lo derivamos en este momento del JSON de items
+    // (estable: mismo contenido → mismo hash → idempotencia).
+    let p_file_hash = fileHash;
+    if (!p_file_hash || !/^[a-f0-9]{64}$/.test(p_file_hash)) {
+      p_file_hash = await sha256Hex(filename + '|' + JSON.stringify(items));
+    }
     const { data, error } = await supa.rpc('rpc_import_batch', {
       p_channel_id: channelId,
       p_filename: filename,
-      p_file_hash: file_hash,
+      p_file_hash,
       p_items: items,
     });
     if (error) throw new Error(error.message);
