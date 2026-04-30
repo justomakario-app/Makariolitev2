@@ -69,6 +69,32 @@ window.skuName = (sku) => {
 };
 window.skuModel = (sku) => window.SKU_DB[sku]?.modelo || sku;
 
+/* ── Override de nombres "cortos" de display (sin tocar la BD).
+   La BD tiene nombres largos para uso oficial; en la UI mostramos
+   estos cortos según pidió el cliente. Si un SKU no está acá, se
+   usa el modelo/color de la BD tal cual.
+   PARA AGREGAR/EDITAR: solo modificar este objeto y pushear. ── */
+window.SKU_DISPLAY_NAMES = {
+  MAD050: { modelo: 'Mesa Nórdica Petiribi',     color: 'Blanco' },
+  MAD051: { modelo: 'Mesa Redonda',              color: 'Blanco' },
+  MAD052: { modelo: 'Mesa Redonda',              color: 'Negro'  },
+  MAD061: { modelo: 'Set Gota',                  color: 'Blanco' },
+  MAD062: { modelo: 'Set Gota',                  color: 'Negro'  },
+  MAD095: { modelo: 'Set Redonda',               color: 'Blanco' },
+  MAD096: { modelo: 'Set Redonda',               color: 'Negro'  },
+  MAD155: { modelo: 'Mesa Púas/Gota Madera',     color: 'Negro'  },
+  MAD190: { modelo: 'Set Redonda Simil Marmol',  color: 'Blanco' },
+  MAD191: { modelo: 'Set Redonda Simil Marmol',  color: 'Negro'  },
+  MAD200: { modelo: 'Rectangular',               color: 'Negro'  },
+  MAD201: { modelo: 'Rectangular',               color: 'Blanco' },
+  MAD300: { modelo: 'Yori',                      color: '—'      },
+  MAD301: { modelo: 'Bumerang',                  color: 'Blanco' },
+  MAD302: { modelo: 'Boomerang',                 color: 'Negro'  },
+  MAD303: { modelo: 'Set XL',                    color: 'Negro'  },
+  MAD304: { modelo: 'Set XL',                    color: 'Blanco' },
+  MAD401: { modelo: 'Hikari',                    color: '—'      },
+};
+
 /* ── State inicial vacío (para primer render antes del fetch) ── */
 window.SKU_DB = {};
 
@@ -143,13 +169,21 @@ async function loadCatalog() {
     if (error) { console.error('[data.js] catalog:', error); return; }
     const map = {};
     for (const s of data || []) {
+      // Override de nombres cortos para display. Si el SKU está en
+      // SKU_DISPLAY_NAMES, usamos ese modelo/color; sino el de la BD.
+      // El SKU mismo NUNCA cambia — toda la lógica del backend depende de él.
+      const override = window.SKU_DISPLAY_NAMES?.[s.sku];
       map[s.sku] = {
-        modelo: s.modelo,
-        color: s.color || '—',
+        modelo: override?.modelo ?? s.modelo,
+        color:  override?.color  ?? (s.color || '—'),
         colorHex: s.color_hex,
         categoria: s.categoria,
         es_fabricado: s.es_fabricado,
         activo: s.activo,
+        // Mantenemos el modelo/color "oficial" de la BD por si los
+        // necesitamos (ej. para exportar reportes con el nombre largo).
+        modelo_oficial: s.modelo,
+        color_oficial: s.color || '—',
       };
     }
     window.SKU_DB = map;
