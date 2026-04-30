@@ -239,23 +239,24 @@ async function loadCarriers() {
     const id = r.channel_id;
     if (!window.MOCK.carriers[id]) continue;
 
-    const row = {
-      sku: r.sku,
-      pedido:    r.pedido    || 0,
-      producido: r.producido || 0,
-      faltante:  r.faltante  || 0,
-      stock:     r.stock     || 0,
-    };
+    const pedido    = r.pedido    || 0;
+    const producido = r.producido || 0;
+    const faltante  = r.faltante  || 0;
+    const stock     = r.stock     || 0;
+
+    // Filas "zombie": todo en 0 (típico tras eliminar un lote — el
+    // carrier_state queda con la fila pero sin valores). No mostrarlas
+    // en la UI para que la vista quede como si nunca se hubiera importado.
+    if (pedido === 0 && producido === 0 && faltante === 0 && stock === 0) {
+      continue;
+    }
+
+    const row = { sku: r.sku, pedido, producido, faltante, stock };
     window.MOCK.carriers[id].table.push(row);
 
     const C = window.CARRIERS[id] || { label: id };
     window.MOCK.prod.todos.table.push({
-      sku: r.sku,
-      canal: C.label,
-      pedido:    r.pedido    || 0,
-      producido: r.producido || 0,
-      faltante:  r.faltante  || 0,
-      stock:     r.stock     || 0,
+      sku: r.sku, canal: C.label, pedido, producido, faltante, stock,
     });
   }
 
