@@ -403,28 +403,60 @@ async function loadProdLogs() {
   window.MOCK.prod.todos.producidoHoy = producidoHoy;
 }
 
-async function loadHistorico() {
+async function loadHistorico(opts = {}) {
   const now = new Date();
-  const year = window.MOCK.historico.year ?? now.getFullYear();
-  const month = window.MOCK.historico.month ?? now.getMonth();
+  const year       = opts.year       ?? window.MOCK.historico.year       ?? now.getFullYear();
+  const month      = opts.month      ?? window.MOCK.historico.month      ?? now.getMonth();
+  const channelId  = opts.channelId  ?? window.MOCK.historico.filters?.channelId ?? 'todos';
+  const skuF       = opts.sku        ?? window.MOCK.historico.filters?.sku       ?? 'todos';
+  const desde      = opts.desde      ?? window.MOCK.historico.filters?.desde     ?? '';
+  const hasta      = opts.hasta      ?? window.MOCK.historico.filters?.hasta     ?? '';
+
   const monthStart = `${year}-${String(month+1).padStart(2,'0')}-01`;
   const monthEnd   = new Date(year, month+1, 0).toISOString().slice(0, 10);
-
-  const { data, error } = await supa
-    .from('view_historico_dia').select('*')
-    .gte('fecha', monthStart).lte('fecha', monthEnd);
-  if (error) { console.error('view_historico_dia', error); return; }
+  const fromDate   = desde && desde >= monthStart ? desde : monthStart;
+  const toDate     = hasta && hasta <= monthEnd   ? hasta : monthEnd;
 
   const days = {};
   let total = 0;
-  for (const r of data || []) {
-    const k = r.fecha;
-    days[k] = (days[k] || 0) + (r.unidades || 0);
-    total += r.unidades || 0;
-  }
-  const diasActivos = Object.values(days).filter(v => v > 0).length;
 
-  window.MOCK.historico = { year, month, days, kpis: { total, diasActivos } };
+  if (skuF !== 'todos') {
+    // Si hay filtro de SKU, queremos granularidad por sku — la view agrega
+    // por (fecha, channel) sin sku, así que vamos directo a production_logs.
+    let q = supa.from('production_logs').select('fecha, cantidad, channel_id, sku')
+      .gte('fecha', fromDate).lte('fecha', toDate)
+      .eq('sku', skuF);
+    if (channelId !== 'todos') q = q.eq('channel_id', channelId);
+    const { data, error } = await q;
+    if (error) { console.error('historico (logs)', error); return; }
+    for (const r of data || []) {
+      const u = Number(r.cantidad) || 0;
+      days[r.fecha] = (days[r.fecha] || 0) + u;
+      total += u;
+    }
+  } else {
+    let q = supa.from('view_historico_dia').select('*')
+      .gte('fecha', fromDate).lte('fecha', toDate);
+    if (channelId !== 'todos') q = q.eq('channel_id', channelId);
+    const { data, error } = await q;
+    if (error) { console.error('view_historico_dia', error); return; }
+    for (const r of data || []) {
+      const u = Number(r.unidades) || 0;  // bigint → number defensivo
+      days[r.fecha] = (days[r.fecha] || 0) + u;
+      total += u;
+    }
+  }
+
+  const valores     = Object.values(days);
+  const diasActivos = valores.filter(v => v > 0).length;
+  const mejorDia    = valores.length ? Math.max(...valores) : 0;
+  const promedio    = diasActivos > 0 ? Math.round(total / diasActivos) : 0;
+
+  window.MOCK.historico = {
+    year, month, days,
+    kpis: { total, diasActivos, mejorDia, promedio },
+    filters: { channelId, sku: skuF, desde, hasta },
+  };
 }
 
 /* ─────────────────────────────────────────────────────────────────
@@ -523,6 +555,37 @@ window.MOCK_ACTIONS = {
     await Promise.all([loadCarriers(), loadOrders(), loadBatches(), loadProdLogs(), loadHistorico()]);
     window.MOCK_BUS.emit();
     return data;  // {batch_id, channel_id, orders_deleted, production_logs_deleted, skus_affected}
+  },
+
+  async recargarHistorico(opts) {
+    await loadHistorico(opts || {});
+    window.MOCK_BUS.emit();
+  },
+
+  async getDetalleDia(fecha, channelId) {
+    // Query directa a production_logs (no usa el cache de MOCK.prodLogs
+    // que tiene LIMIT 200) — útil para días viejos con muchos logs.
+    let q = supa.from('production_logs')
+      .select('*, operario:profiles!production_logs_operario_id_fkey(name,username)')
+      .eq('fecha', fecha)
+      .order('created_at', { ascending: true });
+    if (channelId && channelId !== 'todos') q = q.eq('channel_id', channelId);
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+    return (data || []).map(l => {
+      const C = window.CARRIERS[l.channel_id] || { label: l.channel_id };
+      return {
+        id: l.id,
+        fecha: l.fecha,
+        hora: l.hora ? String(l.hora).slice(0,5) : '',
+        sku: l.sku,
+        canal: C.label,
+        subcanal: l.channel_id,
+        sector: l.sector || '—',
+        unidades: l.cantidad,
+        operario: l.operario?.name || l.operario?.username || '—',
+      };
+    });
   },
 
   async marcarNotificacionLeida(id) {

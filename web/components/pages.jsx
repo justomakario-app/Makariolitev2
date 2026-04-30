@@ -92,30 +92,101 @@ function QRPage() {
 /* ── Histórico (calendario mensual) con filtros ── */
 function HistoricoPage() {
   const toast = useToast();
-  const M = window.MOCK;
+  const M = window.useMockData();
   const H = M.historico;
-  const [month, setMonth] = useState(H.month);
-  const [year, setYear]   = useState(H.year);
-  const [canal, setCanal] = useState('todos');
-  const [skuF, setSkuF]   = useState('todos');
-  const [desde, setDesde] = useState('');
-  const [hasta, setHasta] = useState('');
-  const [selDay, setSelDay] = useState(null);
 
+  const [canal, setCanal]   = useState(H.filters?.channelId || 'todos');
+  const [skuF, setSkuF]     = useState(H.filters?.sku       || 'todos');
+  const [desde, setDesde]   = useState(H.filters?.desde     || '');
+  const [hasta, setHasta]   = useState(H.filters?.hasta     || '');
+  const [selDay, setSelDay] = useState(null);
+  const [reloading, setReloading] = useState(false);
+  const [detalleLogs, setDetalleLogs] = useState([]);
+  const [loadingDetalle, setLoadingDetalle] = useState(false);
+
+  /* Recargar histórico cada vez que cambian filtros (debounce con timeout) */
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      setReloading(true);
+      try {
+        await window.MOCK_ACTIONS.recargarHistorico({
+          year: H.year, month: H.month,
+          channelId: canal, sku: skuF, desde, hasta,
+        });
+      } finally {
+        setReloading(false);
+      }
+    }, 250);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line
+  }, [canal, skuF, desde, hasta]);
+
+  /* Detalle del día — query directa, no usa MOCK.prodLogs (limit 200) */
+  useEffect(() => {
+    if (!selDay) { setDetalleLogs([]); return; }
+    let cancelled = false;
+    setLoadingDetalle(true);
+    (async () => {
+      try {
+        const logs = await window.MOCK_ACTIONS.getDetalleDia(selDay, canal);
+        if (!cancelled) setDetalleLogs(logs);
+      } catch (e) {
+        if (!cancelled) toast.error(e.message || 'No se pudo cargar el detalle');
+      } finally {
+        if (!cancelled) setLoadingDetalle(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line
+  }, [selDay, canal]);
+
+  const navegarMes = async (dir) => {
+    let m = H.month + dir, y = H.year;
+    if (m < 0)  { m = 11; y -= 1; }
+    if (m > 11) { m = 0;  y += 1; }
+    setSelDay(null);
+    setReloading(true);
+    try {
+      await window.MOCK_ACTIONS.recargarHistorico({
+        year: y, month: m, channelId: canal, sku: skuF, desde, hasta,
+      });
+    } finally { setReloading(false); }
+  };
+
+  const exportarCSV = () => {
+    const fechas = Object.keys(H.days || {}).sort();
+    if (!fechas.length) { toast.info('No hay datos para exportar en este mes'); return; }
+    const rows = [['fecha','unidades']].concat(fechas.map(f => [f, H.days[f]]));
+    const csv = rows.map(r => r.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `historico-${H.year}-${String(H.month+1).padStart(2,'0')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exportado · ${fechas.length} días`);
+  };
+
+  /* Calendar grid (semanas LUN→DOM) */
   const days = [];
-  const first = new Date(year, month, 1);
+  const first = new Date(H.year, H.month, 1);
   const startW = first.getDay() === 0 ? 6 : first.getDay() - 1;
-  const last = new Date(year, month + 1, 0).getDate();
+  const last = new Date(H.year, H.month + 1, 0).getDate();
   for (let i = 0; i < startW; i++) days.push(null);
   for (let d = 1; d <= last; d++) {
-    const k = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const k = `${H.year}-${String(H.month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     days.push({ d, key:k, prod: H.days[k] || 0 });
   }
 
-  const monthName = new Date(year, month, 1).toLocaleDateString('es-AR', {month:'long', year:'numeric'});
-  const detalleLogs = selDay ? M.prodLogs.filter(l => l.fecha === selDay) : [];
-
+  const monthName = new Date(H.year, H.month, 1).toLocaleDateString('es-AR', {month:'long', year:'numeric'});
   const skus = Object.keys(window.SKU_DB);
+
+  /* KPIs con guards anti NaN/-Infinity (mes vacío) */
+  const totalMes    = H.kpis?.total       ?? 0;
+  const diasActivos = H.kpis?.diasActivos ?? 0;
+  const mejorDia    = H.kpis?.mejorDia    ?? 0;
+  const promedio    = H.kpis?.promedio    ?? 0;
 
   return (
     <div className="page">
@@ -124,7 +195,7 @@ function HistoricoPage() {
           <div className="page-title">Histórico de producción</div>
           <div className="page-sub">Vista mensual · clic en un día para ver detalle</div>
         </div>
-        <button className="btn-ghost" onClick={() => toast.info('Generando reporte...')}>
+        <button className="btn-ghost" onClick={exportarCSV} disabled={!Object.keys(H.days||{}).length}>
           <Icon n="download" s={13}/> Exportar
         </button>
       </div>
@@ -144,27 +215,33 @@ function HistoricoPage() {
         </select>
         <input type="date" className="filter-select" value={desde} onChange={e => setDesde(e.target.value)} placeholder="Desde"/>
         <input type="date" className="filter-select" value={hasta} onChange={e => setHasta(e.target.value)} placeholder="Hasta"/>
+        {(canal !== 'todos' || skuF !== 'todos' || desde || hasta) && (
+          <button className="btn-ghost" style={{padding:'7px 12px', fontSize:10}} onClick={() => { setCanal('todos'); setSkuF('todos'); setDesde(''); setHasta(''); }}>
+            <Icon n="x" s={11}/> Limpiar
+          </button>
+        )}
+        {reloading && <span className="loader" style={{width:14, height:14, marginLeft:6}}/>}
       </div>
 
       <div className="kpi-grid">
         <div className="stat-card">
           <div style={{fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--ink-muted)', marginBottom:6}}>Total mes</div>
-          <div style={{fontFamily:'var(--mono)', fontSize:32, fontWeight:700, letterSpacing:'-.04em', lineHeight:1}}>{H.kpis.total}</div>
+          <div style={{fontFamily:'var(--mono)', fontSize:32, fontWeight:700, letterSpacing:'-.04em', lineHeight:1}}>{totalMes}</div>
           <div style={{fontSize:11, color:'var(--ink-muted)', marginTop:6, fontWeight:500}}>unidades producidas</div>
         </div>
         <div className="stat-card">
           <div style={{fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--ink-muted)', marginBottom:6}}>Días activos</div>
-          <div style={{fontFamily:'var(--mono)', fontSize:32, fontWeight:700, letterSpacing:'-.04em', lineHeight:1}}>{H.kpis.diasActivos}</div>
+          <div style={{fontFamily:'var(--mono)', fontSize:32, fontWeight:700, letterSpacing:'-.04em', lineHeight:1}}>{diasActivos}</div>
           <div style={{fontSize:11, color:'var(--ink-muted)', marginTop:6, fontWeight:500}}>con producción</div>
         </div>
         <div className="stat-card">
           <div style={{fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--ink-muted)', marginBottom:6}}>Promedio/día</div>
-          <div style={{fontFamily:'var(--mono)', fontSize:32, fontWeight:700, letterSpacing:'-.04em', lineHeight:1}}>{Math.round(H.kpis.total / H.kpis.diasActivos)}</div>
+          <div style={{fontFamily:'var(--mono)', fontSize:32, fontWeight:700, letterSpacing:'-.04em', lineHeight:1}}>{promedio}</div>
           <div style={{fontSize:11, color:'var(--ink-muted)', marginTop:6, fontWeight:500}}>uds. promedio</div>
         </div>
         <div className="stat-card">
           <div style={{fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--ink-muted)', marginBottom:6}}>Mejor día</div>
-          <div style={{fontFamily:'var(--mono)', fontSize:32, fontWeight:700, letterSpacing:'-.04em', lineHeight:1}}>{Math.max(...Object.values(H.days))}</div>
+          <div style={{fontFamily:'var(--mono)', fontSize:32, fontWeight:700, letterSpacing:'-.04em', lineHeight:1}}>{mejorDia}</div>
           <div style={{fontSize:11, color:'var(--ink-muted)', marginTop:6, fontWeight:500}}>uds. en un día</div>
         </div>
       </div>
@@ -173,8 +250,8 @@ function HistoricoPage() {
         <div className="card-header">
           <div className="card-title" style={{textTransform:'capitalize'}}>{monthName}</div>
           <div style={{display:'flex', gap:6}}>
-            <button className="btn-ghost" style={{padding:'5px 10px'}} onClick={() => setMonth(m => m === 0 ? (setYear(y=>y-1), 11) : m-1)}><Icon n="arrow-left" s={12}/></button>
-            <button className="btn-ghost" style={{padding:'5px 10px'}} onClick={() => setMonth(m => m === 11 ? (setYear(y=>y+1), 0) : m+1)}><Icon n="arrow-right" s={12}/></button>
+            <button className="btn-ghost" style={{padding:'5px 10px'}} onClick={() => navegarMes(-1)} disabled={reloading}><Icon n="arrow-left" s={12}/></button>
+            <button className="btn-ghost" style={{padding:'5px 10px'}} onClick={() => navegarMes(+1)} disabled={reloading}><Icon n="arrow-right" s={12}/></button>
           </div>
         </div>
         <div style={{padding:'18px 22px 22px'}}>
@@ -203,7 +280,12 @@ function HistoricoPage() {
               <Icon n="x" s={11}/> Cerrar
             </button>
           </div>
-          {detalleLogs.length === 0 ? (
+          {loadingDetalle ? (
+            <div className="empty" style={{padding:32}}>
+              <span className="loader"/>
+              <div style={{fontSize:12, color:'var(--ink-muted)', marginTop:8}}>Cargando…</div>
+            </div>
+          ) : detalleLogs.length === 0 ? (
             <div className="empty" style={{padding:32}}>
               <Icon n="package" s={26} c="var(--ink-faint)"/>
               <div style={{fontSize:12, color:'var(--ink-muted)'}}>Sin registros para este día</div>
