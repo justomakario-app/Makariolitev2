@@ -1,31 +1,10 @@
-/* Port de mock.js Icon — todos los íconos usados por la app. */
+/* ══ SHARED: Icons, Logo, Toast, Helpers ══ */
 
-type IconName =
-  | 'home' | 'truck' | 'box' | 'layers' | 'package' | 'qr' | 'tag' | 'tools'
-  | 'history' | 'users' | 'settings' | 'bell' | 'logout' | 'plus' | 'check'
-  | 'check-circle' | 'x' | 'arrow-left' | 'arrow-right' | 'chev-down'
-  | 'chev-right' | 'search' | 'filter' | 'download' | 'upload' | 'edit'
-  | 'trash' | 'lock' | 'user' | 'menu' | 'eye' | 'eye-off' | 'copy'
-  | 'refresh' | 'alert' | 'info' | 'calendar' | 'clock' | 'shield' | 'spark'
-  | 'send' | 'chart' | 'dollar' | 'package-check' | 'flame' | 'camera' | 'loader';
+const { useState, useEffect, useRef, useMemo, useCallback, createContext, useContext } = React;
 
-interface IconProps {
-  n: IconName;
-  s?: number;
-  c?: string;
-}
-
-export function Icon({ n, s = 16, c = 'currentColor' }: IconProps) {
-  const props = {
-    width: s,
-    height: s,
-    viewBox: '0 0 24 24',
-    fill: 'none',
-    stroke: c,
-    strokeWidth: 1.5,
-    strokeLinecap: 'round' as const,
-    strokeLinejoin: 'round' as const,
-  };
+/* ── ICONS (24x24, stroke 1.5) ── */
+const Icon = ({ n, s = 16, c = 'currentColor' }) => {
+  const props = { width: s, height: s, viewBox: '0 0 24 24', fill: 'none', stroke: c, strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round' };
   switch (n) {
     case 'home':       return <svg {...props}><path d="M3 12l9-9 9 9"/><path d="M5 10v10a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1V10"/></svg>;
     case 'truck':      return <svg {...props}><rect x="1" y="6" width="14" height="11" rx="1"/><path d="M15 9h4l3 4v4h-7"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/></svg>;
@@ -72,8 +51,123 @@ export function Icon({ n, s = 16, c = 'currentColor' }: IconProps) {
     case 'dollar':     return <svg {...props}><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>;
     case 'package-check': return <svg {...props}><path d="M16 16l2 2 4-4"/><path d="M21 10V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l2-1.13"/><path d="M3.27 6.96L12 12.01l8.73-5.05"/><path d="M12 22V12"/></svg>;
     case 'flame':      return <svg {...props}><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 002.5 2.5z"/></svg>;
-    case 'camera':     return <svg {...props}><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>;
-    case 'loader':     return <svg {...props} style={{animation:'spin 1s linear infinite'}}><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>;
     default: return null;
   }
+};
+
+/* ── LOGO — JUSTO MAKARIO Home ── */
+function Logo({ size = 'sm' }) {
+  // size: 'sm' (sidebar) | 'lg' (login)
+  const dims = size === 'lg'
+    ? { main: 22, sub: 16, regGap: -8 }
+    : { main: 14, sub: 11, regGap: -5 };
+  return (
+    <div style={{
+      display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+      lineHeight: 1, position:'relative', textAlign:'center',
+    }}>
+      <div style={{
+        position:'relative',
+        fontFamily:'var(--font)',
+        fontWeight: 900,
+        fontSize: dims.main,
+        letterSpacing: '-0.01em',
+        color: 'var(--ink)',
+        lineHeight: 1.05,
+      }}>
+        <span style={{display:'block'}}>JUSTO</span>
+        <span style={{display:'block'}}>MAKARIO</span>
+        {/* ® */}
+        <span style={{
+          position:'absolute',
+          top: 1,
+          right: -10,
+          fontSize: dims.main * 0.42,
+          fontWeight: 600,
+          color: 'var(--ink-muted)',
+        }}>®</span>
+      </div>
+      <div style={{
+        fontFamily: 'Georgia, "Times New Roman", serif',
+        fontStyle: 'italic',
+        fontWeight: 400,
+        fontSize: dims.sub,
+        color: 'var(--ink)',
+        marginTop: 2,
+      }}>
+        Home
+      </div>
+    </div>
+  );
 }
+
+/* ── TOAST CONTEXT ── */
+const ToastCtx = createContext(null);
+function useToast() { return useContext(ToastCtx); }
+
+/* ── MOCK reactivity hook — se re-renderiza cuando MOCK_BUS emite ── */
+function useMockData() {
+  const [, set] = useState(0);
+  useEffect(() => {
+    if (!window.MOCK_BUS) return;
+    return window.MOCK_BUS.subscribe(() => set(n => n + 1));
+  }, []);
+  return window.MOCK;
+}
+
+function ToastProvider({ children }) {
+  const [items, setItems] = useState([]);
+  const push = useCallback((msg, kind='info', dur=2800) => {
+    const id = Math.random().toString(36).slice(2);
+    setItems(s => [...s, { id, msg, kind, show:false }]);
+    requestAnimationFrame(() => setItems(s => s.map(i => i.id===id ? {...i, show:true} : i)));
+    setTimeout(() => setItems(s => s.map(i => i.id===id ? {...i, show:false} : i)), dur);
+    setTimeout(() => setItems(s => s.filter(i => i.id !== id)), dur + 400);
+  }, []);
+  const api = useMemo(() => ({
+    success: m => push(m, 'success'),
+    error:   m => push(m, 'error'),
+    info:    m => push(m, 'info'),
+    warning: m => push(m, 'warning'),
+  }), [push]);
+  return (
+    <ToastCtx.Provider value={api}>
+      {children}
+      <div style={{position:'fixed', top:24, right:24, zIndex:5000, display:'flex', flexDirection:'column', gap:8, pointerEvents:'none'}}>
+        {items.map(t => (
+          <div key={t.id} className={`toast toast-${t.kind} ${t.show?'show':''}`}>
+            <Icon n={t.kind==='success'?'check-circle':t.kind==='error'?'alert':t.kind==='warning'?'alert':'info'} s={16}/>
+            <span>{t.msg}</span>
+          </div>
+        ))}
+      </div>
+    </ToastCtx.Provider>
+  );
+}
+
+/* ── HELPERS ── */
+const fmt = {
+  date: iso => {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleDateString('es-AR', { day:'2-digit', month:'short' });
+  },
+  dateTime: iso => {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleString('es-AR', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+  },
+  agoSimple: iso => {
+    if (!iso) return '—';
+    const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+    if (min < 1)   return 'ahora';
+    if (min < 60)  return `hace ${min} min`;
+    const hr = Math.floor(min / 60);
+    if (hr < 24) return `hace ${hr}h`;
+    const d = Math.floor(hr / 24);
+    return `hace ${d}d`;
+  },
+};
+
+/* ── EXPORT GLOBALS ── */
+Object.assign(window, { Icon, Logo, ToastProvider, ToastCtx, useToast, useMockData, fmt });

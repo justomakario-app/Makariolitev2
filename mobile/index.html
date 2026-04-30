@@ -1,22 +1,75 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,viewport-fit=cover" />
-  <meta name="theme-color" content="#0a0a0a" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Macario" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link
-    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
-    rel="stylesheet"
-  />
-  <title>Macario Lite</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#0A0A0A">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Macario">
+  <title>Macario · Mobile</title>
+
+  <link rel="manifest" href="/m/manifest.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="components/styles.css">
+  <link rel="stylesheet" href="components/mobile.css">
 </head>
 <body>
   <div id="root"></div>
-  <script type="module" src="/src/main.tsx"></script>
+
+  <!-- React + Babel + Supabase JS + QR Scanner (UMD via CDN) -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script type="module">
+    /* qr-scanner usa import.meta — lo cargamos como módulo y lo exponemos en window */
+    import QrScanner from 'https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/+esm';
+    QrScanner.WORKER_PATH = 'https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner-worker.min.js';
+    window.QrScanner = QrScanner;
+  </script>
+
+  <!-- Data layer (Supabase real) -->
+  <script src="components/data.js?v=2"></script>
+  <script src="components/xlsx.js?v=10"></script>
+
+  <!-- Componentes (Babel JSX inline) -->
+  <script type="text/babel" src="components/shared.jsx?v=11"></script>
+  <script type="text/babel" src="components/login.jsx?v=11"></script>
+  <script type="text/babel" src="components/bottombar.jsx?v=1"></script>
+  <script type="text/babel" src="components/dashboard.jsx?v=1"></script>
+  <script type="text/babel" src="components/carrier.jsx?v=1"></script>
+  <script type="text/babel" src="components/produccion.jsx?v=1"></script>
+  <script type="text/babel" src="components/scan.jsx?v=1"></script>
+  <script type="text/babel" src="components/modals.jsx?v=11"></script>
+  <script type="text/babel" src="components/pages.jsx?v=1"></script>
+  <script type="text/babel" src="components/app.jsx?v=1"></script>
+
+  <!-- Boot -->
+  <script>
+    (function boot() {
+      if (
+        window.App && window.LoginScreen && window.BottomBar && window.DashboardPage
+        && window.ScanPage && window.ProduccionPage && window.PerfilPage
+        && window.supabase && window.SUPA
+      ) {
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(React.createElement(App));
+      } else {
+        setTimeout(boot, 40);
+      }
+    })();
+
+    /* Service worker registration (PWA install) */
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/m/sw.js', { scope: '/m/' })
+          .catch(e => console.warn('SW reg failed:', e));
+      });
+    }
+  </script>
 </body>
 </html>

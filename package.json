@@ -1,16 +1,11 @@
 {
-  "name": "macario-lite-monorepo",
+  "name": "macario-lite",
   "private": true,
-  "version": "0.2.0",
-  "workspaces": [
-    "shared",
-    "mobile"
-  ],
+  "version": "1.0.0",
+  "description": "Sistema de gestión interno Justo Makario — desktop (web/) + mobile PWA (mobile/) servidos como estáticos. Backend Supabase (auth + RPCs + Edge Functions).",
   "scripts": {
-    "dev:web": "echo 'web/ es estático — abrí web/Macario Lite.html con un static server (ej: npx serve web)'",
-    "dev:mobile": "npm run dev --workspace=mobile",
-    "build:web": "echo 'web/ es estático — no requiere build'",
-    "build:mobile": "npm run build --workspace=mobile",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "dev:web": "echo 'web/ es estático — abrí web/Macario Lite.html con un static server (npx serve web)'",
+    "dev:mobile": "echo 'mobile/ es estático — npx serve mobile, abrí http://localhost:3000/'",
+    "build": "echo 'No requiere build — todo es estático.'"
   }
 }
