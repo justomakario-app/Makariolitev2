@@ -19,6 +19,11 @@ function CarrierPage({ channel, onBack, onNav }) {
   const [openOrders, setOpenOrders]   = useState(false);
   const [openLotes, setOpenLotes]     = useState(false);
   const [openCierres, setOpenCierres] = useState(false);
+  const [loteAEliminar, setLoteAEliminar] = useState(null);  // lote pendiente de borrar
+  const [borrando, setBorrando] = useState(false);
+
+  const userRole = window.MOCK.user.role;
+  const puedeEliminarLote = ['owner','admin','encargado'].includes(userRole);
 
   if (!data) return null;
 
@@ -220,16 +225,31 @@ function CarrierPage({ channel, onBack, onNav }) {
                   <div className="collapsible-body" style={{padding:0}}>
                     <table className="data-table">
                       <thead>
-                        <tr><th>ID</th><th>Fecha</th><th style={{textAlign:'right'}}>Pedidos</th><th>Archivo</th><th>Detectado</th></tr>
+                        <tr>
+                          <th>Fecha</th>
+                          <th>Archivo</th>
+                          <th style={{textAlign:'right'}}>Pedidos</th>
+                          <th></th>
+                        </tr>
                       </thead>
                       <tbody>
                         {data.lotes.map(l => (
                           <tr key={l.id}>
-                            <td><span className="order-num">{l.id}</span></td>
-                            <td style={{fontSize:11}}>{l.fecha}</td>
-                            <td style={{textAlign:'right'}}><span className="cell-color-num">{l.cantidad}</span></td>
+                            <td style={{fontSize:11}}>{fmt.dateTime(l.fecha)}</td>
                             <td style={{fontSize:11, color:'var(--ink-muted)', fontFamily:'var(--mono)'}}>{l.archivo}</td>
-                            <td><span style={{fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:10, background:'var(--accent-bg)', color:'var(--accent)', textTransform:'uppercase', letterSpacing:0.4}}>{l.detectado || '—'}</span></td>
+                            <td style={{textAlign:'right'}}><span className="cell-color-num">{l.cantidad}</span></td>
+                            <td style={{textAlign:'right', width:1, whiteSpace:'nowrap'}}>
+                              {puedeEliminarLote && (
+                                <button
+                                  className="btn-ghost"
+                                  style={{padding:'4px 10px', fontSize:10, color:'var(--red)', borderColor:'rgba(220,38,38,.32)'}}
+                                  onClick={() => setLoteAEliminar(l)}
+                                  title="Eliminar lote y todas sus órdenes"
+                                >
+                                  <Icon n="trash" s={11}/> Eliminar
+                                </button>
+                              )}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -308,6 +328,30 @@ function CarrierPage({ channel, onBack, onNav }) {
           }
         }}
         channel={channel}
+      />
+
+      <ConfirmModal
+        open={!!loteAEliminar}
+        onClose={() => !borrando && setLoteAEliminar(null)}
+        title="Eliminar lote"
+        message={loteAEliminar
+          ? `Vas a eliminar el lote ${loteAEliminar.archivo} y TODAS sus órdenes (${loteAEliminar.cantidad} pedidos). El faltante se va a recalcular automáticamente. Esta acción NO se puede deshacer.`
+          : ''}
+        confirmText={borrando ? 'Eliminando...' : 'Sí, eliminar todo'}
+        danger
+        onConfirm={async () => {
+          if (!loteAEliminar || borrando) return;
+          setBorrando(true);
+          try {
+            await window.MOCK_ACTIONS.eliminarLote(loteAEliminar.id);
+            toast.success('Lote eliminado · ' + loteAEliminar.archivo);
+            setLoteAEliminar(null);
+          } catch (e) {
+            toast.error(e.message || 'No se pudo eliminar el lote');
+          } finally {
+            setBorrando(false);
+          }
+        }}
       />
     </div>
   );

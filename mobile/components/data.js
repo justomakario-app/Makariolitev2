@@ -478,6 +478,23 @@ window.MOCK_ACTIONS = {
     return data;
   },
 
+  async eliminarLote(batchId) {
+    // 1) Borrar las orders del lote — el trigger orders_recompute_state
+    //    se dispara y actualiza carrier_state automáticamente.
+    //    NOTA: si alguna order ya está archivada en una jornada cerrada,
+    //    el FK orders.jornada_id las protege (ON DELETE NO ACTION).
+    //    En ese caso el DELETE falla y NO se borra el batch.
+    const { error: e1 } = await supa.from('orders').delete().eq('import_batch_id', batchId);
+    if (e1) throw new Error('No se pudo borrar las órdenes del lote: ' + e1.message);
+
+    // 2) Borrar el batch en sí
+    const { error: e2 } = await supa.from('import_batches').delete().eq('id', batchId);
+    if (e2) throw new Error('No se pudo borrar el lote: ' + e2.message);
+
+    await Promise.all([loadCarriers(), loadOrders(), loadBatches()]);
+    window.MOCK_BUS.emit();
+  },
+
   async marcarNotificacionLeida(id) {
     await supa.from('notifications').update({ leida: true }).eq('id', id);
     await loadNotifications();
