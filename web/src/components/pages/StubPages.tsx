@@ -1,7 +1,7 @@
 import { Icon } from '@/components/shared/Icon';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
-import type { Database } from '@/types/database.types';
+import { supabase } from '@macario/shared/lib/supabase';
+import type { Database } from '@macario/shared/types/database.types';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 

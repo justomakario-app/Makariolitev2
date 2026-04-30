@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Modal } from '@/components/shared/Modal';
 import { Icon } from '@/components/shared/Icon';
 import { useToast } from '@/components/shared/Toast';
-import { useSkuCategories, useUpsertSku, useUpsertCategory } from '@/hooks/useCatalog';
-import type { Database } from '@/types/database.types';
+import { useSkuCategories, useUpsertSku, useUpsertCategory } from '@macario/shared/hooks/useCatalog';
+import type { Database } from '@macario/shared/types/database.types';
 
 type Sku = Database['public']['Tables']['sku_catalog']['Row'];
 

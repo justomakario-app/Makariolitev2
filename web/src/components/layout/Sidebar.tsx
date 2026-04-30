@@ -1,8 +1,8 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { Icon } from '@/components/shared/Icon';
 import { Logo } from '@/components/shared/Logo';
-import { useCurrentProfile, useLogout } from '@/hooks/useAuth';
-import { useNotifications } from '@/hooks/useNotifications';
+import { useCurrentProfile, useLogout } from '@macario/shared/hooks/useAuth';
+import { useNotifications } from '@macario/shared/hooks/useNotifications';
 
 const ROLE_LABEL: Record<string, string> = {
   owner: 'Propietario',

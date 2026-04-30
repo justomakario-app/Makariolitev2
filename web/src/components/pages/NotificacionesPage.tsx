@@ -1,6 +1,6 @@
 import { Icon } from '@/components/shared/Icon';
-import { useNotifications, useMarkAllRead } from '@/hooks/useNotifications';
-import { fmt } from '@/lib/fmt';
+import { useNotifications, useMarkAllRead } from '@macario/shared/hooks/useNotifications';
+import { fmt } from '@macario/shared/lib/fmt';
 
 const ICONS = {
   stock_critico: 'alert',
