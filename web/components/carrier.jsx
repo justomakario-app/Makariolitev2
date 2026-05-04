@@ -130,14 +130,18 @@ function CarrierPage({ channel, onBack, onNav }) {
       ) : null}
 
       <div className="carrier-body">
-        {/* KPIs — Unidades totales pedidas en este canal vs lo que falta producir */}
-        <div className="carrier-kpis" style={{gridTemplateColumns:'repeat(2,1fr)'}}>
+        {/* KPIs — Pedidas / Producidas / Faltantes (cómo lo ve el sector de producción) */}
+        <div className="carrier-kpis">
           <div className="carrier-kpi" style={{borderLeft:`3px solid ${C.color}`}}>
             <div className="carrier-kpi-label">Unidades totales</div>
             <div className="carrier-kpi-value">{data.kpis.unidades}</div>
           </div>
+          <div className="carrier-kpi" style={{borderLeft:'3px solid var(--ink-faint)'}}>
+            <div className="carrier-kpi-label">Unidades producidas</div>
+            <div className="carrier-kpi-value">{(data.table || []).reduce((s,r) => s + (r.producido || 0), 0)}</div>
+          </div>
           <div className="carrier-kpi" style={{borderLeft: data.kpis.pendiente>0 ? '3px solid var(--red)' : '3px solid var(--green)'}}>
-            <div className="carrier-kpi-label">Pendiente fabricar</div>
+            <div className="carrier-kpi-label">Faltantes de producir</div>
             <div className="carrier-kpi-value" style={{color: data.kpis.pendiente>0?'var(--red)':'var(--green)'}}>{data.kpis.pendiente}</div>
           </div>
         </div>

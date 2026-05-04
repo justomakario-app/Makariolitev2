@@ -69,13 +69,17 @@ function CarrierPage({ channel, onBack }) {
       </div>
 
       {/* KPIs */}
-      <div className="m-kpi-row" style={{marginTop:0, gridTemplateColumns:'repeat(2,1fr)'}}>
+      <div className="m-kpi-row" style={{marginTop:0}}>
         <div className="m-kpi" style={{borderLeft:`3px solid ${C.color}`}}>
-          <div className="m-kpi-label">Unidades</div>
+          <div className="m-kpi-label">Total</div>
           <div className="m-kpi-value">{data.kpis.unidades}</div>
         </div>
+        <div className="m-kpi" style={{borderLeft:'3px solid var(--ink-faint)'}}>
+          <div className="m-kpi-label">Producidas</div>
+          <div className="m-kpi-value">{(data.table || []).reduce((s,r) => s + (r.producido || 0), 0)}</div>
+        </div>
         <div className="m-kpi" style={{borderLeft: data.kpis.pendiente>0?'3px solid var(--red)':'3px solid var(--green)'}}>
-          <div className="m-kpi-label">Pendiente</div>
+          <div className="m-kpi-label">Faltantes</div>
           <div className="m-kpi-value" style={{color: data.kpis.pendiente>0?'var(--red)':'var(--green)'}}>{data.kpis.pendiente}</div>
         </div>
       </div>
