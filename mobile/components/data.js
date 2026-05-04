@@ -506,15 +506,15 @@ window.bootstrap = bootstrap;
 
 window.MOCK_ACTIONS = {
   async registrarProduccion({ sku, subcanal, cantidad, nota }) {
-    // El RPC NO acepta p_fecha — production_logs.fecha tiene default CURRENT_DATE
-    // (server-side). Si en el futuro se quiere registrar producción retroactiva,
-    // se puede ampliar el RPC. Por ahora siempre se loguea HOY.
+    // El RPC NO acepta p_fecha — production_logs.fecha tiene default CURRENT_DATE.
+    // Retorna el log creado completo (para soportar Undo en frontend).
     const params = { p_sku: sku, p_channel_id: subcanal, p_cantidad: cantidad };
     if (nota) params.p_notas = nota;
-    const { error } = await supa.rpc('rpc_register_production', params);
+    const { data, error } = await supa.rpc('rpc_register_production', params);
     if (error) throw new Error(error.message);
     await Promise.all([loadCarriers(), loadProdLogs(), loadHistorico()]);
     window.MOCK_BUS.emit();
+    return data; // production_logs row
   },
 
   async cerrarJornada({ channelId }) {
@@ -560,6 +560,43 @@ window.MOCK_ACTIONS = {
     await Promise.all([loadCarriers(), loadOrders(), loadBatches()]);
     window.MOCK_BUS.emit();
     return data;
+  },
+
+  /* Editar / Anular un log de producción.
+       - Si p_anular=true → solo inserta entrada compensatoria (-cantidad).
+       - Si p_anular=false y p_new_cantidad → compensatoria + nuevo log con
+         la cantidad corregida (y opcionalmente nuevo channel_id).
+     El RPC valida permisos: operario solo sus logs y dentro de 24h o antes
+     del cierre de jornada. Encargado/admin/owner cualquiera, sin tope. */
+  async corregirLog({ logId, nuevaCantidad, nuevoChannelId, motivo, anular }) {
+    const { data, error } = await supa.rpc('rpc_correct_log', {
+      p_log_id: logId,
+      p_new_cantidad: anular ? null : (nuevaCantidad ?? null),
+      p_new_channel_id: nuevoChannelId ?? null,
+      p_motivo: motivo ?? null,
+      p_anular: !!anular,
+    });
+    if (error) throw new Error(error.message);
+    await Promise.all([loadCarriers(), loadProdLogs(), loadHistorico()]);
+    window.MOCK_BUS.emit();
+    return data;
+  },
+
+  /* "Mis cargas" del operario actual — últimas N de hoy.
+     Hace JOIN para mostrar modelo/color en la lista. */
+  async getMisCargasHoy(limit = 20) {
+    const { data: { session } } = await supa.auth.getSession();
+    if (!session) return [];
+    const today = new Date().toISOString().slice(0, 10);
+    const { data, error } = await supa
+      .from('production_logs')
+      .select('*')
+      .eq('operario_id', session.user.id)
+      .eq('fecha', today)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (error) throw new Error(error.message);
+    return data || [];
   },
 
   async eliminarLote(batchId) {

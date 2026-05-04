@@ -80,11 +80,23 @@ function ProduceModal({ open, onClose, defaultSku, defaultSubcanal }) {
   const submit = async () => {
     setBusy(true);
     try {
-      // El backend setea production_logs.fecha = CURRENT_DATE automáticamente.
-      // El campo `fecha` del modal queda como informativo (resumen) — no se envía.
-      await window.MOCK_ACTIONS.registrarProduccion({ sku, subcanal, cantidad, nota });
+      // El RPC retorna el production_logs row creado (con id) — lo usamos para Undo.
+      const log = await window.MOCK_ACTIONS.registrarProduccion({ sku, subcanal, cantidad, nota });
       onClose();
-      toast.success(`${cantidad} × ${sku} → ${window.CARRIERS[subcanal]?.label} registrado`);
+      toast.success(`${cantidad} × ${sku} → ${window.CARRIERS[subcanal]?.label}`, {
+        dur: 5000,
+        action: log?.id ? {
+          label: 'Deshacer',
+          onClick: async () => {
+            try {
+              await window.MOCK_ACTIONS.corregirLog({ logId: log.id, anular: true });
+              toast.info('Carga deshecha');
+            } catch (e) {
+              toast.error('No se pudo deshacer · ' + (e.message || ''));
+            }
+          },
+        } : undefined,
+      });
     } catch (e) {
       toast.error(e.message || 'No se pudo registrar la producción');
     } finally {
@@ -260,6 +272,8 @@ function ProduceModal({ open, onClose, defaultSku, defaultSubcanal }) {
               { v:'flex',    l:'Flex',    s:'ML retiro 14hs', c:'#15803d' },
               { v:'tiendanube', l:'Tienda Nube', s:'Web propia', c:'#2563eb' },
               { v:'distribuidor', l:'Distribuidor', s:'Mayorista', c:'#d97706' },
+              { v:'no_flex', l:'No Flex', s:'Logística inversa', c:'#db2777' },
+              { v:'correo_argentino', l:'Correo Arg.', s:'Logística inversa', c:'#0891b2' },
             ].map(o => (
               <label key={o.v} className={`radio-card ${subcanal===o.v?'selected':''}`} style={{'--sel-color':o.c, '--sel-bg':`${o.c}1a`}}>
                 <input type="radio" checked={subcanal===o.v} onChange={() => setSubcanal(o.v)}/>
@@ -446,6 +460,8 @@ function ImportModal({ open, onClose, channel: defaultChannel }) {
           { v:'flex', l:'Flex', c:'#15803d' },
           { v:'tiendanube', l:'Tienda Nube', c:'#2563eb' },
           { v:'distribuidor', l:'Distribuidor', c:'#d97706' },
+          { v:'no_flex', l:'No Flex', c:'#db2777' },
+          { v:'correo_argentino', l:'Correo Arg.', c:'#0891b2' },
         ].map(o => (
           <label key={o.v} className={`radio-card ${channel===o.v?'selected':''}`} style={{'--sel-color':o.c, '--sel-bg':`${o.c}1a`}}>
             <input type="radio" checked={channel===o.v} onChange={() => setChannel(o.v)}/>

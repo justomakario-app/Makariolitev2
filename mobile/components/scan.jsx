@@ -18,6 +18,11 @@ function ScanPage({ onNav }) {
   const [registerOpen, setRegisterOpen] = useState(false);
   const [pendingSku, setPendingSku] = useState(null);
 
+  // "Mis cargas" del día — recargado tras cada confirmación
+  const [misCargas, setMisCargas]   = useState([]);
+  const [editLog, setEditLog]       = useState(null);
+  const [confirmAnular, setConfirmAnular] = useState(null);
+
   const stop = () => {
     try { scannerRef.current?.stop(); scannerRef.current?.destroy(); } catch (e) {}
     scannerRef.current = null;
@@ -112,6 +117,16 @@ function ScanPage({ onNav }) {
 
   /* Cleanup al desmontar la página */
   useEffect(() => () => stop(), []);
+
+  /* Cargar "Mis cargas de hoy" al montar y después de cada cierre del modal */
+  const recargarMisCargas = async () => {
+    try {
+      const logs = await window.MOCK_ACTIONS.getMisCargasHoy(20);
+      setMisCargas(logs);
+    } catch (e) { /* silencioso, no es crítico */ }
+  };
+  useEffect(() => { recargarMisCargas(); }, []);
+  useEffect(() => { if (!registerOpen) recargarMisCargas(); }, [registerOpen]);
 
   const skuInfo = lastSku ? window.SKU_DB[lastSku] : null;
 
@@ -216,27 +231,171 @@ function ScanPage({ onNav }) {
         </div>
       )}
 
-      {/* Mis últimos escaneos en esta sesión (placeholder — Etapa 4 lo reemplaza) */}
-      {lastScans.length > 0 && (
+      {/* Mis cargas de hoy — con botones Editar / Anular */}
+      {misCargas.length > 0 && (
         <div className="m-card" style={{margin:'14px 16px 100px'}}>
           <div className="m-card-header">
-            <div className="m-card-title">Recientes en esta sesión</div>
+            <div className="m-card-title">Mis cargas de hoy · {misCargas.length}</div>
           </div>
           <div>
-            {lastScans.map((r, i) => (
-              <div key={i} style={{display:'flex', alignItems:'center', gap:12, padding:'10px 14px', borderBottom: i < lastScans.length-1 ? '1px solid var(--border)' : 'none'}}>
-                <div style={{fontFamily:'var(--mono)', fontSize:11, color:'var(--ink-muted)'}}>{r.time}</div>
-                <div style={{flex:1, fontFamily:'var(--mono)', fontWeight:700, fontSize:12}}>{r.sku}</div>
-                <div style={{fontSize:11, color:'var(--ink-soft)'}}>{window.skuName(r.sku)}</div>
-              </div>
-            ))}
+            {misCargas.map((l, i) => {
+              const info = window.SKU_DB[l.sku] || {};
+              const ch = window.CARRIERS[l.channel_id] || { label: l.channel_id };
+              const esAnulado = l.notas && l.notas.startsWith('[ANULADO]');
+              const esCorregido = l.notas && l.notas.startsWith('[CORREGIDO]');
+              const negativo = l.cantidad < 0;
+              return (
+                <div key={l.id} style={{display:'flex', alignItems:'center', gap:10, padding:'10px 14px', borderBottom: i < misCargas.length-1 ? '1px solid var(--border)' : 'none', opacity: esAnulado ? 0.55 : 1}}>
+                  <div style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--ink-muted)', minWidth:38}}>
+                    {l.hora ? String(l.hora).slice(0,5) : ''}
+                  </div>
+                  <div style={{flex:1, minWidth:0}}>
+                    <div style={{display:'flex', alignItems:'center', gap:6, marginBottom:2}}>
+                      <span style={{fontFamily:'var(--mono)', fontWeight:700, fontSize:12}}>{l.sku}</span>
+                      <span style={{fontSize:9, fontWeight:700, padding:'1px 6px', borderRadius:6, background:`${ch.color}1a`, color:ch.color, textTransform:'uppercase'}}>{ch.label}</span>
+                      {esAnulado && <span style={{fontSize:9, fontWeight:700, padding:'1px 6px', borderRadius:6, background:'var(--paper-dim)', color:'var(--ink-muted)'}}>ANULADO</span>}
+                      {esCorregido && <span style={{fontSize:9, fontWeight:700, padding:'1px 6px', borderRadius:6, background:'var(--blue-bg)', color:'var(--blue)'}}>CORREGIDO</span>}
+                    </div>
+                    <div style={{fontSize:11, color:'var(--ink-soft)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
+                      {info.modelo || ''}{info.color && info.color !== '—' ? ` · ${info.color}` : ''}
+                    </div>
+                  </div>
+                  <div style={{fontFamily:'var(--mono)', fontWeight:800, fontSize:14, minWidth:38, textAlign:'right', color: negativo ? 'var(--red)' : 'var(--ink)'}}>
+                    {l.cantidad > 0 ? '+' : ''}{l.cantidad}
+                  </div>
+                  {!esAnulado && !negativo && (
+                    <div style={{display:'flex', flexDirection:'column', gap:4}}>
+                      <button onClick={() => setEditLog(l)} title="Editar" style={{width:30, height:30, padding:0, border:'1px solid var(--border-md)', background:'var(--paper)', borderRadius:5, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:'var(--ink-soft)'}}>
+                        <Icon n="edit" s={12}/>
+                      </button>
+                      <button onClick={() => setConfirmAnular(l)} title="Anular" style={{width:30, height:30, padding:0, border:'1px solid rgba(220,38,38,.32)', background:'var(--red-bg)', borderRadius:5, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:'var(--red)'}}>
+                        <Icon n="trash" s={12}/>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
 
       <ProduceModal open={registerOpen} onClose={() => setRegisterOpen(false)} defaultSku={pendingSku}/>
+
+      {/* Modal Editar carga */}
+      {editLog && (
+        <EditLogModal
+          log={editLog}
+          onClose={() => setEditLog(null)}
+          onSaved={() => { setEditLog(null); recargarMisCargas(); }}
+        />
+      )}
+
+      {/* Confirm Anular */}
+      <ConfirmModal
+        open={!!confirmAnular}
+        onClose={() => setConfirmAnular(null)}
+        title="Anular carga"
+        message={confirmAnular
+          ? `Vas a anular la carga de ${confirmAnular.cantidad} × ${confirmAnular.sku} (${window.CARRIERS[confirmAnular.channel_id]?.label || confirmAnular.channel_id}). Se va a registrar una entrada compensatoria que descuenta lo cargado. Queda registrado.`
+          : ''}
+        confirmText="Sí, anular"
+        danger
+        onConfirm={async () => {
+          try {
+            await window.MOCK_ACTIONS.corregirLog({ logId: confirmAnular.id, anular: true });
+            toast.success('Carga anulada');
+            setConfirmAnular(null);
+            recargarMisCargas();
+          } catch (e) { toast.error(e.message || 'No se pudo anular'); }
+        }}
+      />
     </div>
   );
 }
+
+/* ── Modal: editar una carga existente (corrige cantidad y/o destino) ── */
+function EditLogModal({ log, onClose, onSaved }) {
+  const toast = useToast();
+  const info = window.SKU_DB[log.sku] || {};
+  const [cantidad, setCantidad] = useState(log.cantidad);
+  const [channelId, setChannelId] = useState(log.channel_id);
+  const [motivo, setMotivo] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    if (cantidad === log.cantidad && channelId === log.channel_id) {
+      toast.info('No cambiaste nada');
+      return;
+    }
+    if (cantidad <= 0) { toast.error('Cantidad debe ser > 0'); return; }
+    setBusy(true);
+    try {
+      await window.MOCK_ACTIONS.corregirLog({
+        logId: log.id,
+        nuevaCantidad: cantidad,
+        nuevoChannelId: channelId !== log.channel_id ? channelId : null,
+        motivo: motivo || null,
+        anular: false,
+      });
+      toast.success('Carga corregida');
+      onSaved?.();
+    } catch (e) {
+      toast.error(e.message || 'No se pudo corregir');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const channels = ['colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino']
+    .filter(id => window.CARRIERS[id]);
+
+  return (
+    <Modal open={true} onClose={() => !busy && onClose()} title={`Editar carga · ${log.sku}`} footer={
+      <>
+        <button className="btn-ghost" onClick={onClose} disabled={busy}>Cancelar</button>
+        <button className="btn-primary" onClick={submit} disabled={busy}>
+          {busy ? <span className="loader" style={{borderColor:'rgba(255,255,255,.3)', borderTopColor:'#fff'}}/> : <><Icon n="check" s={14}/> Guardar corrección</>}
+        </button>
+      </>
+    }>
+      <div style={{padding:'10px 12px', background:'var(--paper-off)', border:'1px solid var(--border)', borderRadius:6, marginBottom:14, fontSize:12, color:'var(--ink-soft)'}}>
+        <div><strong>{log.sku}</strong> · {info.modelo}{info.color && info.color !== '—' ? ` · ${info.color}` : ''}</div>
+        <div style={{fontSize:11, color:'var(--ink-muted)', marginTop:4}}>
+          Original: {log.cantidad} uds · {window.CARRIERS[log.channel_id]?.label} · {log.hora?.slice(0,5)}
+        </div>
+      </div>
+
+      <div className="field-group">
+        <label className="field-label">Cantidad correcta</label>
+        <div style={{display:'flex', gap:6, alignItems:'center'}}>
+          <button onClick={() => setCantidad(Math.max(1, cantidad-1))} className="btn-ghost" style={{padding:'10px 14px', fontSize:18, lineHeight:1}}>−</button>
+          <input type="number" min="1" value={cantidad} onChange={e => setCantidad(Math.max(1, parseInt(e.target.value)||1))} className="qty-input"/>
+          <button onClick={() => setCantidad(cantidad+1)} className="btn-ghost" style={{padding:'10px 14px', fontSize:18, lineHeight:1}}>+</button>
+        </div>
+      </div>
+
+      <div className="field-group">
+        <label className="field-label">Destino</label>
+        <select className="field-input" value={channelId} onChange={e => setChannelId(e.target.value)}>
+          {channels.map(id => (
+            <option key={id} value={id}>{window.CARRIERS[id].label}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="field-group">
+        <label className="field-label">Motivo (opcional)</label>
+        <input className="field-input" value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Ej: tipeé mal la cantidad"/>
+      </div>
+
+      <div style={{padding:'10px 12px', background:'var(--blue-bg)', border:'1px solid rgba(37,99,235,.2)', borderRadius:6, fontSize:11, color:'var(--ink-soft)', lineHeight:1.6}}>
+        <Icon n="info" s={11}/> Al guardar: se anula el original y se registra la corrección. El faltante del canal se recalcula al instante. La acción queda registrada en el historial.
+      </div>
+    </Modal>
+  );
+}
+
+window.EditLogModal = EditLogModal;
 
 window.ScanPage = ScanPage;

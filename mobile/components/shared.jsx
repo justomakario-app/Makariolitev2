@@ -117,27 +117,54 @@ function useMockData() {
 
 function ToastProvider({ children }) {
   const [items, setItems] = useState([]);
-  const push = useCallback((msg, kind='info', dur=2800) => {
-    const id = Math.random().toString(36).slice(2);
-    setItems(s => [...s, { id, msg, kind, show:false }]);
-    requestAnimationFrame(() => setItems(s => s.map(i => i.id===id ? {...i, show:true} : i)));
-    setTimeout(() => setItems(s => s.map(i => i.id===id ? {...i, show:false} : i)), dur);
-    setTimeout(() => setItems(s => s.filter(i => i.id !== id)), dur + 400);
+
+  const dismiss = useCallback((id) => {
+    setItems(s => s.map(i => i.id===id ? {...i, show:false} : i));
+    setTimeout(() => setItems(s => s.filter(i => i.id !== id)), 400);
   }, []);
+
+  /* push(msg, kind='info', opts?)
+     opts puede ser un number (back-compat: dur en ms) o un objeto:
+       { dur?: number = 2800, action?: { label, onClick } } */
+  const push = useCallback((msg, kind='info', opts) => {
+    const isObj = opts && typeof opts === 'object';
+    const dur = isObj ? (opts.dur ?? 2800) : (typeof opts === 'number' ? opts : 2800);
+    const action = isObj ? opts.action : null;
+    const id = Math.random().toString(36).slice(2);
+    setItems(s => [...s, { id, msg, kind, action, show:false }]);
+    requestAnimationFrame(() => setItems(s => s.map(i => i.id===id ? {...i, show:true} : i)));
+    setTimeout(() => dismiss(id), dur);
+    return id;
+  }, [dismiss]);
+
   const api = useMemo(() => ({
-    success: m => push(m, 'success'),
-    error:   m => push(m, 'error'),
-    info:    m => push(m, 'info'),
-    warning: m => push(m, 'warning'),
-  }), [push]);
+    success: (m, opts) => push(m, 'success', opts),
+    error:   (m, opts) => push(m, 'error',   opts),
+    info:    (m, opts) => push(m, 'info',    opts),
+    warning: (m, opts) => push(m, 'warning', opts),
+    dismiss,
+  }), [push, dismiss]);
+
   return (
     <ToastCtx.Provider value={api}>
       {children}
       <div style={{position:'fixed', top:24, right:24, zIndex:5000, display:'flex', flexDirection:'column', gap:8, pointerEvents:'none'}}>
         {items.map(t => (
-          <div key={t.id} className={`toast toast-${t.kind} ${t.show?'show':''}`}>
+          <div key={t.id} className={`toast toast-${t.kind} ${t.show?'show':''}`} style={{pointerEvents:'auto'}}>
             <Icon n={t.kind==='success'?'check-circle':t.kind==='error'?'alert':t.kind==='warning'?'alert':'info'} s={16}/>
-            <span>{t.msg}</span>
+            <span style={{flex:1}}>{t.msg}</span>
+            {t.action && (
+              <button
+                onClick={() => { try { t.action.onClick(); } catch (e) {} dismiss(t.id); }}
+                style={{
+                  marginLeft:8, padding:'4px 10px', fontSize:11, fontWeight:700,
+                  letterSpacing:'.06em', textTransform:'uppercase',
+                  background:'rgba(255,255,255,.18)', color:'inherit',
+                  border:'1px solid rgba(255,255,255,.35)', borderRadius:4,
+                  cursor:'pointer', whiteSpace:'nowrap',
+                }}
+              >{t.action.label}</button>
+            )}
           </div>
         ))}
       </div>

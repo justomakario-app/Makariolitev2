@@ -80,11 +80,23 @@ function ProduceModal({ open, onClose, defaultSku, defaultSubcanal }) {
   const submit = async () => {
     setBusy(true);
     try {
-      // El backend setea production_logs.fecha = CURRENT_DATE automáticamente.
-      // El campo `fecha` del modal queda como informativo (resumen) — no se envía.
-      await window.MOCK_ACTIONS.registrarProduccion({ sku, subcanal, cantidad, nota });
+      // El RPC retorna el production_logs row creado (con id) — lo usamos para Undo.
+      const log = await window.MOCK_ACTIONS.registrarProduccion({ sku, subcanal, cantidad, nota });
       onClose();
-      toast.success(`${cantidad} × ${sku} → ${window.CARRIERS[subcanal]?.label} registrado`);
+      toast.success(`${cantidad} × ${sku} → ${window.CARRIERS[subcanal]?.label}`, {
+        dur: 5000,
+        action: log?.id ? {
+          label: 'Deshacer',
+          onClick: async () => {
+            try {
+              await window.MOCK_ACTIONS.corregirLog({ logId: log.id, anular: true });
+              toast.info('Carga deshecha');
+            } catch (e) {
+              toast.error('No se pudo deshacer · ' + (e.message || ''));
+            }
+          },
+        } : undefined,
+      });
     } catch (e) {
       toast.error(e.message || 'No se pudo registrar la producción');
     } finally {
