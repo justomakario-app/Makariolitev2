@@ -747,3 +747,160 @@ setTimeout(() => {
     window.MOCK_BUS.emit();
   }
 }, 8000);
+
+/* ═══════════════════════════════════════════════════════════════════
+   QR UTILITIES — generación de etiquetas para imprimir
+   ───────────────────────────────────────────────────────────────────
+   Cada QR codifica el SKU PLANO (ej: "MAD050"). Cuando lo escaneás
+   con la app, el ScanPage parsea el texto, valida contra SKU_DB y
+   abre el modal de Registrar Producción con el SKU prellenado.
+   ═══════════════════════════════════════════════════════════════════ */
+
+window.QR_UTILS = {
+  /* Genera un dataURL PNG del QR puro (sin texto). Para usar en PDFs o
+     componer canvases más grandes con texto. */
+  async generarQRDataUrl(sku, opts = {}) {
+    if (typeof window.QRCode === 'undefined') {
+      throw new Error('Librería QRCode no cargada — refrescá la página.');
+    }
+    return await window.QRCode.toDataURL(sku, {
+      errorCorrectionLevel: opts.errorCorrectionLevel || 'M', // 15% redundancia, soporta logo si querés
+      margin: opts.margin ?? 1,
+      width: opts.width || 512,
+      color: { dark: '#000000', light: '#FFFFFF' },
+    });
+  },
+
+  /* Descarga PNG individual con QR + SKU + modelo + color
+     debajo, listo para imprimir como etiqueta única. */
+  async descargarQRIndividual(sku) {
+    const info = window.SKU_DB[sku] || {};
+    const dataUrl = await this.generarQRDataUrl(sku, { width: 512 });
+
+    // Componer canvas final (640×800: cuadrado QR + bloque de texto debajo)
+    const final = document.createElement('canvas');
+    final.width = 640;
+    final.height = 800;
+    const ctx = final.getContext('2d');
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, 640, 800);
+
+    // QR centrado horizontalmente, margen 64px arriba
+    const qrImg = new Image();
+    await new Promise((res, rej) => { qrImg.onload = res; qrImg.onerror = rej; qrImg.src = dataUrl; });
+    ctx.drawImage(qrImg, 64, 64, 512, 512);
+
+    // SKU grande mono
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 56px JetBrains Mono, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(sku, 320, 660);
+
+    // Modelo (truncado si excede ancho)
+    ctx.font = '32px Plus Jakarta Sans, sans-serif';
+    ctx.fillStyle = '#3A3A3A';
+    let modelo = info.modelo || '';
+    const maxW = 600;
+    while (modelo.length > 0 && ctx.measureText(modelo).width > maxW) {
+      modelo = modelo.slice(0, -1);
+    }
+    if ((info.modelo || '').length > modelo.length) modelo += '…';
+    ctx.fillText(modelo, 320, 715);
+
+    // Color (si aplica, gris claro)
+    if (info.color && info.color !== '—') {
+      ctx.font = '26px Plus Jakarta Sans, sans-serif';
+      ctx.fillStyle = '#888888';
+      ctx.fillText(info.color, 320, 760);
+    }
+
+    // Disparar descarga
+    return new Promise(resolve => {
+      final.toBlob(blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `qr-${sku}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        resolve();
+      }, 'image/png');
+    });
+  },
+
+  /* Genera un PDF A4 con grilla 4×5 (20 etiquetas/hoja) de los SKUs
+     pasados. Cada celda lleva: QR + SKU + modelo + color. Se descarga
+     como `makario-qrs-{fecha}.pdf`. */
+  async descargarPDFCatalogo(skus) {
+    if (!window.jspdf || !window.jspdf.jsPDF) {
+      throw new Error('Librería jsPDF no cargada — refrescá la página.');
+    }
+    if (typeof window.QRCode === 'undefined') {
+      throw new Error('Librería QRCode no cargada — refrescá la página.');
+    }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+
+    const PAGE_W = 210, PAGE_H = 297;
+    const MARGIN = 8;
+    const COLS = 4, ROWS = 5;
+    const PER_PAGE = COLS * ROWS;
+    const cellW = (PAGE_W - 2 * MARGIN) / COLS;   // 48.5 mm
+    const cellH = (PAGE_H - 2 * MARGIN) / ROWS;   // 56.2 mm
+    const QR_SIZE = 35;                            // mm — escaneable desde 30-50cm
+
+    let i = 0;
+    for (const sku of skus) {
+      const info = window.SKU_DB[sku] || {};
+      if (i > 0 && i % PER_PAGE === 0) doc.addPage();
+      const idx = i % PER_PAGE;
+      const col = idx % COLS;
+      const row = Math.floor(idx / COLS);
+      const x = MARGIN + col * cellW;
+      const y = MARGIN + row * cellH;
+
+      // QR
+      const dataUrl = await this.generarQRDataUrl(sku, { width: 256 });
+      const qrX = x + (cellW - QR_SIZE) / 2;
+      const qrY = y + 4;
+      doc.addImage(dataUrl, 'PNG', qrX, qrY, QR_SIZE, QR_SIZE);
+
+      // SKU bold
+      doc.setFont('courier', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(0, 0, 0);
+      doc.text(sku, x + cellW / 2, qrY + QR_SIZE + 5, { align: 'center' });
+
+      // Modelo (puede ser 2 líneas si es largo)
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(58, 58, 58);
+      const modelo = info.modelo || '';
+      const lines = doc.splitTextToSize(modelo, cellW - 4);
+      const linesToShow = lines.slice(0, 2);
+      let textY = qrY + QR_SIZE + 9;
+      linesToShow.forEach((line, idx2) => {
+        doc.text(line, x + cellW / 2, textY + idx2 * 3.5, { align: 'center' });
+      });
+
+      // Color (si aplica)
+      if (info.color && info.color !== '—') {
+        doc.setFontSize(7);
+        doc.setTextColor(140, 140, 140);
+        const colorY = textY + linesToShow.length * 3.5 + 1;
+        doc.text(info.color, x + cellW / 2, colorY, { align: 'center' });
+      }
+
+      // Borde de corte (línea fina gris)
+      doc.setDrawColor(220, 220, 220);
+      doc.setLineWidth(0.1);
+      doc.rect(x, y, cellW, cellH);
+
+      i++;
+    }
+
+    doc.save(`makario-qrs-${new Date().toISOString().slice(0, 10)}.pdf`);
+  },
+};

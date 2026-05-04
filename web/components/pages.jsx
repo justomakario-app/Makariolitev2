@@ -322,8 +322,44 @@ function CatalogoPage() {
   const [filter, setFilter] = useState('');
   const [cat, setCat] = useState('todas');
   const [showQR, setShowQR] = useState(false);
+  const [generandoPDF, setGenerandoPDF] = useState(false);
   const [editing, setEditing] = useState(null); // {sku, isNew}
   const [, forceUpdate] = useState(0);
+
+  /* Imprimir PDF batch del catálogo filtrado (grilla 4x5) */
+  const imprimirPDFBatch = async () => {
+    if (!window.QR_UTILS) {
+      toast.error('Utilidades de QR no disponibles · refrescá la página');
+      return;
+    }
+    setGenerandoPDF(true);
+    try {
+      // Solo SKUs activos del filtro actual
+      const lista = filtered.filter(s => window.SKU_DB[s]?.activo !== false);
+      if (!lista.length) { toast.info('No hay SKUs activos para imprimir'); return; }
+      await window.QR_UTILS.descargarPDFCatalogo(lista);
+      toast.success(`PDF generado · ${lista.length} QRs`);
+      setShowQR(false);
+    } catch (e) {
+      toast.error(e.message || 'Error generando PDF');
+    } finally {
+      setGenerandoPDF(false);
+    }
+  };
+
+  /* Descargar PNG individual de un SKU */
+  const descargarQRSku = async (sku) => {
+    if (!window.QR_UTILS) {
+      toast.error('Utilidades de QR no disponibles · refrescá la página');
+      return;
+    }
+    try {
+      await window.QR_UTILS.descargarQRIndividual(sku);
+      toast.success(`QR ${sku} descargado`);
+    } catch (e) {
+      toast.error(e.message || 'Error generando QR');
+    }
+  };
 
   const skus = Object.keys(window.SKU_DB);
   const cats = [...new Set(skus.map(s => window.SKU_DB[s].categoria))];
@@ -409,7 +445,7 @@ function CatalogoPage() {
                   <td>{c.activo ? <span style={{display:'inline-flex', alignItems:'center', gap:5, fontSize:11, color:'var(--green)'}}><span style={{width:6, height:6, borderRadius:'50%', background:'var(--green)'}}/>Activo</span> : <span style={{fontSize:11, color:'var(--ink-muted)'}}>Inactivo</span>}</td>
                   <td style={{textAlign:'right', width:1, whiteSpace:'nowrap'}}>
                     <button className="btn-ghost" style={{padding:'5px 10px', fontSize:10, marginRight:4}} onClick={() => setEditing({sku:s, isNew:false})}><Icon n="edit" s={11}/> Editar</button>
-                    <button className="btn-ghost" style={{padding:'5px 10px', fontSize:10}} onClick={() => toast.info(`QR ${s} generado`)}><Icon n="qr" s={11}/> QR</button>
+                    <button className="btn-ghost" style={{padding:'5px 10px', fontSize:10}} onClick={() => descargarQRSku(s)} title="Descargar QR PNG"><Icon n="qr" s={11}/> QR</button>
                   </td>
                 </tr>
               );
@@ -430,19 +466,24 @@ function CatalogoPage() {
 
       {/* Modal QR genérico */}
       {showQR && (
-        <Modal open={showQR} onClose={() => setShowQR(false)} title="Generar QRs del catálogo" footer={
+        <Modal open={showQR} onClose={() => !generandoPDF && setShowQR(false)} title="Imprimir QRs del catálogo" footer={
           <>
-            <button className="btn-ghost" onClick={() => setShowQR(false)}>Cerrar</button>
-            <button className="btn-primary" onClick={() => { toast.success('PDF generado · ' + filtered.length + ' QRs'); setShowQR(false); }}>
-              <Icon n="download" s={14}/> Descargar PDF
+            <button className="btn-ghost" onClick={() => setShowQR(false)} disabled={generandoPDF}>Cancelar</button>
+            <button className="btn-primary" onClick={imprimirPDFBatch} disabled={generandoPDF}>
+              {generandoPDF
+                ? <span className="loader" style={{borderColor:'rgba(255,255,255,.3)', borderTopColor:'#fff'}}/>
+                : <><Icon n="download" s={14}/> Descargar PDF</>}
             </button>
           </>
         }>
           <div style={{fontSize:12, color:'var(--ink-soft)', lineHeight:1.7}}>
-            Vamos a generar un PDF con <strong>{filtered.length} códigos QR</strong> (uno por SKU filtrado), listos para imprimir y pegar en cada caja.
+            Vas a generar un PDF A4 con <strong>{filtered.filter(s => window.SKU_DB[s]?.activo !== false).length} códigos QR</strong> en grilla 4×5 — listos para imprimir, recortar y pegar en el banner del depósito.
           </div>
-          <div style={{marginTop:14, padding:14, background:'var(--paper-off)', border:'1px solid var(--border)', borderRadius:6, fontSize:11, color:'var(--ink-muted)'}}>
-            Cada QR codifica el SKU. Al escanearlo en producción o embalaje, el sistema resuelve modelo, color y variante automáticamente.
+          <div style={{marginTop:14, padding:14, background:'var(--paper-off)', border:'1px solid var(--border)', borderRadius:6, fontSize:11, color:'var(--ink-muted)', lineHeight:1.6}}>
+            Cada QR codifica el SKU. Cuando un operario lo escanea desde la PWA en el cel, abre directamente el modal de Registrar Producción con el modelo prellenado — solo elige destino y cantidad.
+          </div>
+          <div style={{marginTop:12, fontSize:10, color:'var(--ink-muted)'}}>
+            <Icon n="info" s={11}/> Tip: usá los filtros (categoría, búsqueda) si querés imprimir solo una parte del catálogo. SKUs inactivos se excluyen automáticamente.
           </div>
         </Modal>
       )}

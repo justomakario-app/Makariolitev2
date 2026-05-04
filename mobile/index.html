@@ -26,6 +26,9 @@
   <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <!-- QR + PDF generation (para imprimir banner desde mobile si aplica) -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script type="module">
     /* qr-scanner usa import.meta — lo cargamos como módulo y lo exponemos en window */
     import QrScanner from 'https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/+esm';
@@ -34,7 +37,7 @@
   </script>
 
   <!-- Data layer (Supabase real) -->
-  <script src="components/data.js?v=12"></script>
+  <script src="components/data.js?v=13"></script>
   <script src="components/xlsx.js?v=11"></script>
 
   <!-- Componentes (Babel JSX inline) -->
@@ -46,7 +49,7 @@
   <script type="text/babel" src="components/produccion.jsx?v=3"></script>
   <script type="text/babel" src="components/scan.jsx?v=1"></script>
   <script type="text/babel" src="components/modals.jsx?v=13"></script>
-  <script type="text/babel" src="components/pages.jsx?v=2"></script>
+  <script type="text/babel" src="components/pages.jsx?v=3"></script>
   <script type="text/babel" src="components/app.jsx?v=2"></script>
 
   <!-- Boot -->
