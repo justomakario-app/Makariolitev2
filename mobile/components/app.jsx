@@ -48,7 +48,7 @@ function App() {
     if (page === 'produccion')  return <ProduccionPage/>;
     if (page === 'notificaciones') return <NotificacionesPage/>;
     if (page === 'perfil')      return <PerfilPage onLogout={handleLogout}/>;
-    if (['colecta','flex','tiendanube','distribuidor'].includes(page))
+    if (['colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino'].includes(page))
       return <CarrierPage channel={page} onBack={() => setPage('dashboard')}/>;
     return <DashboardPage onNav={setPage}/>;
   };

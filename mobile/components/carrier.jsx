@@ -51,7 +51,7 @@ function CarrierPage({ channel, onBack }) {
             display:'flex', alignItems:'center', justifyContent:'center',
             borderRadius:6, flexShrink:0,
           }}>
-            <Icon n={channel==='colecta'?'truck':channel==='flex'?'package':channel==='tiendanube'?'box':'users'} s={16}/>
+            <Icon n={({colecta:'truck', flex:'package', tiendanube:'box', distribuidor:'users', no_flex:'package-check', correo_argentino:'send'})[channel] || 'box'} s={16}/>
           </div>
           <div style={{minWidth:0}}>
             <div style={{fontSize:15, fontWeight:800, letterSpacing:'-.02em'}}>{C.label}</div>

@@ -9,7 +9,7 @@ function ProduccionPage() {
   const [pendingSku, setPendingSku] = useState(null);
 
   const exportarExcel = () => {
-    const map = { colecta:'Colecta', flex:'Flex', tiendanube:'Tienda Nube', distribuidor:'Distribuidores' };
+    const map = Object.fromEntries(Object.entries(window.CARRIERS || {}).map(([k,v]) => [k, v.label]));
     const fuente = tab === 'todos'
       ? data.table
       : data.table.filter(r => r.canal === map[tab]);
@@ -43,7 +43,7 @@ function ProduccionPage() {
 
   let rows = data.table;
   if (tab !== 'todos') {
-    const map = { colecta:'Colecta', flex:'Flex', tiendanube:'Tienda Nube', distribuidor:'Distribuidores' };
+    const map = Object.fromEntries(Object.entries(window.CARRIERS || {}).map(([k,v]) => [k, v.label]));
     rows = rows.filter(r => r.canal === map[tab]);
   }
   rows = [...rows].sort((a, b) => (b.faltante || 0) - (a.faltante || 0));
@@ -93,11 +93,13 @@ function ProduccionPage() {
       {/* Tabs canales */}
       <div className="m-tabs-scroll">
         {[
-          { id:'todos',        label:'Todos' },
-          { id:'colecta',      label:'Colecta',     dot:'#6366f1' },
-          { id:'flex',         label:'Flex',        dot:'#15803d' },
-          { id:'tiendanube',   label:'Tienda Nube', dot:'#2563eb' },
-          { id:'distribuidor', label:'Distrib.',    dot:'#d97706' },
+          { id:'todos',            label:'Todos' },
+          { id:'colecta',          label:'Colecta',     dot:'#6366f1' },
+          { id:'flex',             label:'Flex',        dot:'#15803d' },
+          { id:'tiendanube',       label:'Tienda Nube', dot:'#2563eb' },
+          { id:'distribuidor',     label:'Distrib.',    dot:'#d97706' },
+          { id:'no_flex',          label:'No Flex',     dot:'#db2777' },
+          { id:'correo_argentino', label:'Correo Arg.', dot:'#0891b2' },
         ].map(t => (
           <button
             key={t.id}
@@ -120,9 +122,9 @@ function ProduccionPage() {
           </div>
         ) : rows.map((r, i) => {
           const info = window.SKU_DB[r.sku] || {};
-          const channelColor = r.canal === 'Colecta' ? '#6366f1' :
-                                r.canal === 'Flex' ? '#15803d' :
-                                r.canal === 'Tienda Nube' ? '#2563eb' : '#d97706';
+          // Encontrar el canal que tenga ese label para tomar su color
+          const _ch = Object.values(window.CARRIERS || {}).find(c => c.label === r.canal);
+          const channelColor = _ch?.color || '#888';
           return (
             <div key={`${r.sku}-${i}`} className="m-prod-card">
               <div style={{display:'flex', alignItems:'flex-start', gap:10}}>

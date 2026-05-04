@@ -65,14 +65,16 @@ function DashboardPage({ onNav }) {
     toast.success(`Excel exportado · ${filas.length} línea${filas.length===1?'':'s'} de ${orden.filter(id => (M.carriers[id]?.table||[]).some(r => (r.faltante||0)>0)).length} canal(es)`);
   };
 
-  // Derivar conteos por canal directamente de los carriers (siempre actualizado)
-  const counts = {
-    colecta:      M.carriers.colecta.kpis.unidades      || 0,
-    flex:         M.carriers.flex.kpis.unidades         || 0,
-    tiendanube:   M.carriers.tiendanube.kpis.unidades   || 0,
-    distribuidor: M.carriers.distribuidor.kpis.unidades || 0,
-  };
-  const total = counts.colecta + counts.flex + counts.tiendanube + counts.distribuidor;
+  // Lista de canales visibles (filtra por rol). Centralizado acá para
+  // que el orden y la lista sean consistentes con el dashboard mobile.
+  const canalesIds = ['colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino'];
+  const counts = {};
+  let total = 0;
+  for (const id of canalesIds) {
+    const u = M.carriers[id]?.kpis?.unidades || 0;
+    counts[id] = u;
+    total += u;
+  }
   const fechaTxt = now.toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
   const horaTxt = now.toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit', hour12:true });
   const today = `${fechaTxt} · ${horaTxt}`;
@@ -120,12 +122,19 @@ function DashboardPage({ onNav }) {
         </div>
       </div>
 
-      {/* Channels */}
-      <div className="channel-grid">
-        <ChannelCard id="colecta"      label={C.colecta.label}      sub={C.colecta.sub}      count={counts.colecta}      color={C.colecta.color}      onClick={() => onNav('colecta')}/>
-        <ChannelCard id="flex"         label={C.flex.label}         sub={C.flex.sub}         count={counts.flex}         color={C.flex.color}         onClick={() => onNav('flex')}/>
-        <ChannelCard id="tiendanube"   label={C.tiendanube.label}   sub={C.tiendanube.sub}   count={counts.tiendanube}   color={C.tiendanube.color}   onClick={() => onNav('tiendanube')}/>
-        <ChannelCard id="distribuidor" label={C.distribuidor.label} sub={C.distribuidor.sub} count={counts.distribuidor} color={C.distribuidor.color} onClick={() => onNav('distribuidor')}/>
+      {/* Channels — 3 columnas (2 filas con 6 canales) — armónico en cualquier viewport */}
+      <div className="channel-grid" style={{gridTemplateColumns:'repeat(3, 1fr)'}}>
+        {canalesIds.map(id => (
+          <ChannelCard
+            key={id}
+            id={id}
+            label={C[id]?.label || id}
+            sub={C[id]?.sub || ''}
+            count={counts[id]}
+            color={C[id]?.color || '#888'}
+            onClick={() => onNav(id)}
+          />
+        ))}
       </div>
     </div>
   );

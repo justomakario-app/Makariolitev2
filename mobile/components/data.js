@@ -103,10 +103,12 @@ window.MOCK = {
   user: { name:'', initials:'', role:'owner', roleLabel:'', email:'', username:'' },
 
   carriers: {
-    colecta:      { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[] },
-    flex:         { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[] },
-    tiendanube:   { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[] },
-    distribuidor: { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[] },
+    colecta:          { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[] },
+    flex:             { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[] },
+    tiendanube:       { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[] },
+    distribuidor:     { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[] },
+    no_flex:          { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[] },
+    correo_argentino: { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[] },
   },
 
   prod: { todos: { producidoHoy:0, kpis:{ faltante:0, totalPedido:0, producido:0 }, table:[] } },
@@ -130,8 +132,8 @@ window.MOCK = {
   },
 
   ROLE_NAV: {
-    owner:     { landing:'dashboard',  items:['dashboard','colecta','flex','tiendanube','distribuidor','produccion','registrar','historico','catalogo','equipo','notificaciones','perfil'] },
-    admin:     { landing:'dashboard',  items:['dashboard','colecta','flex','tiendanube','distribuidor','produccion','registrar','historico','catalogo','equipo','notificaciones','perfil'] },
+    owner:     { landing:'dashboard',  items:['dashboard','colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino','produccion','registrar','historico','catalogo','equipo','notificaciones','perfil'] },
+    admin:     { landing:'dashboard',  items:['dashboard','colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino','produccion','registrar','historico','catalogo','equipo','notificaciones','perfil'] },
     encargado: { landing:'produccion', items:['produccion','registrar','notificaciones','perfil'] },
     cnc:       { landing:'produccion', items:['produccion','registrar','perfil'] },
     melamina:  { landing:'produccion', items:['produccion','registrar','perfil'] },
@@ -146,10 +148,12 @@ window.MOCK = {
 
 /* ── Channel config (visual) — sub/cierreHora se enriquecen desde DB ── */
 window.CARRIERS = {
-  colecta:      { label:'Colecta',         sub:'ML · Retiro 12:00 hs', color:'#6366f1', bg:'#f1f0ff', tipo_cierre:'horario',  cierreHora:'12:00' },
-  flex:         { label:'Flex',            sub:'ML · Retiro 14:00 hs', color:'#15803d', bg:'#effaf1', tipo_cierre:'horario',  cierreHora:'14:00' },
-  tiendanube:   { label:'Tienda Nube',     sub:'Web propia',           color:'#2563eb', bg:'#eff6ff', tipo_cierre:'flexible', cierreHora:null },
-  distribuidor: { label:'Distribuidores',  sub:'Mayoristas / bulto',   color:'#d97706', bg:'#fffbeb', tipo_cierre:'flexible', cierreHora:null },
+  colecta:          { label:'Colecta',         sub:'ML · Retiro 12:00 hs',     color:'#6366f1', bg:'#f1f0ff', tipo_cierre:'horario',  cierreHora:'12:00' },
+  flex:             { label:'Flex',            sub:'ML · Retiro 14:00 hs',     color:'#15803d', bg:'#effaf1', tipo_cierre:'horario',  cierreHora:'14:00' },
+  tiendanube:       { label:'Tienda Nube',     sub:'Web propia',               color:'#2563eb', bg:'#eff6ff', tipo_cierre:'flexible', cierreHora:null },
+  distribuidor:     { label:'Distribuidores',  sub:'Mayoristas / bulto',       color:'#d97706', bg:'#fffbeb', tipo_cierre:'flexible', cierreHora:null },
+  no_flex:          { label:'No Flex',         sub:'Logística inversa',        color:'#db2777', bg:'#fdf2f8', tipo_cierre:'flexible', cierreHora:null },
+  correo_argentino: { label:'Correo Argentino',sub:'Logística inversa',        color:'#0891b2', bg:'#ecfeff', tipo_cierre:'flexible', cierreHora:null },
 };
 
 /* ── Bus reactivo ── */

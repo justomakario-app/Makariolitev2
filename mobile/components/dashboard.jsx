@@ -41,13 +41,14 @@ function DashboardPage({ onNav }) {
     toast.success(`Excel exportado · ${filas.length} líneas`);
   };
 
-  const counts = {
-    colecta:      M.carriers.colecta.kpis.unidades      || 0,
-    flex:         M.carriers.flex.kpis.unidades         || 0,
-    tiendanube:   M.carriers.tiendanube.kpis.unidades   || 0,
-    distribuidor: M.carriers.distribuidor.kpis.unidades || 0,
-  };
-  const total = counts.colecta + counts.flex + counts.tiendanube + counts.distribuidor;
+  const canalesIds = ['colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino'];
+  const counts = {};
+  let total = 0;
+  for (const id of canalesIds) {
+    const u = M.carriers[id]?.kpis?.unidades || 0;
+    counts[id] = u;
+    total += u;
+  }
   const fechaTxt = now.toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
   const horaTxt = now.toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' });
   const C = window.CARRIERS;
@@ -96,10 +97,10 @@ function DashboardPage({ onNav }) {
         </div>
       </div>
 
-      {/* Canales 2x2 */}
+      {/* Canales 2 columnas (con 6 canales se ven 3 filas) */}
       <div className="m-channel-grid">
-        {['colecta','flex','tiendanube','distribuidor'].map(id => {
-          const c = C[id]; const count = counts[id]; const empty = count === 0;
+        {canalesIds.map(id => {
+          const c = C[id] || {}; const count = counts[id]; const empty = count === 0;
           return (
             <div key={id} className="channel-card" data-channel={id} onClick={() => onNav(id)}>
               <div style={{position:'absolute', top:0, left:0, right:0, height:3, background:c.color}}/>

@@ -11,10 +11,10 @@ function ProduccionPage() {
      canales con columna Canal. Si es un canal específico, solo ese.
      Solo SKUs con faltante > 0. */
   const exportarExcel = () => {
-    const map = { colecta:'Colecta', flex:'Flex', tiendanube:'Tienda Nube', distribuidor:'Distribuidor' };
+    const label = window.CARRIERS[tabCanal]?.label;
     const fuente = tabCanal === 'todos'
       ? data.table
-      : data.table.filter(r => r.canal === map[tabCanal]);
+      : data.table.filter(r => r.canal === label);
     const filas = fuente
       .filter(r => (r.faltante || 0) > 0)
       .map(r => {
@@ -49,8 +49,8 @@ function ProduccionPage() {
 
   let rows = data.table;
   if (tabCanal !== 'todos') {
-    const map = { colecta:'Colecta', flex:'Flex', tiendanube:'Tienda Nube', distribuidor:'Distribuidor' };
-    rows = rows.filter(r => r.canal === map[tabCanal]);
+    const label = window.CARRIERS[tabCanal]?.label;
+    if (label) rows = rows.filter(r => r.canal === label);
   }
 
   const todayLogs = M.prodLogs.filter(l => l.fecha === '2026-04-25');
@@ -87,22 +87,19 @@ function ProduccionPage() {
           <button className={`prod-tab ${tabCanal==='todos'?'active-todos':''}`} onClick={() => setTabCanal('todos')}>
             Todos los canales
           </button>
-          <button className={`prod-tab ${tabCanal==='colecta'?'active-todos':''}`} onClick={() => setTabCanal('colecta')}>
-            <span style={{width:6, height:6, borderRadius:'50%', background:'#6366f1', display:'inline-block', marginRight:6, verticalAlign:'middle'}}/>
-            Colecta
-          </button>
-          <button className={`prod-tab ${tabCanal==='flex'?'active-todos':''}`} onClick={() => setTabCanal('flex')}>
-            <span style={{width:6, height:6, borderRadius:'50%', background:'#15803d', display:'inline-block', marginRight:6, verticalAlign:'middle'}}/>
-            Flex
-          </button>
-          <button className={`prod-tab ${tabCanal==='tiendanube'?'active-todos':''}`} onClick={() => setTabCanal('tiendanube')}>
-            <span style={{width:6, height:6, borderRadius:'50%', background:'#2563eb', display:'inline-block', marginRight:6, verticalAlign:'middle'}}/>
-            Tienda Nube
-          </button>
-          <button className={`prod-tab ${tabCanal==='distribuidor'?'active-todos':''}`} onClick={() => setTabCanal('distribuidor')}>
-            <span style={{width:6, height:6, borderRadius:'50%', background:'#d97706', display:'inline-block', marginRight:6, verticalAlign:'middle'}}/>
-            Distribuidores
-          </button>
+          {['colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino'].map(id => {
+            const ch = window.CARRIERS[id] || {};
+            return (
+              <button
+                key={id}
+                className={`prod-tab ${tabCanal===id?'active-todos':''}`}
+                onClick={() => setTabCanal(id)}
+              >
+                <span style={{width:6, height:6, borderRadius:'50%', background: ch.color || '#888', display:'inline-block', marginRight:6, verticalAlign:'middle'}}/>
+                {ch.label || id}
+              </button>
+            );
+          })}
         </div>
       </div>
 

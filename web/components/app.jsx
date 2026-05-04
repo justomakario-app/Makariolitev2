@@ -38,7 +38,7 @@ function App() {
   /* registrar es un atajo a producción */
   const renderPage = () => {
     if (page === 'dashboard')   return <DashboardPage onNav={setPage}/>;
-    if (['colecta','flex','tiendanube','distribuidor'].includes(page))
+    if (['colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino'].includes(page))
       return <CarrierPage channel={page} onBack={() => setPage('dashboard')} onNav={setPage}/>;
     if (page === 'produccion' || page === 'registrar') return <ProduccionPage/>;
     if (page === 'qr')             return <QRPage/>;
