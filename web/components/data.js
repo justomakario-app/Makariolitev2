@@ -170,7 +170,7 @@ window.MOCK_BUS = {
 async function loadCatalog() {
   try {
     const { data, error } = await supa.from('sku_catalog').select('*').order('sku', { ascending: true });
-    if (error) { console.error('[data.js] catalog:', error); return; }
+    if (error) throw error;
     const map = {};
     for (const s of data || []) {
       // Override de nombres cortos para display. Si el SKU está en
@@ -184,14 +184,26 @@ async function loadCatalog() {
         categoria: s.categoria,
         es_fabricado: s.es_fabricado,
         activo: s.activo,
-        // Mantenemos el modelo/color "oficial" de la BD por si los
-        // necesitamos (ej. para exportar reportes con el nombre largo).
         modelo_oficial: s.modelo,
         color_oficial: s.color || '—',
       };
     }
     window.SKU_DB = map;
-  } catch (e) { console.error('[data.js] catalog ex:', e); }
+    // Cache offline: el operario en el depósito podría perder señal
+    // momentáneamente — el catálogo cacheado permite que el scanner
+    // siga reconociendo SKUs sin red.
+    try { localStorage.setItem('makario_cache_skus', JSON.stringify(map)); } catch (e) {}
+  } catch (e) {
+    console.error('[data.js] catalog fail (intentando cache offline):', e?.message ?? e);
+    // Fallback: hidratar SKU_DB desde localStorage si existe
+    try {
+      const cached = localStorage.getItem('makario_cache_skus');
+      if (cached) {
+        window.SKU_DB = JSON.parse(cached);
+        console.warn('[data.js] catálogo cargado desde cache offline');
+      }
+    } catch (e2) {}
+  }
 }
 
 async function loadChannels() {
