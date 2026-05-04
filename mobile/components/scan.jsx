@@ -231,54 +231,73 @@ function ScanPage({ onNav }) {
         </div>
       )}
 
-      {/* Mis cargas de hoy — con botones Editar / Anular */}
-      {misCargas.length > 0 && (
-        <div className="m-card" style={{margin:'14px 16px 100px'}}>
-          <div className="m-card-header">
-            <div className="m-card-title">Mis cargas de hoy · {misCargas.length}</div>
+      {/* Mis cargas de hoy — con botones Editar / Anular.
+          Ocultamos las entradas compensatorias (cantidad<0) — son ruido
+          técnico — pero usamos su info para marcar el original como
+          "ya anulado/corregido" y deshabilitar sus botones. */}
+      {(() => {
+        // Set de IDs de logs que YA tienen una compensación asociada
+        const idsAnulados = new Set();
+        for (const l of misCargas) {
+          const m = (l.notas || '').match(/^\[ANULADO\] log_id=([0-9a-f-]+)/);
+          if (m) idsAnulados.add(m[1]);
+        }
+        // Filtrar compensaciones (las negativas con [ANULADO]); solo
+        // mostramos las cargas reales (positivas).
+        const visibles = misCargas.filter(l => !(l.cantidad < 0 && (l.notas || '').startsWith('[ANULADO]')));
+        if (!visibles.length) return null;
+
+        return (
+          <div className="m-card" style={{margin:'14px 16px 100px'}}>
+            <div className="m-card-header">
+              <div className="m-card-title">Mis cargas de hoy · {visibles.length}</div>
+            </div>
+            <div>
+              {visibles.map((l, i) => {
+                const info = window.SKU_DB[l.sku] || {};
+                const ch = window.CARRIERS[l.channel_id] || { label: l.channel_id };
+                const yaAnulado = idsAnulados.has(l.id);
+                const esCorregido = (l.notas || '').startsWith('[CORREGIDO]');
+                return (
+                  <div key={l.id} style={{
+                    display:'flex', alignItems:'center', gap:10, padding:'10px 14px',
+                    borderBottom: i < visibles.length-1 ? '1px solid var(--border)' : 'none',
+                    opacity: yaAnulado ? 0.5 : 1,
+                  }}>
+                    <div style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--ink-muted)', minWidth:38}}>
+                      {l.hora ? String(l.hora).slice(0,5) : ''}
+                    </div>
+                    <div style={{flex:1, minWidth:0}}>
+                      <div style={{display:'flex', alignItems:'center', gap:6, marginBottom:2, flexWrap:'wrap'}}>
+                        <span style={{fontFamily:'var(--mono)', fontWeight:700, fontSize:12, textDecoration: yaAnulado ? 'line-through' : 'none'}}>{l.sku}</span>
+                        <span style={{fontSize:9, fontWeight:700, padding:'1px 6px', borderRadius:6, background:`${ch.color}1a`, color:ch.color, textTransform:'uppercase'}}>{ch.label}</span>
+                        {yaAnulado && <span style={{fontSize:9, fontWeight:700, padding:'1px 6px', borderRadius:6, background:'var(--paper-dim)', color:'var(--ink-muted)'}}>ANULADO</span>}
+                        {esCorregido && !yaAnulado && <span style={{fontSize:9, fontWeight:700, padding:'1px 6px', borderRadius:6, background:'var(--blue-bg)', color:'var(--blue)'}}>CORRECCIÓN</span>}
+                      </div>
+                      <div style={{fontSize:11, color:'var(--ink-soft)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textDecoration: yaAnulado ? 'line-through' : 'none'}}>
+                        {info.modelo || ''}{info.color && info.color !== '—' ? ` · ${info.color}` : ''}
+                      </div>
+                    </div>
+                    <div style={{fontFamily:'var(--mono)', fontWeight:800, fontSize:14, minWidth:38, textAlign:'right', textDecoration: yaAnulado ? 'line-through' : 'none'}}>
+                      +{l.cantidad}
+                    </div>
+                    {!yaAnulado && (
+                      <div style={{display:'flex', flexDirection:'column', gap:4}}>
+                        <button onClick={() => setEditLog(l)} title="Editar" style={{width:30, height:30, padding:0, border:'1px solid var(--border-md)', background:'var(--paper)', borderRadius:5, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:'var(--ink-soft)'}}>
+                          <Icon n="edit" s={12}/>
+                        </button>
+                        <button onClick={() => setConfirmAnular(l)} title="Anular" style={{width:30, height:30, padding:0, border:'1px solid rgba(220,38,38,.32)', background:'var(--red-bg)', borderRadius:5, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:'var(--red)'}}>
+                          <Icon n="trash" s={12}/>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <div>
-            {misCargas.map((l, i) => {
-              const info = window.SKU_DB[l.sku] || {};
-              const ch = window.CARRIERS[l.channel_id] || { label: l.channel_id };
-              const esAnulado = l.notas && l.notas.startsWith('[ANULADO]');
-              const esCorregido = l.notas && l.notas.startsWith('[CORREGIDO]');
-              const negativo = l.cantidad < 0;
-              return (
-                <div key={l.id} style={{display:'flex', alignItems:'center', gap:10, padding:'10px 14px', borderBottom: i < misCargas.length-1 ? '1px solid var(--border)' : 'none', opacity: esAnulado ? 0.55 : 1}}>
-                  <div style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--ink-muted)', minWidth:38}}>
-                    {l.hora ? String(l.hora).slice(0,5) : ''}
-                  </div>
-                  <div style={{flex:1, minWidth:0}}>
-                    <div style={{display:'flex', alignItems:'center', gap:6, marginBottom:2}}>
-                      <span style={{fontFamily:'var(--mono)', fontWeight:700, fontSize:12}}>{l.sku}</span>
-                      <span style={{fontSize:9, fontWeight:700, padding:'1px 6px', borderRadius:6, background:`${ch.color}1a`, color:ch.color, textTransform:'uppercase'}}>{ch.label}</span>
-                      {esAnulado && <span style={{fontSize:9, fontWeight:700, padding:'1px 6px', borderRadius:6, background:'var(--paper-dim)', color:'var(--ink-muted)'}}>ANULADO</span>}
-                      {esCorregido && <span style={{fontSize:9, fontWeight:700, padding:'1px 6px', borderRadius:6, background:'var(--blue-bg)', color:'var(--blue)'}}>CORREGIDO</span>}
-                    </div>
-                    <div style={{fontSize:11, color:'var(--ink-soft)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
-                      {info.modelo || ''}{info.color && info.color !== '—' ? ` · ${info.color}` : ''}
-                    </div>
-                  </div>
-                  <div style={{fontFamily:'var(--mono)', fontWeight:800, fontSize:14, minWidth:38, textAlign:'right', color: negativo ? 'var(--red)' : 'var(--ink)'}}>
-                    {l.cantidad > 0 ? '+' : ''}{l.cantidad}
-                  </div>
-                  {!esAnulado && !negativo && (
-                    <div style={{display:'flex', flexDirection:'column', gap:4}}>
-                      <button onClick={() => setEditLog(l)} title="Editar" style={{width:30, height:30, padding:0, border:'1px solid var(--border-md)', background:'var(--paper)', borderRadius:5, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:'var(--ink-soft)'}}>
-                        <Icon n="edit" s={12}/>
-                      </button>
-                      <button onClick={() => setConfirmAnular(l)} title="Anular" style={{width:30, height:30, padding:0, border:'1px solid rgba(220,38,38,.32)', background:'var(--red-bg)', borderRadius:5, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:'var(--red)'}}>
-                        <Icon n="trash" s={12}/>
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       <ProduceModal open={registerOpen} onClose={() => setRegisterOpen(false)} defaultSku={pendingSku}/>
 

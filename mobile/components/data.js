@@ -582,21 +582,49 @@ window.MOCK_ACTIONS = {
     return data;
   },
 
-  /* "Mis cargas" del operario actual — últimas N de hoy.
-     Hace JOIN para mostrar modelo/color en la lista. */
+  /* "Mis cargas" del operario actual — últimas N de hoy + las
+     compensaciones que afectan a esos logs (aunque haya hecho la
+     compensación un admin distinto). El frontend usa esto para detectar
+     qué logs originales están "ya anulados" sin tener que volver a
+     consultar la BD por cada fila. */
   async getMisCargasHoy(limit = 20) {
     const { data: { session } } = await supa.auth.getSession();
     if (!session) return [];
     const today = new Date().toISOString().slice(0, 10);
-    const { data, error } = await supa
+
+    // 1) Mis cargas del día
+    const { data: misLogs, error: e1 } = await supa
       .from('production_logs')
       .select('*')
       .eq('operario_id', session.user.id)
       .eq('fecha', today)
       .order('created_at', { ascending: false })
       .limit(limit);
-    if (error) throw new Error(error.message);
-    return data || [];
+    if (e1) throw new Error(e1.message);
+
+    // 2) Compensaciones de hoy que referencian alguno de mis logs.
+    //    Aunque las haya hecho un admin distinto, las traemos para que
+    //    el frontend pueda marcar el original como anulado.
+    const misIds = (misLogs || []).map(l => l.id);
+    let compensaciones = [];
+    if (misIds.length) {
+      const { data: comps, error: e2 } = await supa
+        .from('production_logs')
+        .select('*')
+        .eq('fecha', today)
+        .lt('cantidad', 0)
+        .like('notas', '[ANULADO] log_id=%');
+      if (!e2 && comps) {
+        compensaciones = comps.filter(c => {
+          const m = (c.notas || '').match(/^\[ANULADO\] log_id=([0-9a-f-]+)/);
+          return m && misIds.includes(m[1]);
+        });
+      }
+    }
+
+    // Combinar y ordenar por created_at desc
+    return [...(misLogs || []), ...compensaciones]
+      .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
   },
 
   async eliminarLote(batchId) {
