@@ -165,7 +165,7 @@ window.MOCK_BUS = {
 
 async function loadCatalog() {
   try {
-    const { data, error } = await supa.from('sku_catalog').select('*');
+    const { data, error } = await supa.from('sku_catalog').select('*').order('sku', { ascending: true });
     if (error) { console.error('[data.js] catalog:', error); return; }
     const map = {};
     for (const s of data || []) {
@@ -258,7 +258,7 @@ async function loadNotifications() {
 }
 
 async function loadCarriers() {
-  const { data, error } = await supa.from('view_carrier_with_meta').select('*');
+  const { data, error } = await supa.from('view_carrier_with_meta').select('*').order('sku', { ascending: true });
   if (error) { console.error('view_carrier_with_meta', error); return; }
 
   // reset
@@ -314,6 +314,7 @@ async function loadOrders() {
   const { data, error } = await supa
     .from('orders').select('*')
     .in('status', ['pendiente','arrastrado'])
+    .order('sku', { ascending: true })
     .order('created_at', { ascending: false });
   if (error) { console.error('orders', error); return; }
   for (const id of Object.keys(window.MOCK.carriers)) window.MOCK.carriers[id].orders = [];
