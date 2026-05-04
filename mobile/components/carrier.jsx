@@ -7,10 +7,14 @@ function CarrierPage({ channel, onBack }) {
   const data = M.carriers[channel];
   const [registerOpen, setRegisterOpen] = useState(false);
   const [pendingSku, setPendingSku] = useState(null);
+  const [loteAEliminar, setLoteAEliminar] = useState(null);
+  const [borrando, setBorrando] = useState(false);
 
   if (!data || !C) return null;
 
   const empty = data.kpis.activos === 0 && data.table.length === 0;
+  const userRole = window.MOCK.user.role;
+  const puedeEliminarLote = ['owner','admin','encargado'].includes(userRole);
 
   const exportarExcel = () => {
     const filas = (data.table || [])
@@ -132,9 +136,68 @@ function CarrierPage({ channel, onBack }) {
             })}
           </>
         )}
+
+        {/* Lotes importados (con eliminar) */}
+        {puedeEliminarLote && (data.lotes || []).length > 0 && (
+          <>
+            <div style={{fontSize:10, fontWeight:700, color:'var(--ink-muted)', textTransform:'uppercase', letterSpacing:'.1em', margin:'18px 0 8px'}}>
+              Lotes importados · {data.lotes.length}
+            </div>
+            {data.lotes.map(l => (
+              <div key={l.id} className="m-prod-card" style={{padding:'12px 14px'}}>
+                <div style={{display:'flex', alignItems:'center', gap:10}}>
+                  <div style={{flex:1, minWidth:0}}>
+                    <div style={{fontSize:12, fontWeight:600, color:'var(--ink)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{l.archivo}</div>
+                    <div style={{fontSize:11, color:'var(--ink-muted)', marginTop:2}}>
+                      {fmt.dateTime(l.fecha)} · <strong style={{fontFamily:'var(--mono)'}}>{l.cantidad}</strong> uds.
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setLoteAEliminar(l)}
+                    title="Eliminar lote y todas sus órdenes"
+                    style={{
+                      width:38, height:38, flexShrink:0,
+                      border:'1px solid rgba(220,38,38,.32)',
+                      background:'var(--red-bg)',
+                      borderRadius:6,
+                      display:'flex', alignItems:'center', justifyContent:'center',
+                      color:'var(--red)', cursor:'pointer',
+                    }}
+                  >
+                    <Icon n="trash" s={15}/>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </>
+        )}
       </div>
 
       <ProduceModal open={registerOpen} onClose={() => setRegisterOpen(false)} defaultSku={pendingSku} defaultSubcanal={channel}/>
+
+      <ConfirmModal
+        open={!!loteAEliminar}
+        onClose={() => !borrando && setLoteAEliminar(null)}
+        title="Eliminar lote"
+        message={loteAEliminar
+          ? `Vas a eliminar el lote "${loteAEliminar.archivo}" y todas sus órdenes (${loteAEliminar.cantidad} uds.). El faltante se va a recalcular. Esta acción NO se puede deshacer.`
+          : ''}
+        confirmText={borrando ? 'Eliminando...' : 'Sí, eliminar todo'}
+        danger
+        onConfirm={async () => {
+          if (!loteAEliminar || borrando) return;
+          setBorrando(true);
+          try {
+            await window.MOCK_ACTIONS.eliminarLote(loteAEliminar.id);
+            toast.success('Lote eliminado · ' + loteAEliminar.archivo);
+            setLoteAEliminar(null);
+          } catch (e) {
+            toast.error(e.message || 'No se pudo eliminar el lote');
+          } finally {
+            setBorrando(false);
+          }
+        }}
+      />
     </div>
   );
 }
