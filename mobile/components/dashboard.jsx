@@ -2,11 +2,44 @@
 
 function DashboardPage({ onNav }) {
   const M = window.useMockData();
+  const toast = useToast();
   const [now, setNow] = useState(new Date());
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(t);
   }, []);
+
+  /* Exportar Excel consolidado: todos los canales con columna Canal,
+     SKU, Modelo, Cantidad. Solo SKUs con faltante > 0. */
+  const exportarTodos = () => {
+    const filas = [];
+    const orden = ['colecta','flex','tiendanube','distribuidor'];
+    for (const id of orden) {
+      const carrier = M.carriers[id];
+      const cInfo = window.CARRIERS[id] || { label: id };
+      if (!carrier) continue;
+      for (const r of carrier.table || []) {
+        if ((r.faltante || 0) <= 0) continue;
+        const info = window.SKU_DB[r.sku] || {};
+        const modeloFull = info.color && info.color !== '—'
+          ? `${info.modelo || r.sku} ${info.color}`
+          : (info.modelo || r.sku);
+        filas.push({ Canal: cInfo.label, SKU: r.sku, Modelo: modeloFull, Cantidad: r.faltante });
+      }
+    }
+    if (!filas.length) { toast.info('Nada para exportar — todo al día'); return; }
+    if (typeof window.XLSX === 'undefined') {
+      toast.error('Librería de Excel todavía no cargó · reintentá');
+      return;
+    }
+    const ws = window.XLSX.utils.json_to_sheet(filas);
+    ws['!cols'] = [{ wch: 16 }, { wch: 12 }, { wch: 48 }, { wch: 12 }];
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, 'Producción pendiente');
+    const fecha = new Date().toISOString().slice(0, 10);
+    window.XLSX.writeFile(wb, `produccion-todos-${fecha}.xlsx`);
+    toast.success(`Excel exportado · ${filas.length} líneas`);
+  };
 
   const counts = {
     colecta:      M.carriers.colecta.kpis.unidades      || 0,
@@ -22,15 +55,24 @@ function DashboardPage({ onNav }) {
   return (
     <div className="m-page">
       <div className="m-page-header">
-        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between'}}>
-          <div>
+        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:8}}>
+          <div style={{minWidth:0}}>
             <div className="m-page-title">Hola, {(M.user.name || '').split(' ')[0]}</div>
             <div className="m-page-sub" style={{textTransform:'capitalize'}}>{fechaTxt}</div>
           </div>
-          <span style={{display:'inline-flex', alignItems:'center', gap:5, padding:'4px 9px', background:'var(--green-bg)', border:'1px solid rgba(22,163,74,.25)', borderRadius:4, fontSize:9, fontWeight:700, letterSpacing:'.08em', color:'var(--green)'}}>
-            <span style={{width:5, height:5, borderRadius:'50%', background:'var(--green)', animation:'live-pulse 1.4s ease-in-out infinite'}}/>
-            EN VIVO
-          </span>
+          <div style={{display:'flex', alignItems:'center', gap:6, flexShrink:0}}>
+            <button
+              onClick={exportarTodos}
+              title="Exportar Excel"
+              style={{width:36, height:36, border:'1px solid var(--border-md)', background:'var(--paper)', borderRadius:6, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:'var(--ink-soft)'}}
+            >
+              <Icon n="download" s={15}/>
+            </button>
+            <span style={{display:'inline-flex', alignItems:'center', gap:5, padding:'4px 9px', background:'var(--green-bg)', border:'1px solid rgba(22,163,74,.25)', borderRadius:4, fontSize:9, fontWeight:700, letterSpacing:'.08em', color:'var(--green)'}}>
+              <span style={{width:5, height:5, borderRadius:'50%', background:'var(--green)', animation:'live-pulse 1.4s ease-in-out infinite'}}/>
+              EN VIVO
+            </span>
+          </div>
         </div>
       </div>
 
