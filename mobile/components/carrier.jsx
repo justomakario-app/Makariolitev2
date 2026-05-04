@@ -69,12 +69,8 @@ function CarrierPage({ channel, onBack }) {
       </div>
 
       {/* KPIs */}
-      <div className="m-kpi-row" style={{marginTop:0}}>
+      <div className="m-kpi-row" style={{marginTop:0, gridTemplateColumns:'repeat(2,1fr)'}}>
         <div className="m-kpi" style={{borderLeft:`3px solid ${C.color}`}}>
-          <div className="m-kpi-label">Pedidos</div>
-          <div className="m-kpi-value">{data.orders.length}</div>
-        </div>
-        <div className="m-kpi">
           <div className="m-kpi-label">Unidades</div>
           <div className="m-kpi-value">{data.kpis.unidades}</div>
         </div>

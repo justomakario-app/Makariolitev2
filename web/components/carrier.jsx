@@ -130,14 +130,9 @@ function CarrierPage({ channel, onBack, onNav }) {
       ) : null}
 
       <div className="carrier-body">
-        {/* KPIs — "Pedidos activos" = cantidad real de órdenes individuales (no SKUs).
-             Es el mismo número que aparece abajo en "Pedidos individuales · N". */}
-        <div className="carrier-kpis">
+        {/* KPIs — Unidades totales pedidas en este canal vs lo que falta producir */}
+        <div className="carrier-kpis" style={{gridTemplateColumns:'repeat(2,1fr)'}}>
           <div className="carrier-kpi" style={{borderLeft:`3px solid ${C.color}`}}>
-            <div className="carrier-kpi-label">Pedidos activos</div>
-            <div className="carrier-kpi-value" style={{color: data.orders.length>0?'var(--ink)':'var(--ink-faint)'}}>{data.orders.length}</div>
-          </div>
-          <div className="carrier-kpi">
             <div className="carrier-kpi-label">Unidades totales</div>
             <div className="carrier-kpi-value">{data.kpis.unidades}</div>
           </div>
