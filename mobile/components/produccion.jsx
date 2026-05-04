@@ -2,10 +2,39 @@
 
 function ProduccionPage() {
   const M = window.useMockData();
+  const toast = useToast();
   const data = M.prod.todos;
   const [tab, setTab] = useState('todos');
   const [registerOpen, setRegisterOpen] = useState(false);
   const [pendingSku, setPendingSku] = useState(null);
+
+  const exportarExcel = () => {
+    const map = { colecta:'Colecta', flex:'Flex', tiendanube:'Tienda Nube', distribuidor:'Distribuidores' };
+    const fuente = tab === 'todos'
+      ? data.table
+      : data.table.filter(r => r.canal === map[tab]);
+    const filas = fuente
+      .filter(r => (r.faltante || 0) > 0)
+      .map(r => {
+        const info = window.SKU_DB[r.sku] || {};
+        const modeloFull = info.color && info.color !== '—'
+          ? `${info.modelo || r.sku} ${info.color}`
+          : (info.modelo || r.sku);
+        return { Canal: r.canal, SKU: r.sku, Modelo: modeloFull, Cantidad: r.faltante };
+      });
+    if (!filas.length) { toast.info('Nada para exportar — todo al día'); return; }
+    if (typeof window.XLSX === 'undefined') {
+      toast.error('Librería de Excel todavía no cargó'); return;
+    }
+    const ws = window.XLSX.utils.json_to_sheet(filas);
+    ws['!cols'] = [{ wch: 16 }, { wch: 12 }, { wch: 48 }, { wch: 12 }];
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, 'Producción pendiente');
+    const fecha = new Date().toISOString().slice(0, 10);
+    const nombre = tab === 'todos' ? 'todos' : tab;
+    window.XLSX.writeFile(wb, `produccion-${nombre}-${fecha}.xlsx`);
+    toast.success(`Excel exportado · ${filas.length} líneas`);
+  };
 
   const total = data.kpis.totalPedido;
   const done  = data.kpis.producido;
@@ -22,8 +51,19 @@ function ProduccionPage() {
   return (
     <div className="m-page">
       <div className="m-page-header" style={{paddingBottom:8}}>
-        <div className="m-page-title">Producción</div>
-        <div className="m-page-sub">{done} de {total} unidades · {data.producidoHoy} hoy</div>
+        <div style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:10}}>
+          <div style={{minWidth:0}}>
+            <div className="m-page-title">Producción</div>
+            <div className="m-page-sub">{done} de {total} unidades · {data.producidoHoy} hoy</div>
+          </div>
+          <button
+            onClick={exportarExcel}
+            title="Exportar Excel"
+            style={{width:36, height:36, border:'1px solid var(--border-md)', background:'var(--paper)', borderRadius:6, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:'var(--ink-soft)', flexShrink:0}}
+          >
+            <Icon n="download" s={15}/>
+          </button>
+        </div>
       </div>
 
       {/* Progress bar */}

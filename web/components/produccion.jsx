@@ -2,9 +2,45 @@
 
 function ProduccionPage() {
   const M = window.useMockData();
+  const toast = useToast();
   const data = M.prod.todos;
   const [tabCanal, setTabCanal] = useState('todos');
   const [show, setShow] = useState(false);
+
+  /* Exportar XLSX — respeta el tab activo: si es "todos", exporta los 4
+     canales con columna Canal. Si es un canal específico, solo ese.
+     Solo SKUs con faltante > 0. */
+  const exportarExcel = () => {
+    const map = { colecta:'Colecta', flex:'Flex', tiendanube:'Tienda Nube', distribuidor:'Distribuidor' };
+    const fuente = tabCanal === 'todos'
+      ? data.table
+      : data.table.filter(r => r.canal === map[tabCanal]);
+    const filas = fuente
+      .filter(r => (r.faltante || 0) > 0)
+      .map(r => {
+        const info = window.SKU_DB[r.sku] || {};
+        const modeloFull = info.color && info.color !== '—'
+          ? `${info.modelo || r.sku} ${info.color}`
+          : (info.modelo || r.sku);
+        return { Canal: r.canal, SKU: r.sku, Modelo: modeloFull, Cantidad: r.faltante };
+      });
+    if (!filas.length) {
+      toast.info('Nada para exportar — todo al día');
+      return;
+    }
+    if (typeof window.XLSX === 'undefined') {
+      toast.error('Librería de Excel todavía no cargó · reintentá');
+      return;
+    }
+    const ws = window.XLSX.utils.json_to_sheet(filas);
+    ws['!cols'] = [{ wch: 16 }, { wch: 12 }, { wch: 48 }, { wch: 12 }];
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, 'Producción pendiente');
+    const fecha = new Date().toISOString().slice(0, 10);
+    const nombre = tabCanal === 'todos' ? 'todos' : tabCanal;
+    window.XLSX.writeFile(wb, `produccion-${nombre}-${fecha}.xlsx`);
+    toast.success(`Excel exportado · ${filas.length} línea${filas.length===1?'':'s'}`);
+  };
 
   const total   = data.kpis.totalPedido;
   const done    = data.kpis.producido;
@@ -39,6 +75,9 @@ function ProduccionPage() {
               </div>
               <div className="prod-progress-label">{pct}% completado</div>
             </div>
+            <button className="btn-ghost" onClick={exportarExcel} title="Exportar Excel con producción pendiente">
+              <Icon n="download" s={13}/> Exportar
+            </button>
             <button className="btn-primary" onClick={() => setShow(true)}>
               <Icon n="plus" s={13}/> Registrar producción
             </button>
