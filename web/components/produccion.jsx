@@ -127,9 +127,9 @@ function ProduccionPage() {
                     <tr key={`${r.sku}-${r.canal}-${i}`}>
                       <td><span className="order-num">{r.sku}</span></td>
                       <td>
-                        <div style={{fontWeight:600, color:'var(--ink)', fontSize:12}}>{info.modelo || r.sku}</div>
+                        <div style={{fontWeight:600, color:'var(--ink)', fontSize:14}}>{info.modelo || r.sku}</div>
                         {info.color && info.color !== '—' && (
-                          <div style={{fontSize:10, color:'var(--ink-muted)', marginTop:1, display:'flex', alignItems:'center', gap:5}}>
+                          <div style={{fontSize:11, color:'var(--ink-muted)', marginTop:1, display:'flex', alignItems:'center', gap:5}}>
                             <span style={{width:7, height:7, borderRadius:'50%', background: info.color==='Negro'?'#1a1a1a':'#fff', border:'1px solid #d4cdc1', display:'inline-block'}}/>
                             {info.color}
                           </div>
