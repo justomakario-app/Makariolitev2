@@ -2,6 +2,7 @@
 
 function CarrierPage({ channel, onBack }) {
   const M = window.useMockData();
+  const toast = useToast();
   const C = window.CARRIERS[channel];
   const data = M.carriers[channel];
   const [registerOpen, setRegisterOpen] = useState(false);
@@ -10,6 +11,33 @@ function CarrierPage({ channel, onBack }) {
   if (!data || !C) return null;
 
   const empty = data.kpis.activos === 0 && data.table.length === 0;
+
+  const exportarExcel = () => {
+    const filas = (data.table || [])
+      .filter(r => (r.faltante || 0) > 0)
+      .map(r => {
+        const info = window.SKU_DB[r.sku] || {};
+        const modeloFull = info.color && info.color !== '—'
+          ? `${info.modelo || r.sku} ${info.color}`
+          : (info.modelo || r.sku);
+        return { SKU: r.sku, Modelo: modeloFull, Cantidad: r.faltante };
+      });
+    if (!filas.length) {
+      toast.info('Nada para exportar — todos los pedidos están al día');
+      return;
+    }
+    if (typeof window.XLSX === 'undefined') {
+      toast.error('Librería de Excel todavía no cargó · reintentá en un segundo');
+      return;
+    }
+    const ws = window.XLSX.utils.json_to_sheet(filas);
+    ws['!cols'] = [{ wch: 12 }, { wch: 48 }, { wch: 12 }];
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, (C.label || 'Pendiente').slice(0, 31));
+    const fecha = new Date().toISOString().slice(0, 10);
+    window.XLSX.writeFile(wb, `produccion-${channel}-${fecha}.xlsx`);
+    toast.success(`Excel exportado · ${filas.length} SKU${filas.length===1?'':'s'}`);
+  };
 
   return (
     <div className="m-page">
@@ -30,6 +58,14 @@ function CarrierPage({ channel, onBack }) {
             <div style={{fontSize:10, color:'var(--ink-muted)', fontWeight:600}}>{C.sub}</div>
           </div>
         </div>
+        <button
+          className="m-back-btn"
+          onClick={exportarExcel}
+          title="Exportar Excel"
+          style={{flexShrink:0}}
+        >
+          <Icon n="download" s={16}/>
+        </button>
       </div>
 
       {/* KPIs */}
