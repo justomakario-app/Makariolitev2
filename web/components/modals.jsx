@@ -29,7 +29,9 @@ function Modal({ open, title, onClose, children, footer, size }) {
 /* ── Registrar producción modal — SIN COLOR (el SKU lo define) ── */
 function ProduceModal({ open, onClose, defaultSku, defaultSubcanal }) {
   const toast = useToast();
-  const M = window.MOCK;
+  // useMockData asegura que el modal refresque cuando llegan datos nuevos
+  // (ej: jornadas abiertas/activas via realtime mientras está abierto).
+  const M = window.useMockData();
   const skus = Object.keys(window.SKU_DB);
 
   const [step, setStep] = useState(1);
@@ -595,78 +597,170 @@ function ImportModal({ open, onClose, channel: defaultChannel }) {
   );
 }
 
-/* ── Cierre de jornada con preview snapshot ── */
-function CierreModal({ open, onClose, onConfirm, channel }) {
-  const M = window.MOCK;
+/* ── Cierre de jornada con preview snapshot ──
+   Recibe `channel` y opcionalmente `jornadaId` (la jornada específica
+   a cerrar). Si no se pasa jornadaId, muestra selector cuando hay 2+
+   abiertas y default = la más vieja. El preview filtra production_logs
+   por jornada — refleja exactamente lo que el RPC va a snapshotear. */
+function CierreModal({ open, onClose, onConfirm, channel, defaultJornadaId }) {
+  const M = window.useMockData();
   const data = M.carriers[channel];
-  if (!data) return null;
   const C = window.CARRIERS[channel] || {};
+
+  const abiertas = (data?.jornadasAbiertas) || [];
+  // Default = jornada elegida → activa → la más vieja
+  const inicialId = defaultJornadaId
+    || abiertas.find(j => j.id === data?.jornadaActivaId)?.id
+    || abiertas[0]?.id
+    || null;
+  const [selectedId, setSelectedId] = useState(inicialId);
+
+  useEffect(() => {
+    if (open) setSelectedId(inicialId);
+  }, [open, inicialId]);
+
+  if (!data) return null;
+
+  const jornada = abiertas.find(j => j.id === selectedId) || abiertas[0];
+  const fechaCierre = jornada?.fecha;
+
+  // Preview filtrado por jornada — agregamos prodLogs[].jornadaId === selectedId
+  const logs = (M.prodLogs || []).filter(l => l.subcanal === channel && l.jornadaId === selectedId);
+  const producidoPorSku = {};
+  for (const l of logs) {
+    producidoPorSku[l.sku] = (producidoPorSku[l.sku] || 0) + (l.unidades || 0);
+  }
+  // Pedidos: orders pendientes/arrastradas del canal — son trans-temporal
+  // (igual que el RPC). Vienen de carrier_state via data.table (el mismo
+  // bucket trans-temporal). Esto es consistente con la lógica del backend.
+  const pedidoPorSku = {};
+  for (const r of (data.table || [])) {
+    pedidoPorSku[r.sku] = r.pedido || 0;
+  }
+  // Universo de SKUs = los que tienen pedido en el canal O producción en esta jornada
+  const skus = Array.from(new Set([
+    ...Object.keys(pedidoPorSku),
+    ...Object.keys(producidoPorSku),
+  ])).sort();
+
+  let totalPedido = 0, totalProducido = 0, totalFaltante = 0;
+  const filas = skus.map(sku => {
+    const pedido = pedidoPorSku[sku] || 0;
+    const producido = producidoPorSku[sku] || 0;
+    const faltante = Math.max(0, pedido - producido);
+    const stock = Math.max(0, producido - pedido);
+    totalPedido += pedido;
+    totalProducido += producido;
+    totalFaltante += faltante;
+    return { sku, pedido, producido, faltante, stock };
+  });
+
+  const handleConfirm = () => {
+    onConfirm?.({ fecha: fechaCierre, jornadaId: selectedId });
+    onClose();
+  };
 
   return (
     <Modal open={open} onClose={onClose} title={`Cerrar jornada — ${C.label}`} size="lg" footer={
       <>
         <button className="btn-ghost" onClick={onClose}>Cancelar</button>
-        <button className="btn-success" onClick={() => { onConfirm?.(); onClose(); }}>
+        <button className="btn-success" onClick={handleConfirm} disabled={!fechaCierre}>
           <Icon n="lock" s={14}/> Confirmar cierre
         </button>
       </>
     }>
-      <div style={{fontSize:12, color:'var(--ink-soft)', lineHeight:1.6, marginBottom:12}}>
-        Vas a guardar un <strong>snapshot inmutable</strong> de la jornada de hoy en <strong>{C.label}</strong>.
-        {C.cierreHora && <> Hora de retiro: <strong>{C.cierreHora}</strong>.</>}
-      </div>
-
-      <div style={{padding:'10px 12px', background:'var(--paper-off)', border:'1px solid var(--border)', borderRadius:6, marginBottom:14, fontSize:11, color:'var(--ink-soft)', lineHeight:1.6}}>
-        <div style={{fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--ink-muted)', marginBottom:6}}>Qué pasa al cerrar</div>
-        <div>✓ Los pedidos <strong>completados</strong> se archivan en el histórico.</div>
-        <div>✓ El <strong>faltante</strong> se arrastra al día siguiente como nueva línea.</div>
-        <div>✓ Se genera un snapshot que <strong>no se puede modificar</strong>.</div>
-      </div>
-
-      <div style={{display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, marginBottom:14}}>
-        <div className="stat-card" style={{padding:12}}>
-          <div style={{fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--ink-muted)', marginBottom:4}}>Pedidos</div>
-          <div style={{fontFamily:'var(--mono)', fontSize:22, fontWeight:700}}>{data.kpis.activos}</div>
+      {abiertas.length === 0 ? (
+        <div style={{padding:'12px 14px', background:'var(--red-bg)', border:'1px solid rgba(220,38,38,.32)', borderRadius:6, color:'var(--red)', fontSize:12}}>
+          No hay jornadas abiertas para cerrar en {C.label}.
         </div>
-        <div className="stat-card" style={{padding:12}}>
-          <div style={{fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--ink-muted)', marginBottom:4}}>Unidades</div>
-          <div style={{fontFamily:'var(--mono)', fontSize:22, fontWeight:700}}>{data.kpis.unidades}</div>
-        </div>
-        <div className="stat-card" style={{padding:12, borderLeft: data.kpis.pendiente>0?'3px solid var(--red)':'3px solid var(--green)'}}>
-          <div style={{fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--ink-muted)', marginBottom:4}}>Arrastra</div>
-          <div style={{fontFamily:'var(--mono)', fontSize:22, fontWeight:700, color: data.kpis.pendiente>0?'var(--red)':'var(--green)'}}>{data.kpis.pendiente}</div>
-        </div>
-      </div>
+      ) : (
+        <>
+          {abiertas.length >= 2 && (
+            <div style={{marginBottom:14, padding:'10px 12px', background:'#fef3c7', border:'1px solid #fbbf24', borderRadius:6}}>
+              <div style={{fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'.08em', color:'var(--ink-muted)', marginBottom:6}}>
+                Hay {abiertas.length} jornadas abiertas — elegí cuál cerrás
+              </div>
+              <select
+                className="field-input"
+                value={selectedId || ''}
+                onChange={e => setSelectedId(e.target.value)}
+                style={{fontSize:12, fontWeight:600}}
+              >
+                {abiertas.map(j => (
+                  <option key={j.id} value={j.id}>
+                    {fmt.date(j.fecha)} {j.id === data.jornadaActivaId ? '· ACTIVA' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
-      <div style={{fontSize:11, fontWeight:700, color:'var(--ink-muted)', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:8}}>
-        Snapshot por SKU
-      </div>
-      <table className="data-table" style={{borderRadius:6, overflow:'hidden', border:'1px solid var(--border)'}}>
-        <thead>
-          <tr>
-            <th>SKU</th>
-            <th>Producto</th>
-            <th style={{textAlign:'right'}}>Pedido</th>
-            <th style={{textAlign:'right'}}>Producido</th>
-            <th style={{textAlign:'right'}}>Arrastra</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.table.map(r => (
-            <tr key={r.sku}>
-              <td><span className="order-num">{r.sku}</span></td>
-              <td style={{fontSize:11, color:'var(--ink-soft)'}}>{window.skuName(r.sku)}</td>
-              <td style={{textAlign:'right'}}><span className="cell-color-num">{r.pedido}</span></td>
-              <td style={{textAlign:'right'}}><span className="cell-color-num" style={{color:'var(--green)'}}>{r.producido}</span></td>
-              <td style={{textAlign:'right'}}>
-                {r.faltante>0
-                  ? <span className="cell-faltante-red">{r.faltante}</span>
-                  : <span className="cell-faltante-ok"><Icon n="check" s={12}/></span>}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+          <div style={{fontSize:12, color:'var(--ink-soft)', lineHeight:1.6, marginBottom:12}}>
+            Vas a guardar un <strong>snapshot inmutable</strong> de <strong>{C.label} · {fechaCierre ? fmt.date(fechaCierre) : '—'}</strong>.
+          </div>
+
+          <div style={{padding:'10px 12px', background:'var(--paper-off)', border:'1px solid var(--border)', borderRadius:6, marginBottom:14, fontSize:11, color:'var(--ink-soft)', lineHeight:1.6}}>
+            <div style={{fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--ink-muted)', marginBottom:6}}>Qué pasa al cerrar</div>
+            <div>✓ Los pedidos <strong>completados</strong> se archivan en el histórico.</div>
+            <div>✓ El <strong>faltante</strong> se arrastra al día siguiente como nueva línea.</div>
+            <div>✓ Se genera un snapshot que <strong>no se puede modificar</strong>.</div>
+            {data.jornadaActivaId === selectedId && abiertas.length >= 2 && (
+              <div>✓ La marca <strong>activa para producción</strong> pasa a la siguiente jornada abierta automáticamente.</div>
+            )}
+          </div>
+
+          <div style={{display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, marginBottom:14}}>
+            <div className="stat-card" style={{padding:12}}>
+              <div style={{fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--ink-muted)', marginBottom:4}}>Pedidos</div>
+              <div style={{fontFamily:'var(--mono)', fontSize:22, fontWeight:700}}>{totalPedido}</div>
+            </div>
+            <div className="stat-card" style={{padding:12}}>
+              <div style={{fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--ink-muted)', marginBottom:4}}>Producido</div>
+              <div style={{fontFamily:'var(--mono)', fontSize:22, fontWeight:700}}>{totalProducido}</div>
+            </div>
+            <div className="stat-card" style={{padding:12, borderLeft: totalFaltante>0?'3px solid var(--red)':'3px solid var(--green)'}}>
+              <div style={{fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--ink-muted)', marginBottom:4}}>Arrastra</div>
+              <div style={{fontFamily:'var(--mono)', fontSize:22, fontWeight:700, color: totalFaltante>0?'var(--red)':'var(--green)'}}>{totalFaltante}</div>
+            </div>
+          </div>
+
+          <div style={{fontSize:11, fontWeight:700, color:'var(--ink-muted)', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:8}}>
+            Snapshot por SKU
+          </div>
+          {filas.length === 0 ? (
+            <div style={{padding:14, textAlign:'center', fontSize:12, color:'var(--ink-muted)', border:'1px dashed var(--border)', borderRadius:6}}>
+              Sin pedidos ni producción para esta jornada.
+            </div>
+          ) : (
+          <table className="data-table" style={{borderRadius:6, overflow:'hidden', border:'1px solid var(--border)'}}>
+            <thead>
+              <tr>
+                <th>SKU</th>
+                <th>Producto</th>
+                <th style={{textAlign:'right'}}>Pedido</th>
+                <th style={{textAlign:'right'}}>Producido</th>
+                <th style={{textAlign:'right'}}>Arrastra</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filas.map(r => (
+                <tr key={r.sku}>
+                  <td><span className="order-num">{r.sku}</span></td>
+                  <td style={{fontSize:11, color:'var(--ink-soft)'}}>{window.skuName(r.sku)}</td>
+                  <td style={{textAlign:'right'}}><span className="cell-color-num">{r.pedido}</span></td>
+                  <td style={{textAlign:'right'}}><span className="cell-color-num" style={{color:'var(--green)'}}>{r.producido}</span></td>
+                  <td style={{textAlign:'right'}}>
+                    {r.faltante > 0
+                      ? <span className="cell-faltante-red">{r.faltante}</span>
+                      : <span className="cell-faltante-ok"><Icon n="check" s={12}/></span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          )}
+        </>
+      )}
     </Modal>
   );
 }

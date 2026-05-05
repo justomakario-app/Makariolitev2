@@ -103,12 +103,12 @@ window.MOCK = {
   user: { name:'', initials:'', role:'owner', roleLabel:'', email:'', username:'' },
 
   carriers: {
-    colecta:          { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[] },
-    flex:             { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[] },
-    tiendanube:       { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[] },
-    distribuidor:     { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[] },
-    no_flex:          { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[] },
-    correo_argentino: { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[] },
+    colecta:          { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[], jornadasAbiertas:[], jornadaActivaId:null },
+    flex:             { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[], jornadasAbiertas:[], jornadaActivaId:null },
+    tiendanube:       { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[], jornadasAbiertas:[], jornadaActivaId:null },
+    distribuidor:     { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[], jornadasAbiertas:[], jornadaActivaId:null },
+    no_flex:          { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[], jornadasAbiertas:[], jornadaActivaId:null },
+    correo_argentino: { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[], jornadasAbiertas:[], jornadaActivaId:null },
   },
 
   prod: { todos: { producidoHoy:0, kpis:{ faltante:0, totalPedido:0, producido:0 }, table:[] } },
@@ -426,11 +426,10 @@ async function loadJornadas() {
 }
 
 async function loadProdLogs() {
-  // JOIN con profiles para traer el nombre del operario (la tabla solo guarda operario_id)
   const { data, error } = await supa
     .from('production_logs')
     .select('*, operario:profiles!production_logs_operario_id_fkey(name,username)')
-    .order('created_at', { ascending: false }).limit(200);
+    .order('created_at', { ascending: false }).limit(500);
   if (error) { console.error('production_logs', error); return; }
 
   const today = new Date().toISOString().slice(0, 10);
@@ -439,7 +438,6 @@ async function loadProdLogs() {
   window.MOCK.prodLogs = (data || []).map(l => {
     if (l.fecha === today) producidoHoy += l.cantidad;
     const C = window.CARRIERS[l.channel_id] || { label: l.channel_id };
-    // Usar la columna `hora` canónica (time) — no `created_at`
     const horaStr = l.hora ? String(l.hora).slice(0, 5) : '';
     return {
       id: l.id,
@@ -451,6 +449,8 @@ async function loadProdLogs() {
       sector: l.sector || '—',
       unidades: l.cantidad,
       operario: l.operario?.name || l.operario?.username || '—',
+      jornadaId: l.jornada_id || null,
+      notas: l.notas || null,
     };
   });
 
@@ -860,7 +860,7 @@ function scheduleRefresh() {
 function subscribeRealtime() {
   const tables = [
     'orders','carrier_state','production_logs','jornadas',
-    'import_batches','sku_catalog','profiles','notifications',
+    'import_batches','sku_catalog','profiles','notifications','free_stock',
   ];
   for (const t of tables) {
     supa.channel(`rt-${t}`)

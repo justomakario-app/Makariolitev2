@@ -454,9 +454,9 @@ function CarrierPage({ channel, onBack, onNav }) {
       <CierreModal
         open={showCierre}
         onClose={() => setShowCierre(false)}
-        onConfirm={async () => {
+        onConfirm={async ({ fecha, jornadaId } = {}) => {
           try {
-            await window.MOCK_ACTIONS.cerrarJornada({ channelId: channel });
+            await window.MOCK_ACTIONS.cerrarJornada({ channelId: channel, fecha });
             toast.success('Jornada cerrada · snapshot guardado');
           } catch (e) {
             toast.error(e.message || 'No se pudo cerrar la jornada');
