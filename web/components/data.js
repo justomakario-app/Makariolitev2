@@ -947,6 +947,116 @@ setTimeout(() => {
    abre el modal de Registrar Producción con el SKU prellenado.
    ═══════════════════════════════════════════════════════════════════ */
 
+/* ═══════════════════════════════════════════════════════════════════
+   REPORT_UTILS — generación on-demand de reportes de cierre
+   ───────────────────────────────────────────────────────────────────
+   El snapshot inmutable está en jornadas.snapshot (jsonb). Generamos
+   Excel y PDF al vuelo cuando el usuario los pide. Nada se sube a
+   Storage en V1 — los datos están a una query de distancia.
+   ═══════════════════════════════════════════════════════════════════ */
+window.REPORT_UTILS = {
+  async descargarReporteCierre(cierre, channel, format) {
+    // cierre: row de jornadas (snapshot, fecha, pedidos_count, etc.)
+    // channel: id del canal (colecta, flex, ...)
+    // format: 'xlsx' | 'pdf'
+    const C = window.CARRIERS[channel] || { label: channel };
+    const fechaJornada = cierre.fechaJornada || cierre.fecha;
+    const fechaStr = (fechaJornada || '').slice(0, 10);
+    const filename = `cierre-${channel}-${fechaStr}`;
+    const snapshot = Array.isArray(cierre.snapshot) ? cierre.snapshot : [];
+
+    if (format === 'xlsx') {
+      if (typeof window.XLSX === 'undefined') {
+        throw new Error('Librería de Excel no cargada — refrescá la página');
+      }
+      const filas = snapshot.map(r => ({
+        SKU: r.sku,
+        Modelo: r.modelo || '',
+        Color: r.color || '',
+        Pedido: r.pedido || 0,
+        Producido: r.producido || 0,
+        Faltante: r.faltante || 0,
+        Sobrante: r.stock || 0,
+      }));
+      const meta = [
+        { Campo: 'Canal', Valor: C.label },
+        { Campo: 'Fecha jornada', Valor: fechaStr },
+        { Campo: 'Cerrada el', Valor: cierre.fecha || '' },
+        { Campo: 'Pedidos', Valor: cierre.pedidos || 0 },
+        { Campo: 'Unidades pedidas', Valor: cierre.unidadesPedidas || 0 },
+        { Campo: 'Unidades producidas', Valor: cierre.unidadesProducidas || 0 },
+        { Campo: 'Faltante arrastrado', Valor: cierre.faltante || 0 },
+      ];
+      const wb = window.XLSX.utils.book_new();
+      const wsMeta = window.XLSX.utils.json_to_sheet(meta);
+      wsMeta['!cols'] = [{ wch: 24 }, { wch: 32 }];
+      window.XLSX.utils.book_append_sheet(wb, wsMeta, 'Resumen');
+      const wsDet = window.XLSX.utils.json_to_sheet(filas);
+      wsDet['!cols'] = [{ wch: 12 }, { wch: 36 }, { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
+      window.XLSX.utils.book_append_sheet(wb, wsDet, 'Detalle por SKU');
+      window.XLSX.writeFile(wb, `${filename}.xlsx`);
+      return;
+    }
+
+    if (format === 'pdf') {
+      if (!window.jspdf || !window.jspdf.jsPDF) {
+        throw new Error('Librería jsPDF no cargada — refrescá la página');
+      }
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+      const PAGE_W = 210;
+      let y = 18;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(16);
+      doc.text(`Cierre ${C.label}`, 12, y); y += 7;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.text(`Fecha jornada: ${fechaStr}`, 12, y); y += 5;
+      doc.text(`Cerrada el: ${cierre.fecha ? new Date(cierre.fecha).toLocaleString('es-AR') : '—'}`, 12, y); y += 5;
+      y += 2;
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Resumen', 12, y); y += 5;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.text(`Pedidos: ${cierre.pedidos || 0}    Unidades pedidas: ${cierre.unidadesPedidas || 0}    Unidades producidas: ${cierre.unidadesProducidas || 0}    Faltante arrastrado: ${cierre.faltante || 0}`, 12, y);
+      y += 8;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.text('Detalle por SKU', 12, y); y += 6;
+      doc.setFontSize(8);
+      // Tabla simple
+      const headers = ['SKU', 'Modelo', 'Color', 'Pedido', 'Producido', 'Faltante', 'Sobrante'];
+      const colW = [22, 60, 22, 18, 22, 20, 20];
+      let x = 12;
+      doc.setFillColor(240, 240, 240);
+      doc.rect(12, y - 4, PAGE_W - 24, 6, 'F');
+      headers.forEach((h, i) => { doc.text(h, x + 1, y); x += colW[i]; });
+      y += 4;
+      doc.setFont('helvetica', 'normal');
+      for (const r of snapshot) {
+        if (y > 280) { doc.addPage(); y = 18; }
+        x = 12;
+        const row = [
+          r.sku || '',
+          (r.modelo || '').slice(0, 32),
+          r.color || '',
+          String(r.pedido || 0),
+          String(r.producido || 0),
+          String(r.faltante || 0),
+          String(r.stock || 0),
+        ];
+        row.forEach((cell, i) => { doc.text(cell, x + 1, y); x += colW[i]; });
+        y += 5;
+      }
+      doc.save(`${filename}.pdf`);
+      return;
+    }
+
+    throw new Error('Formato desconocido: ' + format);
+  },
+};
+
 window.QR_UTILS = {
   /* Genera un dataURL PNG del QR puro (sin texto). Usa qrcode-generator
      (UMD, expone window.qrcode minúscula). La lib retorna GIF — lo

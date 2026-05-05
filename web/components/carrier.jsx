@@ -388,15 +388,36 @@ function CarrierPage({ channel, onBack, onNav }) {
                   <div className="collapsible-body" style={{padding:0}}>
                     <table className="data-table">
                       <thead>
-                        <tr><th>Fecha</th><th>Pedidos</th><th>Faltante arrastrado</th><th>Snapshot</th></tr>
+                        <tr><th>Fecha jornada</th><th>Cerrada el</th><th>Pedidos</th><th>Producidas</th><th>Faltante</th><th style={{textAlign:'right'}}>Reporte</th></tr>
                       </thead>
                       <tbody>
                         {data.cierres.map((c, i) => (
-                          <tr key={i}>
+                          <tr key={c.id || i}>
+                            <td style={{fontWeight:600}}>{c.fechaJornada ? fmt.date(c.fechaJornada) : '—'}</td>
                             <td>{fmt.dateTime(c.fecha)}</td>
                             <td><span className="cell-color-num">{c.pedidos}</span></td>
+                            <td>{c.unidadesProducidas || 0}</td>
                             <td><FaltanteBadge value={c.faltante}/></td>
-                            <td><span style={{fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:10, background:'var(--green-bg)', color:'var(--green)'}}>{c.snapshot}</span></td>
+                            <td style={{textAlign:'right', whiteSpace:'nowrap'}}>
+                              <button className="btn-ghost" style={{padding:'4px 8px', fontSize:10, marginRight:4}}
+                                onClick={async () => {
+                                  try {
+                                    await window.REPORT_UTILS.descargarReporteCierre(c, channel, 'xlsx');
+                                    toast.success('Excel descargado');
+                                  } catch (e) { toast.error(e.message); }
+                                }}>
+                                <Icon n="download" s={11}/> Excel
+                              </button>
+                              <button className="btn-ghost" style={{padding:'4px 8px', fontSize:10}}
+                                onClick={async () => {
+                                  try {
+                                    await window.REPORT_UTILS.descargarReporteCierre(c, channel, 'pdf');
+                                    toast.success('PDF descargado');
+                                  } catch (e) { toast.error(e.message); }
+                                }}>
+                                <Icon n="download" s={11}/> PDF
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -406,26 +427,22 @@ function CarrierPage({ channel, onBack, onNav }) {
               </div>
             )}
 
-            {/* Cerrar jornada — solo en canales con cierre horario */}
-            {esHorario && (
-              <div style={{marginTop:20, display:'flex', justifyContent:'space-between', alignItems:'center', gap:12}}>
+            {/* Cerrar jornada — disponible para todos los canales (Etapa 2).
+                Solo se puede cerrar si hay una jornada abierta.
+                Solo admin/encargado/owner. */}
+            {(data.jornadasAbiertas?.length > 0) && ['owner','admin','encargado'].includes(userRole) && (
+              <div style={{marginTop:20, display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap'}}>
                 <div style={{fontSize:11, color:'var(--ink-muted)', maxWidth:520, lineHeight:1.5}}>
                   <Icon n="info" s={12} style={{verticalAlign:'middle', marginRight:4}}/>
-                  Al cerrar: archivamos los pedidos completados y arrastramos el faltante al día siguiente como nueva línea.
+                  Al cerrar: foto fija del estado, archivar pedidos completados, arrastrar faltante al día siguiente.
                 </div>
                 <button
                   className="btn-success"
                   onClick={() => setShowCierre(true)}
-                  style={vencida ? {background:'var(--red)', animation:'pulseDot 1.5s infinite'} : undefined}
+                  style={(esHorario && vencida) ? {background:'var(--red)', animation:'pulseDot 1.5s infinite'} : undefined}
                 >
-                  <Icon n="lock" s={13}/> {vencida ? 'Cerrar jornada (vencida)' : 'Cerrar jornada'}
+                  <Icon n="lock" s={13}/> {esHorario && vencida ? 'Cerrar jornada (vencida)' : 'Cerrar jornada'}
                 </button>
-              </div>
-            )}
-            {!esHorario && data.cierres.length === 0 && data.kpis.activos > 0 && (
-              <div style={{marginTop:20, padding:14, background:'var(--paper-off)', border:'1px dashed var(--border-md)', borderRadius:6, fontSize:11, color:'var(--ink-soft)', display:'flex', gap:10, alignItems:'center'}}>
-                <Icon n="info" s={14} c="var(--ink-muted)"/>
-                <span>Este canal no tiene cierre obligatorio diario. El faltante se arrastra automáticamente cada día sin necesidad de acción.</span>
               </div>
             )}
           </>
