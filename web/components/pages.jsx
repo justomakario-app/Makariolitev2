@@ -319,12 +319,45 @@ function HistoricoPage() {
 /* ── Catálogo desde SKU_DB ── */
 function CatalogoPage() {
   const toast = useToast();
+  const M = window.useMockData(); // re-render cuando free_stock cambie
   const [filter, setFilter] = useState('');
   const [cat, setCat] = useState('todas');
   const [showQR, setShowQR] = useState(false);
   const [generandoPDF, setGenerandoPDF] = useState(false);
   const [editing, setEditing] = useState(null); // {sku, isNew}
   const [, forceUpdate] = useState(0);
+
+  const freeStock = M.freeStock || {};
+
+  /* Asigna o consume stock libre via prompts simples (V1).
+     Para una UI de modal completa: ver Etapa 4b (TBD). */
+  const asignarFreeStock = async (sku, total) => {
+    const channelId = window.prompt(
+      `Asignar ${sku} (${total} disponibles)\n\nCanal destino (colecta, flex, tiendanube, distribuidor, no_flex, correo_argentino) o "walk-in":`
+    );
+    if (!channelId) return;
+    const cantidadStr = window.prompt(`¿Cuántas unidades? (max ${total})`, String(total));
+    if (!cantidadStr) return;
+    const cantidad = parseInt(cantidadStr, 10);
+    if (!cantidad || cantidad <= 0 || cantidad > total) {
+      toast.error('Cantidad inválida');
+      return;
+    }
+    try {
+      if (channelId.toLowerCase() === 'walk-in') {
+        const motivo = window.prompt('Motivo (opcional):', '');
+        await window.MOCK_ACTIONS.consumeFreeStock({
+          sku, cantidad, motivo: motivo || undefined,
+        });
+        toast.success(`${cantidad} × ${sku} consumidas (walk-in)`);
+      } else {
+        await window.MOCK_ACTIONS.assignFreeStock({ sku, cantidad, channelId });
+        toast.success(`${cantidad} × ${sku} → ${channelId}`);
+      }
+    } catch (e) {
+      toast.error(e.message || 'No se pudo asignar');
+    }
+  };
 
   /* Imprimir PDF batch del catálogo filtrado (grilla 4x5) */
   const imprimirPDFBatch = async () => {
@@ -424,10 +457,11 @@ function CatalogoPage() {
 
       <div className="card">
         <table className="data-table">
-          <thead><tr><th>SKU</th><th>Modelo</th><th>Color</th><th>Categoría</th><th>Tipo</th><th>Estado</th><th></th></tr></thead>
+          <thead><tr><th>SKU</th><th>Modelo</th><th>Color</th><th>Categoría</th><th>Tipo</th><th>Stock libre</th><th>Estado</th><th></th></tr></thead>
           <tbody>
             {filtered.map(s => {
               const c = window.SKU_DB[s];
+              const fs = freeStock[s] || 0;
               return (
                 <tr key={s}>
                   <td><span className="order-num">{s}</span></td>
@@ -442,6 +476,19 @@ function CatalogoPage() {
                   </td>
                   <td><span style={{fontSize:11, fontWeight:600, color:'var(--ink-muted)'}}>{c.categoria}</span></td>
                   <td>{c.es_fabricado ? <span style={{fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:10, background:'var(--green-bg)', color:'var(--green)'}}>FABRICADO</span> : <span style={{fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:10, background:'var(--paper-dim)', color:'var(--ink-muted)'}}>REVENTA</span>}</td>
+                  <td>
+                    {fs > 0 ? (
+                      <button
+                        onClick={() => asignarFreeStock(s, fs)}
+                        style={{
+                          fontSize:11, fontWeight:700, padding:'4px 10px', borderRadius:10,
+                          background:'#fef3c7', color:'#92400e', border:'1px solid #fbbf24',
+                          cursor:'pointer',
+                        }}
+                        title="Asignar a canal o consumir"
+                      >{fs}</button>
+                    ) : <span style={{fontSize:11, color:'var(--ink-faint)'}}>—</span>}
+                  </td>
                   <td>{c.activo ? <span style={{display:'inline-flex', alignItems:'center', gap:5, fontSize:11, color:'var(--green)'}}><span style={{width:6, height:6, borderRadius:'50%', background:'var(--green)'}}/>Activo</span> : <span style={{fontSize:11, color:'var(--ink-muted)'}}>Inactivo</span>}</td>
                   <td style={{textAlign:'right', width:1, whiteSpace:'nowrap'}}>
                     <button className="btn-ghost" style={{padding:'5px 10px', fontSize:10, marginRight:4}} onClick={() => setEditing({sku:s, isNew:false})}><Icon n="edit" s={11}/> Editar</button>
@@ -453,6 +500,7 @@ function CatalogoPage() {
           </tbody>
         </table>
       </div>
+
 
       {/* Modal Editar / Crear */}
       {editing && (

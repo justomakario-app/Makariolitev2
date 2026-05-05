@@ -116,6 +116,7 @@ window.MOCK = {
   prodLogs: [],
   notifications: [],
   users: [],
+  freeStock: {}, // {sku: cantidad_total}
 
   historico: {
     year: new Date().getFullYear(),
@@ -366,6 +367,18 @@ async function loadBatches() {
   }
 }
 
+/* Carga el stock libre por SKU. Se acumula desde free_stock (PK por
+   (sku, source_jornada_id)) — agregamos la suma para el display. */
+async function loadFreeStock() {
+  const { data, error } = await supa.from('free_stock').select('sku, cantidad');
+  if (error) { console.error('free_stock', error); return; }
+  const map = {};
+  for (const r of data || []) {
+    map[r.sku] = (map[r.sku] || 0) + (r.cantidad || 0);
+  }
+  window.MOCK.freeStock = map;
+}
+
 async function loadJornadas() {
   const { data, error } = await supa
     .from('jornadas').select('*')
@@ -585,13 +598,41 @@ window.MOCK_ACTIONS = {
     return data;
   },
 
-  async cerrarJornada({ channelId, fecha }) {
+  /* Cerrar jornada con disposiciones opcionales para los sobrantes.
+     disposiciones: [{sku, accion: 'free_stock', cantidad?}]
+     Si se omite, todos los sobrantes se arrastran (carrier_state.stock). */
+  async cerrarJornada({ channelId, fecha, disposiciones }) {
     const params = { p_channel_id: channelId };
     if (fecha) params.p_fecha = fecha;
+    if (disposiciones && disposiciones.length) params.p_disposiciones = disposiciones;
     const { error } = await supa.rpc('rpc_close_jornada', params);
     if (error) throw new Error(error.message);
-    await Promise.all([loadCarriers(), loadOrders(), loadJornadas()]);
+    await Promise.all([loadCarriers(), loadOrders(), loadJornadas(), loadFreeStock()]);
     window.MOCK_BUS.emit();
+  },
+
+  /* Mueve cantidad del stock libre del SKU al canal target (genera
+     production_log positivo en la jornada destino). Si no se pasa
+     jornada destino, usa la activa del canal o crea una de hoy. */
+  async assignFreeStock({ sku, cantidad, channelId, jornadaId }) {
+    const params = { p_sku: sku, p_cantidad: cantidad, p_target_channel_id: channelId };
+    if (jornadaId) params.p_target_jornada_id = jornadaId;
+    const { data, error } = await supa.rpc('rpc_assign_free_stock', params);
+    if (error) throw new Error(error.message);
+    await Promise.all([loadCarriers(), loadProdLogs(), loadFreeStock(), loadJornadas()]);
+    window.MOCK_BUS.emit();
+    return data;
+  },
+
+  /* Walk-in: consumir stock libre sin generar production_log. */
+  async consumeFreeStock({ sku, cantidad, motivo }) {
+    const params = { p_sku: sku, p_cantidad: cantidad };
+    if (motivo) params.p_motivo = motivo;
+    const { data, error } = await supa.rpc('rpc_consume_free_stock', params);
+    if (error) throw new Error(error.message);
+    await loadFreeStock();
+    window.MOCK_BUS.emit();
+    return data;
   },
 
   async importarLote({ channelId, filename, items, fileHash }) {
@@ -871,6 +912,7 @@ const _safe = (p, label) => p.catch(e => {
         _safe(loadOrders(),        'orders'),
         _safe(loadBatches(),       'batches'),
         _safe(loadJornadas(),      'jornadas'),
+        _safe(loadFreeStock(),     'free_stock'),
         _safe(loadProdLogs(),      'prodLogs'),
         _safe(loadHistorico(),     'historico'),
       ]);
