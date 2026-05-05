@@ -96,11 +96,97 @@ function CarrierPage({ channel, onBack, onNav }) {
           }}>
             <Icon n="download" s={13}/> Exportar
           </button>
+          {/* Abrir jornada — solo admin/encargado/owner */}
+          {['owner','admin','encargado'].includes(userRole) && (
+            <button className="btn-ghost" onClick={async () => {
+              const fecha = window.prompt(
+                `Abrir jornada de ${C.label}\n\nFecha (YYYY-MM-DD), o vacío para hoy:`,
+                new Date().toISOString().slice(0, 10)
+              );
+              if (fecha === null) return;
+              try {
+                await window.MOCK_ACTIONS.abrirJornada({
+                  channelId: channel,
+                  fecha: fecha.trim() || undefined,
+                });
+                toast.success(`Jornada abierta · ${C.label}`);
+              } catch (e) {
+                toast.error(e.message || 'No se pudo abrir la jornada');
+              }
+            }}>
+              <Icon n="plus" s={13}/> Abrir jornada
+            </button>
+          )}
           <button className="btn-primary" onClick={() => { setProduceCtx({ subcanal: channel }); setShowProduce(true); }}>
             <Icon n="plus" s={13}/> Producir
           </button>
         </div>
       </div>
+
+      {/* Chip de jornada activa — visible siempre, dropdown si hay 2+ abiertas */}
+      {(() => {
+        const abiertas = data.jornadasAbiertas || [];
+        const activaId = data.jornadaActivaId;
+        if (abiertas.length === 0) {
+          return (
+            <div className="carrier-banner" style={{background:'#fff3e0', borderColor:'rgba(217,119,6,.32)', color:'#92400e'}}>
+              <Icon n="alert" s={16}/>
+              <span>Sin jornada abierta. La próxima carga va a auto-crear una de hoy.</span>
+            </div>
+          );
+        }
+        const activa = abiertas.find(j => j.id === activaId);
+        const sinActiva = !activa && abiertas.length >= 2;
+        if (sinActiva) {
+          return (
+            <div className="carrier-banner" style={{background:'var(--red-bg)', borderColor:'rgba(220,38,38,.32)', color:'var(--red)'}}>
+              <Icon n="alert" s={16}/>
+              <span><strong>{abiertas.length} jornadas abiertas, ninguna activa.</strong> Las cargas nuevas van a fallar — marcá una como activa abajo.</span>
+            </div>
+          );
+        }
+        return (
+          <div style={{padding:'10px 24px', borderBottom:'1px solid var(--border)', background:'#fff', display:'flex', alignItems:'center', gap:12, flexWrap:'wrap'}}>
+            <div style={{fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'.08em', color:'var(--ink-muted)'}}>
+              Jornada activa
+            </div>
+            {abiertas.length === 1 ? (
+              <div style={{fontSize:13, fontWeight:700}}>
+                {fmt.date(abiertas[0].fecha)}
+                <span style={{marginLeft:8, fontSize:10, color:'var(--green)', fontWeight:600}}>· única abierta</span>
+              </div>
+            ) : (
+              <select
+                value={activaId || ''}
+                onChange={async (e) => {
+                  if (!e.target.value || e.target.value === activaId) return;
+                  try {
+                    await window.MOCK_ACTIONS.setJornadaActiva({ jornadaId: e.target.value });
+                    toast.success('Jornada activa cambiada');
+                  } catch (err) {
+                    toast.error(err.message || 'No se pudo cambiar');
+                  }
+                }}
+                disabled={!['owner','admin','encargado'].includes(userRole)}
+                style={{
+                  padding:'4px 8px', fontSize:13, fontWeight:700,
+                  border:'1px solid var(--border)', borderRadius:4,
+                  background:'var(--paper)',
+                }}
+              >
+                {abiertas.map(j => (
+                  <option key={j.id} value={j.id}>
+                    {fmt.date(j.fecha)} {j.id === activaId ? '· ACTIVA' : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+            <span style={{fontSize:11, color:'var(--ink-muted)'}}>
+              {abiertas.length} jornada{abiertas.length===1?'':'s'} abierta{abiertas.length===1?'':'s'}
+            </span>
+          </div>
+        );
+      })()}
 
       {data.allDone && data.kpis.activos === 0 ? (
         <div className="carrier-banner green">

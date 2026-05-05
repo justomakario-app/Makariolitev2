@@ -41,12 +41,12 @@ function ProduceModal({ open, onClose, defaultSku, defaultSubcanal }) {
   const [nota, setNota] = useState('');
   const [scanning, setScanning] = useState(false);
   const [busy, setBusy] = useState(false);
+  /* jornadaIdOverride: si se elige a mano del selector. Si null, el RPC
+     usa la jornada activa del canal automaticamente. */
+  const [jornadaIdOverride, setJornadaIdOverride] = useState(null);
 
   useEffect(() => {
     if (open) {
-      // Si vinimos con SKU + canal preseleccionados, saltar directo al paso 3 (cantidad)
-      // Si solo viene canal, empezar en paso 1 pero con canal listo
-      // Si nada, empezar de cero
       const hasSku = !!defaultSku;
       const hasCanal = !!defaultSubcanal;
       setStep(hasSku && hasCanal ? 3 : hasSku ? 2 : 1);
@@ -55,8 +55,12 @@ function ProduceModal({ open, onClose, defaultSku, defaultSubcanal }) {
       setSubcanal(defaultSubcanal || 'colecta');
       setCantidad(1); setFecha(new Date().toISOString().slice(0,10));
       setNota(''); setScanning(false);
+      setJornadaIdOverride(null);
     }
   }, [open, defaultSku, defaultSubcanal]);
+
+  /* Reset override al cambiar de canal — la lista de jornadas abiertas cambia */
+  useEffect(() => { setJornadaIdOverride(null); }, [subcanal]);
 
   /* simular scan QR */
   const startScan = () => {
@@ -80,8 +84,10 @@ function ProduceModal({ open, onClose, defaultSku, defaultSubcanal }) {
   const submit = async () => {
     setBusy(true);
     try {
-      // El RPC retorna el production_logs row creado (con id) — lo usamos para Undo.
-      const log = await window.MOCK_ACTIONS.registrarProduccion({ sku, subcanal, cantidad, nota });
+      const log = await window.MOCK_ACTIONS.registrarProduccion({
+        sku, subcanal, cantidad, nota,
+        jornadaId: jornadaIdOverride || undefined,
+      });
       onClose();
       toast.success(`${cantidad} × ${sku} → ${window.CARRIERS[subcanal]?.label}`, {
         dur: 5000,
@@ -291,6 +297,34 @@ function ProduceModal({ open, onClose, defaultSku, defaultSubcanal }) {
       {/* Paso 3: cantidad + fecha + nota + resumen */}
       {step === 3 && (
         <div>
+          {/* Selector de jornada — solo si hay 2+ abiertas en el canal.
+              Default = la activa (RPC la elige sin que el usuario haga click). */}
+          {(() => {
+            const abiertas = M.carriers[subcanal]?.jornadasAbiertas || [];
+            const activaId = M.carriers[subcanal]?.jornadaActivaId;
+            if (abiertas.length < 2) return null;
+            const selectedId = jornadaIdOverride || activaId || abiertas[0]?.id;
+            return (
+              <div style={{marginBottom:14, padding:'10px 12px', background:'#fef3c7', border:'1px solid #fbbf24', borderRadius:6}}>
+                <div style={{fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'.08em', color:'var(--ink-muted)', marginBottom:6}}>
+                  Hay {abiertas.length} jornadas abiertas en {window.CARRIERS[subcanal]?.label}
+                </div>
+                <select
+                  className="field-input"
+                  value={selectedId || ''}
+                  onChange={e => setJornadaIdOverride(e.target.value)}
+                  style={{fontSize:12, fontWeight:600}}
+                >
+                  {abiertas.map(j => (
+                    <option key={j.id} value={j.id}>
+                      {fmt.date(j.fecha)} {j.id === activaId ? '· ACTIVA' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            );
+          })()}
+
           <label className="field-label">Cantidad producida</label>
           <div style={{display:'flex', gap:6, alignItems:'center'}}>
             <button onClick={() => setCantidad(Math.max(1, cantidad-1))} className="btn-ghost" style={{padding:'10px 14px', fontSize:18, lineHeight:1}}>−</button>

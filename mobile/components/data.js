@@ -369,22 +369,48 @@ async function loadBatches() {
 async function loadJornadas() {
   const { data, error } = await supa
     .from('jornadas').select('*')
-    .order('closed_at', { ascending: false }).limit(50);
+    .order('fecha', { ascending: false }).limit(100);
   if (error) { console.error('jornadas', error); return; }
+
   for (const id of Object.keys(window.MOCK.carriers)) {
-    window.MOCK.carriers[id].cierres     = [];
-    window.MOCK.carriers[id].lastClosure = null;
+    window.MOCK.carriers[id].cierres         = [];
+    window.MOCK.carriers[id].lastClosure     = null;
+    window.MOCK.carriers[id].jornadasAbiertas = [];
+    window.MOCK.carriers[id].jornadaActivaId = null;
   }
+
   for (const j of data || []) {
     const c = window.MOCK.carriers[j.channel_id];
     if (!c) continue;
-    if (!c.lastClosure) c.lastClosure = j.closed_at;
-    c.cierres.push({
-      fecha:    j.closed_at,
-      pedidos:  j.pedidos_count,
-      faltante: j.faltante_arrastrado,
-      snapshot: 'Guardado',
-    });
+
+    if (j.status === 'cerrada') {
+      if (!c.lastClosure) c.lastClosure = j.closed_at;
+      c.cierres.push({
+        id: j.id,
+        fecha:    j.closed_at,
+        fechaJornada: j.fecha,
+        pedidos:  j.pedidos_count,
+        unidadesProducidas: j.unidades_producidas,
+        unidadesPedidas:    j.unidades_pedidas,
+        faltante: j.faltante_arrastrado,
+        snapshot: j.snapshot || [],
+        closedBy: j.closed_by,
+      });
+    } else {
+      c.jornadasAbiertas.push({
+        id: j.id,
+        fecha: j.fecha,
+        isActive: j.is_active,
+        abiertaAt: j.abierta_at,
+      });
+      if (j.is_active) c.jornadaActivaId = j.id;
+    }
+  }
+
+  for (const id of Object.keys(window.MOCK.carriers)) {
+    window.MOCK.carriers[id].jornadasAbiertas.sort(
+      (a, b) => (a.fecha || '').localeCompare(b.fecha || '')
+    );
   }
 }
 
@@ -522,20 +548,41 @@ function humanizeCorrectError(err) {
 }
 
 window.MOCK_ACTIONS = {
-  async registrarProduccion({ sku, subcanal, cantidad, nota }) {
-    // El RPC NO acepta p_fecha — production_logs.fecha tiene default CURRENT_DATE.
-    // Retorna el log creado completo (para soportar Undo en frontend).
+  async registrarProduccion({ sku, subcanal, cantidad, nota, jornadaId }) {
+    // p_jornada_id es opcional — si no se pasa, el RPC busca la jornada
+    // activa del canal y la usa (o crea/marca según el caso).
     const params = { p_sku: sku, p_channel_id: subcanal, p_cantidad: cantidad };
     if (nota) params.p_notas = nota;
+    if (jornadaId) params.p_jornada_id = jornadaId;
     const { data, error } = await supa.rpc('rpc_register_production', params);
     if (error) throw new Error(error.message);
-    await Promise.all([loadCarriers(), loadProdLogs(), loadHistorico()]);
+    await Promise.all([loadCarriers(), loadProdLogs(), loadJornadas(), loadHistorico()]);
     window.MOCK_BUS.emit();
-    return data; // production_logs row
+    return data;
   },
 
-  async cerrarJornada({ channelId }) {
-    const { error } = await supa.rpc('rpc_close_jornada', { p_channel_id: channelId });
+  async abrirJornada({ channelId, fecha }) {
+    const params = { p_channel_id: channelId };
+    if (fecha) params.p_fecha = fecha;
+    const { data, error } = await supa.rpc('rpc_open_jornada', params);
+    if (error) throw new Error(error.message);
+    await Promise.all([loadCarriers(), loadJornadas()]);
+    window.MOCK_BUS.emit();
+    return data;
+  },
+
+  async setJornadaActiva({ jornadaId }) {
+    const { data, error } = await supa.rpc('rpc_set_active_jornada', { p_jornada_id: jornadaId });
+    if (error) throw new Error(error.message);
+    await loadJornadas();
+    window.MOCK_BUS.emit();
+    return data;
+  },
+
+  async cerrarJornada({ channelId, fecha }) {
+    const params = { p_channel_id: channelId };
+    if (fecha) params.p_fecha = fecha;
+    const { error } = await supa.rpc('rpc_close_jornada', params);
     if (error) throw new Error(error.message);
     await Promise.all([loadCarriers(), loadOrders(), loadJornadas()]);
     window.MOCK_BUS.emit();

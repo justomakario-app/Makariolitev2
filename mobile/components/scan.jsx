@@ -196,6 +196,36 @@ function ScanPage({ onNav }) {
         <div className="m-page-sub">Apuntá la cámara al QR del modelo</div>
       </div>
 
+      {/* Mini-resumen de jornadas activas — solo si hay alguna info para mostrar */}
+      {(() => {
+        const canalesConActiva = Object.keys(M.carriers || {})
+          .map(id => ({
+            id,
+            label: window.CARRIERS[id]?.label || id,
+            activa: (M.carriers[id]?.jornadasAbiertas || []).find(j => j.id === M.carriers[id]?.jornadaActivaId),
+            abiertas: (M.carriers[id]?.jornadasAbiertas || []).length,
+          }))
+          .filter(c => c.activa || c.abiertas > 0);
+        if (!canalesConActiva.length) return null;
+        return (
+          <div style={{margin:'12px 16px 0', padding:'10px 12px', background:'var(--paper-off)', border:'1px solid var(--border)', borderRadius:8, fontSize:11}}>
+            <div style={{fontSize:9, fontWeight:700, textTransform:'uppercase', letterSpacing:'.08em', color:'var(--ink-muted)', marginBottom:6}}>
+              Jornadas activas
+            </div>
+            <div style={{display:'flex', flexWrap:'wrap', gap:8}}>
+              {canalesConActiva.map(c => (
+                <div key={c.id} style={{display:'flex', alignItems:'center', gap:5, padding:'3px 8px', background:'var(--paper)', border:'1px solid var(--border)', borderRadius:12}}>
+                  <span style={{fontWeight:700}}>{c.label}:</span>
+                  <span style={{color: c.activa ? 'var(--ink)' : 'var(--red)'}}>
+                    {c.activa ? fmt.date(c.activa.fecha) : `${c.abiertas} sin activa`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Marco de cámara con feedback de color */}
       <div className={`m-scan-frame m-scan-${feedback||'idle'}`}>
         {scanning ? (
