@@ -74,7 +74,11 @@ function ScanPage({ onNav }) {
     }
   };
 
-  const start = async () => {
+  /* start() solo dispara el flag scanning. El useEffect de abajo
+     instancia el scanner DESPUÉS de que React montó el <video> en el
+     DOM — sino videoRef.current es null y la lib tira:
+     "null is not an object (evaluating 't.disablePictureInPicture=!0')". */
+  const start = () => {
     if (!window.QrScanner) {
       setError('Librería de QR no cargada todavía. Recargá la página.');
       return;
@@ -82,32 +86,59 @@ function ScanPage({ onNav }) {
     setError('');
     setPD(false);
     setScanning(true);
-    try {
-      const scanner = new window.QrScanner(
-        videoRef.current,
-        result => handleScan(result?.data ?? result ?? ''),
-        { highlightScanRegion: false, highlightCodeOutline: false, returnDetailedScanResult: true }
-      );
-      scannerRef.current = scanner;
-      await scanner.start();
-    } catch (e) {
-      const msg = (e?.message || '').toLowerCase();
-      if (msg.includes('permission') || msg.includes('denied') || msg.includes('notallowed')) {
-        setPD(true);
-      } else {
-        setError(e?.message || 'No se pudo acceder a la cámara');
-      }
-      setScanning(false);
-    }
   };
+
+  /* Inicialización del scanner: corre cuando scanning pasa a true Y el
+     <video> ya está montado. Cleanup automático al unmount o cuando
+     scanning vuelve a false. */
+  useEffect(() => {
+    if (!scanning) return;
+    // Doble rAF asegura que React ya commiteo el DOM
+    let cancelled = false;
+    let localScanner = null;
+
+    const init = async () => {
+      // Esperar a que el video esté en el DOM
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      if (cancelled || !videoRef.current) return;
+      try {
+        localScanner = new window.QrScanner(
+          videoRef.current,
+          result => handleScan(result?.data ?? result ?? ''),
+          { highlightScanRegion: false, highlightCodeOutline: false, returnDetailedScanResult: true }
+        );
+        scannerRef.current = localScanner;
+        await localScanner.start();
+        if (cancelled) {
+          try { localScanner.stop(); localScanner.destroy(); } catch (e) {}
+          scannerRef.current = null;
+        }
+      } catch (e) {
+        if (cancelled) return;
+        const msg = (e?.message || '').toLowerCase();
+        if (msg.includes('permission') || msg.includes('denied') || msg.includes('notallowed')) {
+          setPD(true);
+        } else {
+          setError(e?.message || 'No se pudo acceder a la cámara');
+        }
+        setScanning(false);
+      }
+    };
+    init();
+
+    return () => {
+      cancelled = true;
+      try { localScanner?.stop(); localScanner?.destroy(); } catch (e) {}
+      if (scannerRef.current === localScanner) scannerRef.current = null;
+    };
+    // eslint-disable-next-line
+  }, [scanning]);
 
   /* Modo continuo: cuando se cierra el modal de Registrar, vuelve la
      cámara automáticamente sin que el operario tenga que tocar nada. */
   const wasOpenRef = useRef(false);
   useEffect(() => {
     if (wasOpenRef.current && !registerOpen) {
-      // El modal acaba de cerrarse → reactivar cámara (delay corto para
-      // evitar conflicto con el unmount del modal).
       setTimeout(() => {
         if (!scannerRef.current && !permissionDenied) start();
       }, 350);
