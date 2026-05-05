@@ -123,6 +123,13 @@ function ToastProvider({ children }) {
     setTimeout(() => setItems(s => s.filter(i => i.id !== id)), 400);
   }, []);
 
+  /* Marca el action como "consumido" (botón ya disparado). El toast
+     queda visible un poco más para que el operario vea el feedback,
+     pero el botón no acepta clicks subsiguientes. */
+  const consumeAction = useCallback((id) => {
+    setItems(s => s.map(i => i.id === id ? { ...i, consumed: true } : i));
+  }, []);
+
   /* push(msg, kind='info', opts?)
      opts puede ser un number (back-compat: dur en ms) o un objeto:
        { dur?: number = 2800, action?: { label, onClick } } */
@@ -131,7 +138,7 @@ function ToastProvider({ children }) {
     const dur = isObj ? (opts.dur ?? 2800) : (typeof opts === 'number' ? opts : 2800);
     const action = isObj ? opts.action : null;
     const id = Math.random().toString(36).slice(2);
-    setItems(s => [...s, { id, msg, kind, action, show:false }]);
+    setItems(s => [...s, { id, msg, kind, action, show:false, consumed:false }]);
     requestAnimationFrame(() => setItems(s => s.map(i => i.id===id ? {...i, show:true} : i)));
     setTimeout(() => dismiss(id), dur);
     return id;
@@ -155,15 +162,23 @@ function ToastProvider({ children }) {
             <span style={{flex:1}}>{t.msg}</span>
             {t.action && (
               <button
-                onClick={() => { try { t.action.onClick(); } catch (e) {} dismiss(t.id); }}
+                disabled={!!t.consumed}
+                onClick={() => {
+                  if (t.consumed) return;
+                  consumeAction(t.id);
+                  try { t.action.onClick(); } catch (e) {}
+                  setTimeout(() => dismiss(t.id), 800);
+                }}
                 style={{
                   marginLeft:8, padding:'4px 10px', fontSize:11, fontWeight:700,
                   letterSpacing:'.06em', textTransform:'uppercase',
                   background:'rgba(255,255,255,.18)', color:'inherit',
                   border:'1px solid rgba(255,255,255,.35)', borderRadius:4,
-                  cursor:'pointer', whiteSpace:'nowrap',
+                  cursor: t.consumed ? 'default' : 'pointer',
+                  opacity: t.consumed ? 0.5 : 1,
+                  whiteSpace:'nowrap',
                 }}
-              >{t.action.label}</button>
+              >{t.consumed ? 'Hecho' : t.action.label}</button>
             )}
           </div>
         ))}

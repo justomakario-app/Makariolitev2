@@ -504,6 +504,23 @@ window.bootstrap = bootstrap;
    MUTATIONS
    ───────────────────────────────────────────────────────────────── */
 
+/* Mapea errores de rpc_correct_log a mensajes mostrables al operario.
+   El RPC v3 ya devuelve mensajes humanos para todos los casos de
+   negocio (jornada cerrada, ventana 24h, ya anulado, etc.); acá solo
+   capturamos errores de transporte (auth expirada, red) que vienen
+   crudos de PostgREST y no son legibles. */
+function humanizeCorrectError(err) {
+  const raw = (err && err.message) || '';
+  const low = raw.toLowerCase();
+  if (low.includes('jwt') || low.includes('not authenticated') || low.includes('invalid token')) {
+    return 'Tu sesion expiro. Volve a iniciar sesion.';
+  }
+  if (low.includes('failed to fetch') || low.includes('network') || low.includes('typeerror')) {
+    return 'Sin conexion. Reintenta en unos segundos.';
+  }
+  return raw || 'No se pudo aplicar la correccion.';
+}
+
 window.MOCK_ACTIONS = {
   async registrarProduccion({ sku, subcanal, cantidad, nota }) {
     // El RPC NO acepta p_fecha — production_logs.fecha tiene default CURRENT_DATE.
@@ -566,8 +583,10 @@ window.MOCK_ACTIONS = {
        - Si p_anular=true → solo inserta entrada compensatoria (-cantidad).
        - Si p_anular=false y p_new_cantidad → compensatoria + nuevo log con
          la cantidad corregida (y opcionalmente nuevo channel_id).
-     El RPC valida permisos: operario solo sus logs y dentro de 24h o antes
-     del cierre de jornada. Encargado/admin/owner cualquiera, sin tope. */
+     El RPC valida permisos: operario solo sus logs, ventana hasta cierre
+     del canal o 24h (lo que ocurra primero). Encargado/admin/owner sin tope.
+     Los errores del RPC (rpc_correct_log v3) ya vienen con mensaje humano
+     listo para mostrar — solo mapeamos errores de transporte (auth/red). */
   async corregirLog({ logId, nuevaCantidad, nuevoChannelId, motivo, anular }) {
     const { data, error } = await supa.rpc('rpc_correct_log', {
       p_log_id: logId,
@@ -576,7 +595,7 @@ window.MOCK_ACTIONS = {
       p_motivo: motivo ?? null,
       p_anular: !!anular,
     });
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(humanizeCorrectError(error));
     await Promise.all([loadCarriers(), loadProdLogs(), loadHistorico()]);
     window.MOCK_BUS.emit();
     return data;
