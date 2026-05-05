@@ -834,18 +834,43 @@ setTimeout(() => {
    ═══════════════════════════════════════════════════════════════════ */
 
 window.QR_UTILS = {
-  /* Genera un dataURL PNG del QR puro (sin texto). Para usar en PDFs o
-     componer canvases más grandes con texto. */
+  /* Genera un dataURL PNG del QR puro (sin texto). Usa qrcode-generator
+     (UMD, expone window.qrcode minúscula). La lib retorna GIF — lo
+     redibujamos en canvas y lo exportamos como PNG porque jsPDF.addImage
+     no soporta GIF directo. */
   async generarQRDataUrl(sku, opts = {}) {
-    if (typeof window.QRCode === 'undefined') {
+    if (typeof window.qrcode === 'undefined') {
       throw new Error('Librería QRCode no cargada — refrescá la página.');
     }
-    return await window.QRCode.toDataURL(sku, {
-      errorCorrectionLevel: opts.errorCorrectionLevel || 'M', // 15% redundancia, soporta logo si querés
-      margin: opts.margin ?? 1,
-      width: opts.width || 512,
-      color: { dark: '#000000', light: '#FFFFFF' },
-    });
+    const qr = window.qrcode(0, opts.errorCorrectionLevel || 'M'); // typeNumber=0 = autodetect
+    qr.addData(sku);
+    qr.make();
+
+    // Tamaño: queremos ~512px de QR. Calculamos cellSize en función del
+    // número de módulos (variará entre 21x21 y 33x33 según el largo del SKU).
+    const moduleCount = qr.getModuleCount(); // ej. 21 para SKUs cortos
+    const targetPx = opts.width || 512;
+    const margin = opts.margin ?? 1;
+    const cellSize = Math.max(2, Math.floor(targetPx / (moduleCount + margin * 2)));
+
+    // qrcode-generator escribe directo en canvas si le pedimos createImgTag,
+    // pero más limpio dibujar nosotros para tener PNG en vez de GIF.
+    const canvas = document.createElement('canvas');
+    const size = (moduleCount + margin * 2) * cellSize;
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, size, size);
+    ctx.fillStyle = '#000000';
+    for (let r = 0; r < moduleCount; r++) {
+      for (let c = 0; c < moduleCount; c++) {
+        if (qr.isDark(r, c)) {
+          ctx.fillRect((c + margin) * cellSize, (r + margin) * cellSize, cellSize, cellSize);
+        }
+      }
+    }
+    return canvas.toDataURL('image/png');
   },
 
   /* Descarga PNG individual con QR + SKU + modelo + color
