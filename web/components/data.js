@@ -959,8 +959,9 @@ function subscribeRealtime() {
    Sistema visualmente identico al pre-feature. Para activar: cambiar
    a true + redeploy. Para desactivar: cambiar a false + redeploy.
    Los RPCs y la tabla order_edit_log existen en BD pero nadie los
-   invoca con flag OFF. */
-window.FEATURE_PEDIDOS_MANUALES = false;
+   invoca con flag OFF.
+   Activado 2026-05-06 tras validacion visual con flag OFF. */
+window.FEATURE_PEDIDOS_MANUALES = true;
 
 /* ─────────────────────────────────────────────────────────────────
    BOOT
