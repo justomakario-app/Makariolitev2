@@ -565,6 +565,11 @@ function ProductoEditModal({ editing, onClose, onSave, cats }) {
       categoria: finalCat,
       es_fabricado: esFab,
       activo,
+      // editing.incompleto: viene como true cuando el modal se abre desde
+      // el carrito de carga manual (SKU al vuelo). Default false desde
+      // CatalogoPage. La BD tiene default false también — si esta key
+      // viaja como undefined al payload, igual queda consistente.
+      incompleto: editing.incompleto || false,
     };
     onSave(sku.trim().toUpperCase(), data, editing.isNew);
   };
@@ -1238,4 +1243,4 @@ function ConfigPage() {
   );
 }
 
-Object.assign(window, { QRPage, HistoricoPage, CatalogoPage, EquipoPage, NotificacionesPage, ConfigPage, SecurityModal, ChannelsConfigModal });
+Object.assign(window, { QRPage, HistoricoPage, CatalogoPage, EquipoPage, NotificacionesPage, ConfigPage, SecurityModal, ChannelsConfigModal, ProductoEditModal });
