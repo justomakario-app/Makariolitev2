@@ -444,7 +444,8 @@ function ImportModal({ open, onClose, channel: defaultChannel }) {
     setBusy(true);
     setProgress(20);
     try {
-      // Filtrar SKUs reconocidos para no romper la FK del backend
+      // Filtrar SKUs reconocidos para no romper la FK del backend.
+      // Pasamos `estado` para que importarLote filtre cancelados.
       const items = orders
         .filter(o => window.SKU_DB[o.sku])
         .map(o => ({
@@ -453,6 +454,7 @@ function ImportModal({ open, onClose, channel: defaultChannel }) {
           order_number: o.numero,
           cliente: o.cliente,
           fecha_pedido: o.fecha,
+          estado: o.estado,
         }));
       const ignorados = orders.length - items.length;
       setProgress(50);
@@ -463,11 +465,17 @@ function ImportModal({ open, onClose, channel: defaultChannel }) {
       });
       setProgress(100);
       onClose();
-      const aplicados = result?.unidades_count ?? items.reduce((s, o) => s + o.cantidad, 0);
-      if (ignorados > 0) {
-        toast.success(`${file.name} importado · ${aplicados} uds. aplicadas a ${window.CARRIERS[channel]?.label} · ${ignorados} pedido(s) con SKU desconocido ignorados`);
+      const cancelados = result?.cancelled_count_local ?? result?.cancelled_count ?? 0;
+      const canalLabel = window.CARRIERS[channel]?.label;
+      // Caso extremo: todos cancelados — no se procesó el archivo.
+      if (result?.skipped_all) {
+        toast.success(`${file.name} · ${cancelados} saltado(s) por cancelados · archivo no procesado`);
       } else {
-        toast.success(`${file.name} importado · ${aplicados} uds. aplicadas a ${window.CARRIERS[channel]?.label}`);
+        const aplicados = result?.unidades_count ?? items.reduce((s, o) => s + o.cantidad, 0);
+        const partes = [`${file.name} importado · ${aplicados} uds. aplicadas a ${canalLabel}`];
+        if (cancelados > 0) partes.push(`${cancelados} saltado(s) por cancelados`);
+        if (ignorados > 0)  partes.push(`${ignorados} con SKU desconocido`);
+        toast.success(partes.join(' · '));
       }
     } catch (e) {
       toast.error(e.message || 'No se pudo importar el lote');

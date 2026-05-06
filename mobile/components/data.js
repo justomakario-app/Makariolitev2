@@ -639,11 +639,20 @@ window.MOCK_ACTIONS = {
   },
 
   async importarLote({ channelId, filename, items, fileHash }) {
+    // 0) Filtrar pedidos cancelados (defensa en profundidad — espejo del web).
+    const isCancelled = (it) => (it.estado || '').toString().trim().toLowerCase().startsWith('cancelada');
+    const cancelledCount = (items || []).filter(isCancelled).length;
+    const itemsActivos = (items || []).filter(it => !isCancelled(it));
+
+    if (itemsActivos.length === 0 && cancelledCount > 0) {
+      return { skipped_all: true, cancelled_count_local: cancelledCount };
+    }
+
     // 1) Normalizar items antes del RPC: el campo `fecha_pedido` debe ser
     //    ISO date (YYYY-MM-DD) o null. El parser de Excel lo deja como
     //    string crudo (ej "20 de abril de 2026 21:24 hs.") que Postgres
     //    rechaza con "invalid input syntax for type date".
-    const normalizedItems = (items || []).map(it => {
+    const normalizedItems = itemsActivos.map(it => {
       const fecha = window.parseFechaAR ? window.parseFechaAR(it.fecha_pedido) : null;
       const cleaned = {
         sku: (it.sku || '').toString().trim().toUpperCase(),
@@ -651,7 +660,8 @@ window.MOCK_ACTIONS = {
       };
       if (it.order_number) cleaned.order_number = String(it.order_number).trim();
       if (it.cliente)      cleaned.cliente      = String(it.cliente).trim();
-      if (fecha)           cleaned.fecha_pedido = fecha;  // omit si null → RPC usa current_date
+      if (it.estado)       cleaned.estado       = String(it.estado).trim();
+      if (fecha)           cleaned.fecha_pedido = fecha;
       return cleaned;
     }).filter(it => it.sku && it.cantidad > 0);
 
@@ -673,7 +683,7 @@ window.MOCK_ACTIONS = {
     if (error) throw new Error(error.message);
     await Promise.all([loadCarriers(), loadOrders(), loadBatches()]);
     window.MOCK_BUS.emit();
-    return data;
+    return { ...(data || {}), cancelled_count_local: cancelledCount };
   },
 
   /* Editar / Anular un log de producción.
