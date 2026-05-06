@@ -150,5 +150,130 @@ function PerfilPage({ onLogout }) {
   );
 }
 
+/* ════════════════════════════════════════════════════════════════
+   ProductoEditModal — portado desde web/pages.jsx para paridad total.
+   Necesario en mobile para el flujo "SKU al vuelo" desde el carrito
+   de carga manual. Mismo componente, mismo onSave shape, mismas
+   validaciones. El CSS de modals.jsx (Modal full-screen en viewport
+   ≤480px) lo adapta automáticamente al mobile.
+   ════════════════════════════════════════════════════════════════ */
+function ProductoEditModal({ editing, onClose, onSave, cats }) {
+  const toast = useToast();
+  const existing = !editing.isNew ? window.SKU_DB[editing.sku] : null;
+  const [sku, setSku]       = useState(editing.sku || '');
+  const [modelo, setModelo] = useState(existing?.modelo || '');
+  const [color, setColor]   = useState(existing?.color || '');
+  const [colorHex, setColorHex] = useState(existing?.colorHex || (existing?.color==='Negro'?'#1a1a1a':existing?.color==='Blanco'?'#ffffff':'#cccccc'));
+  const [categoria, setCategoria] = useState(existing?.categoria || cats[0] || 'Mesas');
+  const [esFab, setEsFab]   = useState(existing?.es_fabricado ?? true);
+  const [activo, setActivo] = useState(existing?.activo ?? true);
+  const [nuevaCat, setNuevaCat] = useState(false);
+  const [catCustom, setCatCustom] = useState('');
+
+  const submit = () => {
+    if (!sku.trim()) { toast.error('Falta SKU'); return; }
+    if (!modelo.trim()) { toast.error('Falta nombre del modelo'); return; }
+    const finalCat = nuevaCat ? catCustom.trim() : categoria;
+    if (!finalCat) { toast.error('Falta categoría'); return; }
+    const data = {
+      modelo: modelo.trim(),
+      color: color.trim() || '—',
+      colorHex: color.trim() && color.trim() !== '—' ? colorHex : null,
+      categoria: finalCat,
+      es_fabricado: esFab,
+      activo,
+      incompleto: editing.incompleto || false,
+    };
+    onSave(sku.trim().toUpperCase(), data, editing.isNew);
+  };
+
+  const PRESETS = [
+    {n:'Blanco', h:'#ffffff'},
+    {n:'Negro',  h:'#1a1a1a'},
+    {n:'Natural', h:'#d4a574'},
+    {n:'Roble',  h:'#8b6f47'},
+    {n:'Nogal',  h:'#5c3a21'},
+    {n:'Gris',   h:'#888888'},
+  ];
+
+  return (
+    <Modal open={true} onClose={onClose} title={editing.isNew ? 'Nuevo producto' : `Editar ${editing.sku}`} size="lg" footer={
+      <>
+        <button className="btn-ghost" onClick={onClose}>Cancelar</button>
+        <button className="btn-primary" onClick={submit}>
+          <Icon n="check" s={14}/> {editing.isNew ? 'Crear producto' : 'Guardar cambios'}
+        </button>
+      </>
+    }>
+      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12}}>
+        <div>
+          <label className="field-label">SKU</label>
+          <input className="field-input" value={sku} onChange={e => setSku(e.target.value)} disabled={!editing.isNew} placeholder="Ej: MAD500" style={{fontFamily:'var(--mono)', textTransform:'uppercase'}}/>
+          {!editing.isNew && <div style={{fontSize:10, color:'var(--ink-muted)', marginTop:4}}>El SKU no se puede cambiar después de creado.</div>}
+        </div>
+        <div>
+          <label className="field-label">Categoría</label>
+          {!nuevaCat ? (
+            <div style={{display:'flex', gap:6}}>
+              <select className="field-input" value={categoria} onChange={e => setCategoria(e.target.value)} style={{flex:1}}>
+                {cats.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <button type="button" className="btn-ghost" style={{padding:'8px 10px', fontSize:10}} onClick={() => setNuevaCat(true)} title="Nueva categoría">
+                <Icon n="plus" s={12}/>
+              </button>
+            </div>
+          ) : (
+            <div style={{display:'flex', gap:6}}>
+              <input className="field-input" value={catCustom} onChange={e => setCatCustom(e.target.value)} placeholder="Nueva categoría..." style={{flex:1}}/>
+              <button type="button" className="btn-ghost" style={{padding:'8px 10px', fontSize:10}} onClick={() => setNuevaCat(false)}>
+                <Icon n="x" s={12}/>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{marginTop:14}}>
+        <label className="field-label">Nombre del modelo</label>
+        <input className="field-input" value={modelo} onChange={e => setModelo(e.target.value)} placeholder="Ej: Mesa Nórdica Redonda 50cm"/>
+      </div>
+
+      <div style={{marginTop:14}}>
+        <label className="field-label">Color / variante</label>
+        <div style={{display:'flex', gap:8, alignItems:'center', marginBottom:10}}>
+          <input className="field-input" value={color} onChange={e => setColor(e.target.value)} placeholder="Ej: Blanco, Negro, Natural, Beige..." style={{flex:1}}/>
+          <input type="color" value={colorHex} onChange={e => setColorHex(e.target.value)} style={{width:48, height:38, border:'1px solid var(--border)', borderRadius:4, padding:2, cursor:'pointer', background:'#fff'}}/>
+        </div>
+        <div style={{display:'flex', flexWrap:'wrap', gap:5}}>
+          <span style={{fontSize:10, fontWeight:700, color:'var(--ink-muted)', textTransform:'uppercase', letterSpacing:'.08em', alignSelf:'center', marginRight:4}}>Atajos:</span>
+          {PRESETS.map(p => (
+            <button key={p.n} type="button" onClick={() => { setColor(p.n); setColorHex(p.h); }} style={{
+              display:'flex', alignItems:'center', gap:5, padding:'3px 8px', fontSize:10, fontWeight:600,
+              background: color===p.n?'var(--ink)':'var(--paper-off)', color: color===p.n?'#fff':'var(--ink-soft)',
+              border:'1px solid var(--border)', borderRadius:10, cursor:'pointer'
+            }}>
+              <span style={{width:9, height:9, borderRadius:'50%', background:p.h, border:'1px solid #d4cdc1'}}/>
+              {p.n}
+            </button>
+          ))}
+        </div>
+        <div style={{fontSize:10, color:'var(--ink-muted)', marginTop:6}}>Dejar vacío si el producto no tiene variantes de color.</div>
+      </div>
+
+      <div style={{marginTop:18, display:'flex', gap:24}}>
+        <label style={{display:'flex', alignItems:'center', gap:8, fontSize:12, fontWeight:600, cursor:'pointer'}}>
+          <input type="checkbox" checked={esFab} onChange={e => setEsFab(e.target.checked)}/>
+          Producto fabricado
+        </label>
+        <label style={{display:'flex', alignItems:'center', gap:8, fontSize:12, fontWeight:600, cursor:'pointer'}}>
+          <input type="checkbox" checked={activo} onChange={e => setActivo(e.target.checked)}/>
+          Activo en catálogo
+        </label>
+      </div>
+    </Modal>
+  );
+}
+
 window.NotificacionesPage = NotificacionesPage;
 window.PerfilPage = PerfilPage;
+window.ProductoEditModal = ProductoEditModal;

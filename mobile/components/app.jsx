@@ -4,6 +4,9 @@ function App() {
   const M = window.useMockData();
   const [page, setPage] = useState('dashboard');
   const [didLanding, setDidLanding] = useState(false);
+  // Singleton global del modal de SKU (paridad con web). Permite que el
+  // carrito de carga manual abra el modal de creacion de SKU al vuelo.
+  const [skuModal, setSkuModal] = useState(null);
 
   const logged = !!(M.user && M.user.name);
   const unread = (M.notifications || []).filter(n => !n.leida).length;
@@ -28,6 +31,20 @@ function App() {
     try { await window.MOCK_ACTIONS.logout(); }
     catch (e) { console.error(e); }
   };
+
+  /* Exponer/quitar el opener global del modal de SKU.
+     opts: { newSku?: string, incompleto?: bool, onCreated?: (sku) => void } */
+  useEffect(() => {
+    window.openProductoEditModal = (opts = {}) => {
+      setSkuModal({
+        sku: (opts.newSku || '').toUpperCase(),
+        isNew: true,
+        incompleto: !!opts.incompleto,
+        onCreated: opts.onCreated,
+      });
+    };
+    return () => { try { delete window.openProductoEditModal; } catch (_) {} };
+  }, []);
 
   /* Loader inicial */
   if (!M.bootstrapped) {
@@ -61,7 +78,49 @@ function App() {
         </main>
         <BottomBar current={page} onNav={setPage} unread={unread}/>
       </div>
+      {skuModal && <GlobalSkuModal modal={skuModal} onClose={() => setSkuModal(null)}/>}
     </ToastProvider>
+  );
+}
+
+/* GlobalSkuModal — wrapper que renderiza ProductoEditModal con onSave
+   del singleton. Vive dentro del ToastProvider para que useToast()
+   funcione. NO interfiere con otros usos del modal porque mobile no
+   tiene CatalogoPage hoy. */
+function GlobalSkuModal({ modal, onClose }) {
+  const toast = useToast();
+  const cats = [...new Set(Object.values(window.SKU_DB || {}).map(s => s.categoria).filter(Boolean))];
+
+  const onSave = async (sku, data, isNew) => {
+    if (isNew && window.SKU_DB[sku]) {
+      toast.error(`SKU ${sku} ya existe`);
+      return false;
+    }
+    try {
+      const payload = {
+        modelo: data.modelo,
+        color: data.color === '—' ? null : data.color,
+        color_hex: data.colorHex || null,
+        categoria: data.categoria,
+        es_fabricado: data.es_fabricado,
+        activo: data.activo,
+        incompleto: data.incompleto || false,
+      };
+      await window.MOCK_ACTIONS.crearOActualizarSku(sku, payload, isNew);
+      toast.success(`SKU ${sku} creado${data.incompleto ? ' (incompleto)' : ''}`);
+      try { modal.onCreated?.(sku); } catch (_) {}
+      onClose();
+      return true;
+    } catch (e) {
+      toast.error(e.message || 'No se pudo guardar el SKU');
+      return false;
+    }
+  };
+
+  if (!window.ProductoEditModal) return null;
+  const Cmp = window.ProductoEditModal;
+  return (
+    <Cmp editing={modal} onClose={onClose} onSave={onSave} cats={cats}/>
   );
 }
 

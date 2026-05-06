@@ -9,12 +9,32 @@ function CarrierPage({ channel, onBack }) {
   const [pendingSku, setPendingSku] = useState(null);
   const [loteAEliminar, setLoteAEliminar] = useState(null);
   const [borrando, setBorrando] = useState(false);
+  // Pedidos manuales + edición (paridad con web — feature flag controla visibilidad)
+  const [showManualOrder, setShowManualOrder] = useState(false);
+  const [editingOrder, setEditingOrder]       = useState(null);
+  const [historyOrder, setHistoryOrder]       = useState(null);
+  const [openOrders, setOpenOrders]           = useState(false);
 
   if (!data || !C) return null;
 
   const empty = data.kpis.activos === 0 && data.table.length === 0;
   const userRole = window.MOCK.user.role;
   const puedeEliminarLote = ['owner','admin','encargado'].includes(userRole);
+  const featurePedidos = !!window.FEATURE_PEDIDOS_MANUALES && channel !== 'distribuidor';
+  const puedeCargarManual = featurePedidos && ['owner','admin','encargado'].includes(userRole);
+
+  // Pedidos individuales agrupados por order_number (paridad con web)
+  const ordersAgrupados = (() => {
+    if (!featurePedidos) return [];
+    const map = new Map();
+    for (const o of (data.orders || [])) {
+      if (!map.has(o.numero)) {
+        map.set(o.numero, { numero: o.numero, cliente: o.cliente, fecha: o.fecha, editsCount: o.editsCount || 0, items: [] });
+      }
+      map.get(o.numero).items.push(o);
+    }
+    return Array.from(map.values());
+  })();
 
   const exportarExcel = () => {
     const filas = (data.table || [])
@@ -89,6 +109,17 @@ function CarrierPage({ channel, onBack }) {
       </div>
 
       <div style={{padding:'4px 16px 100px'}}>
+        {/* Botón ancho horizontal "Cargar pedido manual" — siempre visible (no en distribuidor) */}
+        {puedeCargarManual && (
+          <button
+            className="btn-primary"
+            onClick={() => setShowManualOrder(true)}
+            style={{width:'100%', padding:'12px', marginTop:12, justifyContent:'center', fontSize:13}}
+          >
+            <Icon n="plus" s={14}/> Cargar pedido manual
+          </button>
+        )}
+
         {empty ? (
           <div className="m-empty">
             <Icon n="check-circle" s={32} c="var(--green)"/>
@@ -137,6 +168,80 @@ function CarrierPage({ channel, onBack }) {
           </>
         )}
 
+        {/* Pedidos individuales (paridad con web — colapsable) */}
+        {featurePedidos && ordersAgrupados.length > 0 && (
+          <>
+            <button
+              type="button"
+              onClick={() => setOpenOrders(o => !o)}
+              style={{
+                width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between',
+                padding:'10px 12px', margin:'18px 0 8px', background:'var(--paper-off)',
+                border:'1px solid var(--border)', borderRadius:6, cursor:'pointer',
+              }}
+            >
+              <span style={{fontSize:11, fontWeight:700, color:'var(--ink-muted)', textTransform:'uppercase', letterSpacing:'.1em'}}>
+                Pedidos individuales · {ordersAgrupados.length}
+              </span>
+              <Icon n="chev-down" s={14} c="var(--ink-muted)"/>
+            </button>
+            {openOrders && ordersAgrupados.map(o => {
+              const totalUnits = o.items.reduce((s, it) => s + (it.cantidad || 0), 0);
+              return (
+                <div key={o.numero} className="m-prod-card">
+                  <div style={{display:'flex', alignItems:'flex-start', gap:10, marginBottom:6}}>
+                    <div style={{flex:1, minWidth:0}}>
+                      <div style={{display:'flex', alignItems:'center', gap:6, flexWrap:'wrap'}}>
+                        <span style={{fontFamily:'var(--mono)', fontSize:12, fontWeight:700}}>{o.numero}</span>
+                        {o.editsCount > 0 && (
+                          <button
+                            onClick={() => setHistoryOrder(o.numero)}
+                            style={{
+                              padding:'2px 8px', fontSize:10, fontWeight:700, borderRadius:10,
+                              background:'#fef3c7', color:'#92400e', border:'1px solid #fbbf24',
+                              cursor:'pointer',
+                            }}
+                            title="Ver historial de ediciones"
+                          >
+                            ✏ Editado ({o.editsCount})
+                          </button>
+                        )}
+                      </div>
+                      {o.cliente && o.cliente !== '—' && (
+                        <div style={{fontSize:11, color:'var(--ink-soft)', marginTop:2, fontWeight:600}}>{o.cliente}</div>
+                      )}
+                      <div style={{fontSize:11, color:'var(--ink-muted)', marginTop:2}}>
+                        {o.items.length} item{o.items.length===1?'':'s'} · {totalUnits} uds · {o.fecha}
+                      </div>
+                    </div>
+                    {puedeCargarManual && (
+                      <button
+                        className="btn-ghost"
+                        onClick={() => setEditingOrder(o.numero)}
+                        style={{padding:'6px 10px', fontSize:10, flexShrink:0}}
+                      >
+                        <Icon n="edit" s={11}/> Editar
+                      </button>
+                    )}
+                  </div>
+                  {/* Items resumidos */}
+                  <div style={{fontSize:11, color:'var(--ink-soft)', lineHeight:1.6, paddingTop:6, borderTop:'1px dashed var(--border)'}}>
+                    {o.items.map(it => (
+                      <div key={it.sku} style={{display:'flex', justifyContent:'space-between'}}>
+                        <span>
+                          <span style={{fontFamily:'var(--mono)', fontWeight:700}}>{it.sku}</span>
+                          <span style={{color:'var(--ink-muted)'}}> · {window.skuName(it.sku)}</span>
+                        </span>
+                        <span style={{fontFamily:'var(--mono)', fontWeight:700}}>{it.cantidad}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </>
+        )}
+
         {/* Lotes importados (con eliminar) */}
         {puedeEliminarLote && (data.lotes || []).length > 0 && (
           <>
@@ -174,6 +279,31 @@ function CarrierPage({ channel, onBack }) {
       </div>
 
       <ProduceModal open={registerOpen} onClose={() => setRegisterOpen(false)} defaultSku={pendingSku} defaultSubcanal={channel}/>
+
+      {/* Carga manual + edición + historial — montados solo si feature flag ON */}
+      {featurePedidos && window.ManualOrderModal && (
+        <window.ManualOrderModal
+          open={showManualOrder}
+          onClose={() => setShowManualOrder(false)}
+          channel={channel}
+        />
+      )}
+      {featurePedidos && window.OrderEditModal && editingOrder && (
+        <window.OrderEditModal
+          open={!!editingOrder}
+          onClose={() => setEditingOrder(null)}
+          channel={channel}
+          orderNumber={editingOrder}
+        />
+      )}
+      {featurePedidos && window.OrderHistoryModal && historyOrder && (
+        <window.OrderHistoryModal
+          open={!!historyOrder}
+          onClose={() => setHistoryOrder(null)}
+          channel={channel}
+          orderNumber={historyOrder}
+        />
+      )}
 
       <ConfirmModal
         open={!!loteAEliminar}
