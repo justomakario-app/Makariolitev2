@@ -335,16 +335,35 @@ async function loadOrders() {
     .order('sku', { ascending: true })
     .order('created_at', { ascending: false });
   if (error) { console.error('orders', error); return; }
+
+  // Lookup de edits_count por (channel_id, order_number) en una sola query.
+  // Si la tabla todavia no existe (pre-migration), el catch deja el map vacio.
+  const editsMap = {};
+  try {
+    const { data: logRows } = await supa
+      .from('order_edit_log')
+      .select('channel_id, order_number');
+    for (const r of logRows || []) {
+      const k = r.channel_id + '|' + r.order_number;
+      editsMap[k] = (editsMap[k] || 0) + 1;
+    }
+  } catch (_) { /* tabla no existe → no badges, comportamiento idéntico al pre-feature */ }
+
   for (const id of Object.keys(window.MOCK.carriers)) window.MOCK.carriers[id].orders = [];
   for (const o of data || []) {
     const c = window.MOCK.carriers[o.channel_id];
     if (!c) continue;
+    const editsKey = o.channel_id + '|' + o.order_number;
     c.orders.push({
-      numero:   o.order_number,
-      cliente:  o.cliente || '—',
-      sku:      o.sku,
-      cantidad: o.cantidad,
-      fecha:    (o.fecha_pedido || '').slice(0, 10),
+      numero:    o.order_number,
+      cliente:   o.cliente || '—',
+      sku:       o.sku,
+      cantidad:  o.cantidad,
+      fecha:     (o.fecha_pedido || '').slice(0, 10),
+      origen:    o.origen || 'excel',
+      version:   o.version || 1,
+      jornadaId: o.jornada_id || null,
+      editsCount: editsMap[editsKey] || 0,
     });
   }
 }
@@ -744,6 +763,50 @@ window.MOCK_ACTIONS = {
       .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
   },
 
+  /* Carga manual de pedido (carrito atomico).
+     items: [{sku, cantidad}]. orderNumber/cliente/motivo opcionales.
+     forceMerge: true → permite agregar items a un order_number existente. */
+  async crearPedidoManual({ channelId, orderNumber, cliente, items, motivo, forceMerge }) {
+    const params = { p_channel_id: channelId, p_items: items || [] };
+    if (orderNumber) params.p_order_number = orderNumber;
+    if (cliente) params.p_cliente = cliente;
+    if (motivo) params.p_motivo = motivo;
+    if (forceMerge) params.p_force_merge = true;
+    const { data, error } = await supa.rpc('rpc_create_manual_order', params);
+    if (error) throw new Error(error.message);
+    await Promise.all([loadCarriers(), loadOrders(), loadJornadas()]);
+    window.MOCK_BUS.emit();
+    return data;
+  },
+
+  /* Edicion de pedido con optimistic locking.
+     cambios: {modificar:[{sku,cantidad_nueva,version}], agregar:[...], quitar:[{sku,version}]} */
+  async editarPedido({ channelId, orderNumber, cambios, motivo }) {
+    const params = {
+      p_channel_id: channelId,
+      p_order_number: orderNumber,
+      p_cambios: cambios || {},
+    };
+    if (motivo) params.p_motivo = motivo;
+    const { data, error } = await supa.rpc('rpc_edit_order', params);
+    if (error) throw new Error(error.message);
+    await Promise.all([loadCarriers(), loadOrders(), loadJornadas()]);
+    window.MOCK_BUS.emit();
+    return data;
+  },
+
+  /* Historial de ediciones de un pedido (para el modal de log) */
+  async getOrderEditLog({ channelId, orderNumber }) {
+    const { data, error } = await supa
+      .from('order_edit_log')
+      .select('*, profile:profiles!order_edit_log_by_user_fkey(name,username)')
+      .eq('channel_id', channelId)
+      .eq('order_number', orderNumber)
+      .order('at', { ascending: false });
+    if (error) throw new Error(error.message);
+    return data || [];
+  },
+
   async eliminarLote(batchId) {
     // RPC backend con SECURITY DEFINER: borra orders + production_logs
     // de los SKUs del lote (desde su fecha) + el batch + las filas
@@ -887,6 +950,17 @@ function subscribeRealtime() {
       .subscribe();
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────
+   FEATURE FLAGS — controlados desde frontend
+   ───────────────────────────────────────────────────────────────── */
+/* CARGA MANUAL + EDICION DE PEDIDOS.
+   Cuando false: ningun boton, badge ni modal de la feature aparece.
+   Sistema visualmente identico al pre-feature. Para activar: cambiar
+   a true + redeploy. Para desactivar: cambiar a false + redeploy.
+   Los RPCs y la tabla order_edit_log existen en BD pero nadie los
+   invoca con flag OFF. */
+window.FEATURE_PEDIDOS_MANUALES = false;
 
 /* ─────────────────────────────────────────────────────────────────
    BOOT

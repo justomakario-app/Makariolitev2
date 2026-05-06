@@ -781,8 +781,487 @@ function ConfirmModal({ open, onClose, onConfirm, title, message, confirmText, d
   );
 }
 
+/* ════════════════════════════════════════════════════════════════
+   ManualOrderModal — carrito de carga manual
+   Solo se renderiza cuando window.FEATURE_PEDIDOS_MANUALES === true
+   (CarrierPage controla el trigger).
+   ════════════════════════════════════════════════════════════════ */
+function ManualOrderModal({ open, onClose, channel }) {
+  const toast = useToast();
+  const M = window.useMockData();
+  const C = window.CARRIERS[channel] || {};
+  const data = M.carriers[channel];
+  const activaId = data?.jornadaActivaId;
+  const activa = (data?.jornadasAbiertas || []).find(j => j.id === activaId);
+
+  const [orderNumber, setOrderNumber] = useState('');
+  const [cliente, setCliente]         = useState('');
+  const [motivo, setMotivo]           = useState('');
+  const [items, setItems]             = useState([{ sku: '', cantidad: 1 }]);
+  const [busy, setBusy]               = useState(false);
+  const [activeRow, setActiveRow]     = useState(0);
+  const [confirmMerge, setConfirmMerge] = useState(null); // {existingCount}
+
+  useEffect(() => {
+    if (open) {
+      setOrderNumber(''); setCliente(''); setMotivo('');
+      setItems([{ sku: '', cantidad: 1 }]);
+      setBusy(false); setConfirmMerge(null);
+    }
+  }, [open]);
+
+  /* Listener para refrescar cuando se crea un SKU al vuelo */
+  const onCreatedRef = useRef(null);
+  useEffect(() => {
+    onCreatedRef.current = (sku) => {
+      // Preselecciona el SKU recien creado en la fila activa
+      setItems(prev => prev.map((r, i) => i === activeRow ? { ...r, sku } : r));
+    };
+  }, [activeRow]);
+
+  const addRow = () => setItems(s => [...s, { sku: '', cantidad: 1 }]);
+  const removeRow = (idx) => setItems(s => s.length > 1 ? s.filter((_, i) => i !== idx) : s);
+  const updateRow = (idx, patch) => setItems(s => s.map((r, i) => i === idx ? { ...r, ...patch } : r));
+
+  const skusCatalog = Object.keys(window.SKU_DB);
+  const totalUnits = items.reduce((s, r) => s + (parseInt(r.cantidad, 10) || 0), 0);
+  const validItems = items.filter(r => r.sku && (parseInt(r.cantidad, 10) || 0) > 0);
+
+  const submit = async (forceMerge = false) => {
+    if (!validItems.length) { toast.error('Agregá al menos un item con SKU y cantidad'); return; }
+    if (!activa) { toast.error('No hay jornada activa para ' + (C.label || channel)); return; }
+
+    setBusy(true);
+    try {
+      const result = await window.MOCK_ACTIONS.crearPedidoManual({
+        channelId: channel,
+        orderNumber: orderNumber.trim() || undefined,
+        cliente: cliente.trim() || undefined,
+        items: validItems.map(r => ({ sku: r.sku.toUpperCase(), cantidad: parseInt(r.cantidad, 10) })),
+        motivo: motivo.trim() || undefined,
+        forceMerge,
+      });
+      toast.success('Pedido cargado · ' + result.order_number);
+      onClose();
+    } catch (e) {
+      const msg = e.message || '';
+      // Caso colision: ofrecer merge
+      if (msg.includes('ya existe en') && msg.includes('items')) {
+        const m = msg.match(/(\d+) items/);
+        setConfirmMerge({ existingCount: m ? parseInt(m[1], 10) : 0 });
+      } else {
+        toast.error(msg || 'No se pudo cargar el pedido');
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!open) return null;
+
+  return (
+    <Modal open={open} onClose={busy ? () => {} : onClose} title={`Cargar pedido manual — ${C.label || channel}`} size="lg" footer={
+      <>
+        <button className="btn-ghost" onClick={onClose} disabled={busy}>Cancelar</button>
+        <button className="btn-primary" onClick={() => submit(false)} disabled={busy || !validItems.length}>
+          {busy ? <span className="loader" style={{borderColor:'rgba(255,255,255,.3)', borderTopColor:'#fff'}}/>
+                : <><Icon n="check" s={14}/> Confirmar pedido</>}
+        </button>
+      </>
+    }>
+      {/* Info de jornada destino */}
+      <div style={{padding:'8px 12px', background: activa ? 'var(--green-bg)' : 'var(--red-bg)',
+                   border: '1px solid ' + (activa ? 'rgba(22,163,74,.32)' : 'rgba(220,38,38,.32)'),
+                   borderRadius:6, marginBottom:14, fontSize:11, color: activa ? 'var(--green)' : 'var(--red)'}}>
+        {activa
+          ? <>Jornada destino: <strong>{fmt.date(activa.fecha)}</strong> (activa)</>
+          : <><Icon n="alert" s={12}/> No hay jornada activa para {C.label}. Pedíle al encargado que abra una.</>}
+      </div>
+
+      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:14}}>
+        <div>
+          <label className="field-label">N° de pedido (opcional)</label>
+          <input className="field-input" value={orderNumber} onChange={e => setOrderNumber(e.target.value)}
+                 placeholder="Autogenerar (MAN-...)" style={{fontFamily:'var(--mono)'}}/>
+        </div>
+        <div>
+          <label className="field-label">Cliente (opcional)</label>
+          <input className="field-input" value={cliente} onChange={e => setCliente(e.target.value)}
+                 placeholder="Nombre del cliente"/>
+        </div>
+      </div>
+
+      <div style={{marginBottom:8, fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.08em', color:'var(--ink-muted)'}}>
+        Items del pedido
+      </div>
+      <div style={{display:'flex', flexDirection:'column', gap:8, marginBottom:10}}>
+        {items.map((r, idx) => {
+          const skuExists = r.sku && skusCatalog.includes(r.sku.toUpperCase());
+          const skuTipeado = (r.sku || '').toUpperCase().trim();
+          return (
+            <div key={idx} style={{display:'grid', gridTemplateColumns:'1fr 100px auto', gap:8, alignItems:'flex-end'}}>
+              <div>
+                <input
+                  list={`skus-${idx}`}
+                  className="field-input"
+                  value={r.sku}
+                  onChange={e => updateRow(idx, { sku: e.target.value.toUpperCase() })}
+                  onFocus={() => setActiveRow(idx)}
+                  placeholder="SKU (ej: MAD050)"
+                  style={{fontFamily:'var(--mono)'}}
+                />
+                <datalist id={`skus-${idx}`}>
+                  {skusCatalog.map(s => {
+                    const info = window.SKU_DB[s];
+                    return <option key={s} value={s}>{info.modelo}{info.color && info.color !== '—' ? ' · ' + info.color : ''}</option>;
+                  })}
+                </datalist>
+                {skuExists && (
+                  <div style={{fontSize:10, color:'var(--ink-muted)', marginTop:2}}>
+                    {window.skuName(r.sku.toUpperCase())}
+                  </div>
+                )}
+                {!skuExists && skuTipeado && (
+                  <button type="button" className="btn-ghost" style={{padding:'3px 8px', fontSize:10, marginTop:4}}
+                          onClick={() => {
+                            setActiveRow(idx);
+                            window.openProductoEditModal?.({
+                              newSku: skuTipeado, incompleto: true,
+                              onCreated: (created) => onCreatedRef.current?.(created),
+                            });
+                          }}>
+                    <Icon n="plus" s={10}/> Crear SKU "{skuTipeado}"
+                  </button>
+                )}
+              </div>
+              <input type="number" min="1" className="field-input" value={r.cantidad}
+                     onChange={e => updateRow(idx, { cantidad: e.target.value })}/>
+              <button type="button" className="btn-ghost" style={{padding:'8px 10px'}}
+                      onClick={() => removeRow(idx)} disabled={items.length === 1} title="Quitar item">
+                <Icon n="x" s={14}/>
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      <button type="button" className="btn-ghost" onClick={addRow} style={{fontSize:11}}>
+        <Icon n="plus" s={12}/> Agregar item
+      </button>
+
+      <div style={{marginTop:14}}>
+        <label className="field-label">Motivo (opcional)</label>
+        <input className="field-input" value={motivo} onChange={e => setMotivo(e.target.value)}
+               placeholder="Ej: WSP cliente directo"/>
+      </div>
+
+      <div style={{marginTop:14, padding:10, background:'var(--paper-off)', border:'1px solid var(--border)', borderRadius:6, fontSize:12}}>
+        <strong>{validItems.length} item{validItems.length === 1 ? '' : 's'}</strong> · <strong>{totalUnits} unidades</strong> totales
+      </div>
+
+      {/* Sub-modal de confirmación de merge */}
+      {confirmMerge && (
+        <Modal open={true} onClose={() => setConfirmMerge(null)} title="Número de pedido ya existe" footer={
+          <>
+            <button className="btn-ghost" onClick={() => setConfirmMerge(null)}>Cambiar número</button>
+            <button className="btn-primary" onClick={() => { setConfirmMerge(null); submit(true); }}>
+              Agregar al pedido existente
+            </button>
+          </>
+        }>
+          <div style={{fontSize:13, color:'var(--ink-soft)', lineHeight:1.6}}>
+            El número <strong>{orderNumber}</strong> ya existe en {C.label} con <strong>{confirmMerge.existingCount}</strong> items.
+            ¿Querés agregar estos items al mismo pedido o usar otro número?
+          </div>
+        </Modal>
+      )}
+    </Modal>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════
+   OrderEditModal — edición full-screen de un pedido existente
+   ════════════════════════════════════════════════════════════════ */
+function OrderEditModal({ open, onClose, channel, orderNumber }) {
+  const toast = useToast();
+  const M = window.useMockData();
+  const C = window.CARRIERS[channel] || {};
+  const data = M.carriers[channel];
+
+  // Items del pedido (snapshot al abrir)
+  const itemsOriginales = (data?.orders || []).filter(o => o.numero === orderNumber);
+  const jornadaIdPedido = itemsOriginales[0]?.jornadaId;
+  const jornadaCerrada  = (data?.cierres || []).find(c => c.id === jornadaIdPedido);
+  const isClosed        = !!jornadaCerrada;
+  const cliente         = itemsOriginales[0]?.cliente || '';
+
+  // State editable
+  const [drafts, setDrafts]       = useState({}); // {sku: {cantidad, version, removed?: bool}}
+  const [agregar, setAgregar]     = useState([]); // [{sku, cantidad}]
+  const [motivo, setMotivo]       = useState('');
+  const [busy, setBusy]           = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      const d = {};
+      for (const it of itemsOriginales) {
+        d[it.sku] = { cantidad: it.cantidad, version: it.version, removed: false };
+      }
+      setDrafts(d);
+      setAgregar([]);
+      setMotivo('');
+      setBusy(false);
+    }
+  }, [open, orderNumber]);
+
+  const updateDraft = (sku, patch) => setDrafts(prev => ({ ...prev, [sku]: { ...prev[sku], ...patch } }));
+  const toggleRemove = (sku) => setDrafts(prev => ({ ...prev, [sku]: { ...prev[sku], removed: !prev[sku]?.removed } }));
+  const addNew = () => setAgregar(s => [...s, { sku: '', cantidad: 1 }]);
+  const removeNew = (idx) => setAgregar(s => s.filter((_, i) => i !== idx));
+  const updateNew = (idx, patch) => setAgregar(s => s.map((r, i) => i === idx ? { ...r, ...patch } : r));
+
+  // Calcular cambios pendientes
+  const cambios = (() => {
+    const modificar = [];
+    const quitar = [];
+    for (const it of itemsOriginales) {
+      const d = drafts[it.sku];
+      if (!d) continue;
+      if (d.removed) {
+        quitar.push({ sku: it.sku, version: it.version });
+      } else if (parseInt(d.cantidad, 10) !== it.cantidad) {
+        modificar.push({ sku: it.sku, cantidad_nueva: parseInt(d.cantidad, 10), version: it.version });
+      }
+    }
+    const agregarValid = agregar.filter(r => r.sku && (parseInt(r.cantidad, 10) || 0) > 0)
+      .map(r => ({ sku: r.sku.toUpperCase(), cantidad: parseInt(r.cantidad, 10) }));
+    return { modificar, agregar: agregarValid, quitar };
+  })();
+  const totalCambios = cambios.modificar.length + cambios.agregar.length + cambios.quitar.length;
+
+  const submit = async () => {
+    if (totalCambios === 0) { toast.info('No hay cambios para aplicar'); return; }
+    setBusy(true);
+    try {
+      await window.MOCK_ACTIONS.editarPedido({
+        channelId: channel,
+        orderNumber,
+        cambios,
+        motivo: motivo.trim() || undefined,
+      });
+      toast.success(`Pedido editado · ${totalCambios} cambio${totalCambios === 1 ? '' : 's'}`);
+      onClose();
+    } catch (e) {
+      toast.error(e.message || 'No se pudo editar el pedido');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!open) return null;
+
+  // Bloqueo si jornada cerrada
+  if (isClosed) {
+    return (
+      <Modal open={open} onClose={onClose} title={`Editar pedido — ${orderNumber}`} size="lg" footer={
+        <button className="btn-ghost" onClick={onClose}>Entendido</button>
+      }>
+        <div style={{padding:'18px 14px', textAlign:'center'}}>
+          <div style={{fontSize:32, marginBottom:8}}>🔒</div>
+          <div style={{fontSize:14, fontWeight:700, marginBottom:8}}>Este pedido está en una jornada cerrada</div>
+          <div style={{fontSize:12, color:'var(--ink-soft)', lineHeight:1.6, maxWidth:420, margin:'0 auto'}}>
+            Para corregirlo, pedíselo a un admin (el flujo de ajuste post-cierre se va a implementar próximamente).
+          </div>
+        </div>
+      </Modal>
+    );
+  }
+
+  if (!itemsOriginales.length) {
+    return (
+      <Modal open={open} onClose={onClose} title="Pedido no encontrado" footer={
+        <button className="btn-ghost" onClick={onClose}>Cerrar</button>
+      }>
+        <div style={{fontSize:13, color:'var(--ink-soft)'}}>
+          El pedido {orderNumber} no se encuentra en {C.label}. Puede haber sido eliminado o archivado.
+        </div>
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal open={open} onClose={busy ? () => {} : onClose} title={`Editar pedido — ${orderNumber}`} size="lg" footer={
+      <>
+        <button className="btn-ghost" onClick={onClose} disabled={busy}>Cancelar</button>
+        <button className="btn-primary" onClick={submit} disabled={busy || totalCambios === 0}>
+          {busy ? <span className="loader" style={{borderColor:'rgba(255,255,255,.3)', borderTopColor:'#fff'}}/>
+                : <><Icon n="check" s={14}/> Aplicar {totalCambios} cambio{totalCambios === 1 ? '' : 's'}</>}
+        </button>
+      </>
+    }>
+      <div style={{fontSize:11, color:'var(--ink-muted)', marginBottom:12}}>
+        Canal: <strong>{C.label}</strong>
+        {cliente && <> · Cliente: <strong>{cliente}</strong></>}
+      </div>
+
+      {/* Items existentes */}
+      <div style={{marginBottom:8, fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.08em', color:'var(--ink-muted)'}}>
+        Items existentes
+      </div>
+      <div style={{display:'flex', flexDirection:'column', gap:8, marginBottom:14}}>
+        {itemsOriginales.map(it => {
+          const d = drafts[it.sku] || {};
+          const info = window.SKU_DB[it.sku] || {};
+          const removed = !!d.removed;
+          return (
+            <div key={it.sku} style={{
+              display:'grid', gridTemplateColumns:'1fr 100px auto', gap:8, alignItems:'center',
+              padding:8, background:'var(--paper-off)', border:'1px solid var(--border)', borderRadius:6,
+              opacity: removed ? 0.5 : 1, textDecoration: removed ? 'line-through' : 'none',
+            }}>
+              <div>
+                <div style={{fontFamily:'var(--mono)', fontSize:11, fontWeight:700}}>{it.sku} <span style={{color:'var(--ink-muted)', fontSize:9, fontWeight:500}}>v{it.version}</span></div>
+                <div style={{fontSize:11, color:'var(--ink-soft)'}}>
+                  {info.modelo}{info.color && info.color !== '—' ? ' · ' + info.color : ''}
+                </div>
+              </div>
+              <input type="number" min="1" className="field-input" disabled={removed}
+                     value={d.cantidad ?? it.cantidad}
+                     onChange={e => updateDraft(it.sku, { cantidad: e.target.value })}
+                     style={{textAlign:'right'}}/>
+              <button type="button" className="btn-ghost" style={{padding:'6px 10px', fontSize:10}}
+                      onClick={() => toggleRemove(it.sku)}>
+                {removed ? 'Restaurar' : <><Icon n="trash" s={12}/> Quitar</>}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Items nuevos */}
+      <div style={{marginBottom:8, fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.08em', color:'var(--ink-muted)'}}>
+        Items nuevos
+      </div>
+      {agregar.length === 0 ? (
+        <div style={{fontSize:11, color:'var(--ink-faint)', marginBottom:8, fontStyle:'italic'}}>Sin items nuevos.</div>
+      ) : (
+        <div style={{display:'flex', flexDirection:'column', gap:8, marginBottom:8}}>
+          {agregar.map((r, idx) => (
+            <div key={idx} style={{display:'grid', gridTemplateColumns:'1fr 100px auto', gap:8, alignItems:'center'}}>
+              <input list={`new-skus-${idx}`} className="field-input" value={r.sku}
+                     onChange={e => updateNew(idx, { sku: e.target.value.toUpperCase() })}
+                     placeholder="SKU" style={{fontFamily:'var(--mono)'}}/>
+              <datalist id={`new-skus-${idx}`}>
+                {Object.keys(window.SKU_DB).map(s => <option key={s} value={s}>{window.skuName(s)}</option>)}
+              </datalist>
+              <input type="number" min="1" className="field-input" value={r.cantidad}
+                     onChange={e => updateNew(idx, { cantidad: e.target.value })}/>
+              <button type="button" className="btn-ghost" style={{padding:'8px 10px'}} onClick={() => removeNew(idx)}>
+                <Icon n="x" s={14}/>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <button type="button" className="btn-ghost" onClick={addNew} style={{fontSize:11, marginBottom:14}}>
+        <Icon n="plus" s={12}/> Agregar item nuevo
+      </button>
+
+      <div>
+        <label className="field-label">Motivo (opcional)</label>
+        <input className="field-input" value={motivo} onChange={e => setMotivo(e.target.value)}
+               placeholder="Ej: cliente cambia color"/>
+      </div>
+
+      {/* Resumen de cambios */}
+      {totalCambios > 0 && (
+        <div style={{marginTop:14, padding:10, background:'#fef3c7', border:'1px solid #fbbf24', borderRadius:6}}>
+          <div style={{fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'.08em', color:'var(--ink-muted)', marginBottom:6}}>
+            Cambios pendientes ({totalCambios})
+          </div>
+          <div style={{fontSize:11, lineHeight:1.7, color:'var(--ink-soft)', fontFamily:'var(--mono)'}}>
+            {cambios.modificar.map(c => {
+              const orig = itemsOriginales.find(it => it.sku === c.sku);
+              return <div key={'m'+c.sku}>{c.sku}: {orig?.cantidad} → {c.cantidad_nueva}</div>;
+            })}
+            {cambios.quitar.map(c => <div key={'q'+c.sku} style={{color:'var(--red)'}}>{c.sku}: quitar</div>)}
+            {cambios.agregar.map(c => <div key={'a'+c.sku} style={{color:'var(--green)'}}>{c.sku}: nuevo, +{c.cantidad}</div>)}
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════
+   OrderHistoryModal — historial de ediciones de un pedido
+   ════════════════════════════════════════════════════════════════ */
+function OrderHistoryModal({ open, onClose, channel, orderNumber }) {
+  const toast = useToast();
+  const [logs, setLogs]   = useState([]);
+  const [busy, setBusy]   = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setBusy(true);
+    window.MOCK_ACTIONS.getOrderEditLog({ channelId: channel, orderNumber })
+      .then(setLogs)
+      .catch(e => toast.error(e.message || 'No se pudo cargar el historial'))
+      .finally(() => setBusy(false));
+  }, [open, channel, orderNumber]);
+
+  if (!open) return null;
+
+  return (
+    <Modal open={open} onClose={onClose} title={`Historial — ${orderNumber}`} size="lg" footer={
+      <button className="btn-ghost" onClick={onClose}>Cerrar</button>
+    }>
+      {busy ? (
+        <div style={{padding:18, textAlign:'center'}}><span className="loader"/></div>
+      ) : logs.length === 0 ? (
+        <div style={{padding:18, textAlign:'center', fontSize:12, color:'var(--ink-muted)'}}>
+          Sin ediciones registradas.
+        </div>
+      ) : (
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Fecha/hora</th>
+              <th>Usuario</th>
+              <th>Cambio</th>
+              <th>Motivo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {logs.map(l => {
+              const userName = l.profile?.name || l.profile?.username || '—';
+              let cambio = '';
+              if (l.evento === 'cantidad_changed') cambio = `${l.sku}: ${l.cantidad_anterior} → ${l.cantidad_nueva}`;
+              else if (l.evento === 'item_added') cambio = `${l.sku}: nuevo (+${l.cantidad_nueva})`;
+              else if (l.evento === 'item_removed') cambio = `${l.sku}: quitado (era ${l.cantidad_anterior})`;
+              return (
+                <tr key={l.id}>
+                  <td style={{fontSize:11, color:'var(--ink-muted)'}}>{fmt.dateTime(l.at)}</td>
+                  <td style={{fontSize:11, fontWeight:600}}>{userName}</td>
+                  <td style={{fontFamily:'var(--mono)', fontSize:11}}>{cambio}</td>
+                  <td style={{fontSize:11, color:'var(--ink-soft)', fontStyle: l.motivo ? 'normal' : 'italic'}}>
+                    {l.motivo || '—'}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </Modal>
+  );
+}
+
 window.Modal = Modal;
 window.ProduceModal = ProduceModal;
 window.ImportModal = ImportModal;
 window.ConfirmModal = ConfirmModal;
 window.CierreModal = CierreModal;
+window.ManualOrderModal = ManualOrderModal;
+window.OrderEditModal = OrderEditModal;
+window.OrderHistoryModal = OrderHistoryModal;

@@ -21,6 +21,11 @@ function CarrierPage({ channel, onBack, onNav }) {
   const [openCierres, setOpenCierres] = useState(false);
   const [loteAEliminar, setLoteAEliminar] = useState(null);  // lote pendiente de borrar
   const [borrando, setBorrando] = useState(false);
+  // Carga manual + edición (feature flag protege visibilidad)
+  const [showManualOrder, setShowManualOrder] = useState(false);
+  const [editingOrder, setEditingOrder]       = useState(null); // string order_number
+  const [historyOrder, setHistoryOrder]       = useState(null); // string order_number
+  const featurePedidos = !!window.FEATURE_PEDIDOS_MANUALES && channel !== 'distribuidor';
 
   const userRole = window.MOCK.user.role;
   const puedeEliminarLote = ['owner','admin','encargado'].includes(userRole);
@@ -115,6 +120,12 @@ function CarrierPage({ channel, onBack, onNav }) {
               }
             }}>
               <Icon n="plus" s={13}/> Abrir jornada
+            </button>
+          )}
+          {/* Cargar pedido manual — solo bajo feature flag, admin/encargado, no distribuidor */}
+          {featurePedidos && ['owner','admin','encargado'].includes(userRole) && (
+            <button className="btn-ghost" onClick={() => setShowManualOrder(true)}>
+              <Icon n="plus" s={13}/> Cargar pedido manual
             </button>
           )}
           <button className="btn-primary" onClick={() => { setProduceCtx({ subcanal: channel }); setShowProduce(true); }}>
@@ -313,17 +324,50 @@ function CarrierPage({ channel, onBack, onNav }) {
                 <div className="collapsible-body" style={{padding:0}}>
                   <table className="data-table">
                     <thead>
-                      <tr><th>N° pedido</th><th>Cliente</th><th>SKU</th><th>Producto</th><th style={{textAlign:'right'}}>Cant.</th><th>Fecha</th></tr>
+                      <tr>
+                        <th>N° pedido</th>
+                        <th>Cliente</th>
+                        <th>SKU</th>
+                        <th>Producto</th>
+                        <th style={{textAlign:'right'}}>Cant.</th>
+                        <th>Fecha</th>
+                        {featurePedidos && <th></th>}
+                      </tr>
                     </thead>
                     <tbody>
-                      {data.orders.map(o => (
-                        <tr key={o.numero}>
-                          <td><span className="order-num">{o.numero}</span></td>
+                      {data.orders.map((o, idx) => (
+                        <tr key={`${o.numero}-${o.sku}-${idx}`}>
+                          <td>
+                            <span className="order-num">{o.numero}</span>
+                            {featurePedidos && o.editsCount > 0 && (
+                              <button
+                                className="btn-ghost"
+                                style={{padding:'1px 6px', fontSize:9, marginLeft:6, background:'#fef3c7', borderColor:'#fbbf24', color:'#92400e'}}
+                                onClick={() => setHistoryOrder(o.numero)}
+                                title="Ver historial de ediciones"
+                              >
+                                ✏ Editado ({o.editsCount})
+                              </button>
+                            )}
+                          </td>
                           <td style={{fontWeight:600, color:'var(--ink)'}}>{o.cliente}</td>
                           <td><span className="order-num" style={{fontSize:10}}>{o.sku}</span></td>
                           <td style={{fontSize:11, color:'var(--ink-soft)'}}>{window.skuName(o.sku)}</td>
                           <td style={{textAlign:'right'}}><span className="cell-color-num">{o.cantidad}</span></td>
                           <td style={{fontSize:11, color:'var(--ink-muted)'}}>{o.fecha}</td>
+                          {featurePedidos && (
+                            <td style={{textAlign:'right', width:1, whiteSpace:'nowrap'}}>
+                              {['owner','admin','encargado'].includes(userRole) && (
+                                <button
+                                  className="btn-ghost"
+                                  style={{padding:'4px 8px', fontSize:10}}
+                                  onClick={() => setEditingOrder(o.numero)}
+                                >
+                                  <Icon n="edit" s={11}/> Editar
+                                </button>
+                              )}
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -488,6 +532,31 @@ function CarrierPage({ channel, onBack, onNav }) {
           }
         }}
       />
+
+      {/* Carga manual + edición + historial — montados solo si feature flag ON */}
+      {featurePedidos && window.ManualOrderModal && (
+        <window.ManualOrderModal
+          open={showManualOrder}
+          onClose={() => setShowManualOrder(false)}
+          channel={channel}
+        />
+      )}
+      {featurePedidos && window.OrderEditModal && editingOrder && (
+        <window.OrderEditModal
+          open={!!editingOrder}
+          onClose={() => setEditingOrder(null)}
+          channel={channel}
+          orderNumber={editingOrder}
+        />
+      )}
+      {featurePedidos && window.OrderHistoryModal && historyOrder && (
+        <window.OrderHistoryModal
+          open={!!historyOrder}
+          onClose={() => setHistoryOrder(null)}
+          channel={channel}
+          orderNumber={historyOrder}
+        />
+      )}
     </div>
   );
 }
