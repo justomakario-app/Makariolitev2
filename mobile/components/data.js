@@ -295,10 +295,9 @@ async function loadCarriers() {
     const faltante  = r.faltante  || 0;
     const stock     = r.stock     || 0;
 
-    // Filas "zombie": todo en 0 (típico tras eliminar un lote — el
-    // carrier_state queda con la fila pero sin valores). No mostrarlas
-    // en la UI para que la vista quede como si nunca se hubiera importado.
-    if (pedido === 0 && producido === 0 && faltante === 0 && stock === 0) {
+    // Skip filas sin actividad pendiente. Si pedido=0 y faltante=0,
+    // no hay nada pendiente que mostrar — solo stock acumulado del canal.
+    if (pedido === 0 && faltante === 0) {
       continue;
     }
 
