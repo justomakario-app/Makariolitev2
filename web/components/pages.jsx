@@ -395,7 +395,12 @@ function CatalogoPage() {
   };
 
   const skus = Object.keys(window.SKU_DB);
-  const cats = [...new Set(skus.map(s => window.SKU_DB[s].categoria))];
+  // cats: lista de categorías de la maestra sku_categories (incluye
+  // las que aún no tienen SKUs asociados). Fallback al método viejo
+  // si MOCK.categories no está cargado (boot temprano).
+  const cats = (M.categories && M.categories.length > 0)
+    ? M.categories
+    : [...new Set(skus.map(s => window.SKU_DB[s].categoria))];
 
   const filtered = skus.filter(s => {
     const c = window.SKU_DB[s];

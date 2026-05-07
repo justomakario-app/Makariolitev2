@@ -89,7 +89,12 @@ function App() {
    tiene CatalogoPage hoy. */
 function GlobalSkuModal({ modal, onClose }) {
   const toast = useToast();
-  const cats = [...new Set(Object.values(window.SKU_DB || {}).map(s => s.categoria).filter(Boolean))];
+  const M = window.useMockData();
+  // cats: lista de la maestra sku_categories (incluye sin SKUs).
+  // Fallback al cálculo viejo si MOCK.categories no está cargado.
+  const cats = (M.categories && M.categories.length > 0)
+    ? M.categories
+    : [...new Set(Object.values(window.SKU_DB || {}).map(s => s.categoria).filter(Boolean))];
 
   const onSave = async (sku, data, isNew) => {
     if (isNew && window.SKU_DB[sku]) {

@@ -117,6 +117,7 @@ window.MOCK = {
   notifications: [],
   users: [],
   freeStock: {},
+  categories: [],
 
   historico: {
     year: new Date().getFullYear(),
@@ -205,6 +206,17 @@ async function loadCatalog() {
       }
     } catch (e2) {}
   }
+}
+
+/* Carga el listado completo de categorías de la maestra sku_categories,
+   incluyendo las que aún no tienen SKUs asociados. Espejo del web. */
+async function loadCategories() {
+  const { data, error } = await supa
+    .from('sku_categories')
+    .select('name, sort_order')
+    .order('sort_order', { ascending: true });
+  if (error) { console.error('sku_categories', error); return; }
+  window.MOCK.categories = (data || []).map(c => c.name);
 }
 
 async function loadChannels() {
@@ -536,7 +548,7 @@ async function loadHistorico(opts = {}) {
    ───────────────────────────────────────────────────────────────── */
 
 async function bootstrap() {
-  await Promise.all([loadCatalog(), loadChannels()]);
+  await Promise.all([loadCatalog(), loadCategories(), loadChannels()]);
   const has = await loadProfile();
   if (!has) { window.MOCK_BUS.emit(); return; }
   await Promise.all([
@@ -886,15 +898,24 @@ window.MOCK_ACTIONS = {
   },
 
   async crearOActualizarSku(sku, payload, isNew) {
-    if (isNew) {
-      const { error } = await supa.from('sku_catalog').insert({ sku, ...payload });
-      if (error) throw new Error(error.message);
-    } else {
-      const { error } = await supa.from('sku_catalog').update(payload).eq('sku', sku);
-      if (error) throw new Error(error.message);
-    }
+    // Usa rpc_upsert_sku para atomicidad: si la categoría no existe
+    // en sku_categories, se crea ANTES del INSERT del SKU.
+    const { data, error } = await supa.rpc('rpc_upsert_sku', {
+      p_sku:          sku,
+      p_modelo:       payload.modelo,
+      p_color:        payload.color === '—' ? null : payload.color,
+      p_color_hex:    payload.color_hex || null,
+      p_categoria:    payload.categoria,
+      p_es_fabricado: payload.es_fabricado,
+      p_activo:       payload.activo,
+      p_incompleto:   payload.incompleto || false,
+      p_is_new:       !!isNew,
+    });
+    if (error) throw new Error(error.message);
     await loadCatalog();
+    await loadCategories();
     window.MOCK_BUS.emit();
+    return data;
   },
 
   async login({ username, password }) {
@@ -962,7 +983,11 @@ const _safe = (p, label) => p.catch(e => {
 (async function boot() {
   try {
     // Public: catálogo + canales (no requieren auth)
-    await Promise.allSettled([_safe(loadCatalog(), 'catalog'), _safe(loadChannels(), 'channels')]);
+    await Promise.allSettled([
+      _safe(loadCatalog(),    'catalog'),
+      _safe(loadCategories(), 'categories'),
+      _safe(loadChannels(),   'channels'),
+    ]);
 
     // Sesión / perfil
     let has = false;
