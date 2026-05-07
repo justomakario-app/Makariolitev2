@@ -149,15 +149,22 @@ function ScanPage({ onNav }) {
   /* Cleanup al desmontar la página */
   useEffect(() => () => stop(), []);
 
-  /* Cargar "Mis cargas de hoy" al montar y después de cada cierre del modal */
+  /* Cargar cargas de hoy al montar y despues de cada cierre del modal.
+     scope='auto' → admin/encargado/owner ven toda la planta; operario
+     solo las suyas. Limit 50 alcanza con margen para un dia normal. */
   const recargarMisCargas = async () => {
     try {
-      const logs = await window.MOCK_ACTIONS.getMisCargasHoy(20);
+      const logs = await window.MOCK_ACTIONS.getCargasHoy({ limit: 50, scope: 'auto' });
       setMisCargas(logs);
     } catch (e) { /* silencioso, no es crítico */ }
   };
   useEffect(() => { recargarMisCargas(); }, []);
   useEffect(() => { if (!registerOpen) recargarMisCargas(); }, [registerOpen]);
+
+  // Vista admin (ve cargas de toda la planta) vs operario (solo las suyas).
+  // Cambia titulo, subtitulo, y muestra el nombre del operario en cada card.
+  const role = (M.user?.role || '').toLowerCase();
+  const isAdmin = ['owner', 'admin', 'encargado'].includes(role);
 
   const skuInfo = lastSku ? window.SKU_DB[lastSku] : null;
 
@@ -292,33 +299,35 @@ function ScanPage({ onNav }) {
         </div>
       )}
 
-      {/* Mis cargas de hoy — con botones Editar / Anular.
-          Ocultamos las entradas compensatorias (cantidad<0) — son ruido
-          técnico — pero usamos su info para marcar el original como
-          "ya anulado/corregido" y deshabilitar sus botones. */}
+      {/* Cargas de hoy — vista admin (toda la planta) o operario (solo
+          las suyas), segun isAdmin. Ocultamos las entradas compensatorias
+          (cantidad<0) pero las usamos para marcar el original como "ya
+          anulado/corregido" y deshabilitar sus botones. Lista con scroll
+          interno para no romper el layout cuando hay 50+ logs. */}
       {(() => {
-        // Set de IDs de logs que YA tienen una compensación asociada
         const idsAnulados = new Set();
         for (const l of misCargas) {
           const m = (l.notas || '').match(/^\[ANULADO\] log_id=([0-9a-f-]+)/);
           if (m) idsAnulados.add(m[1]);
         }
-        // Filtrar compensaciones (las negativas con [ANULADO]); solo
-        // mostramos las cargas reales (positivas).
         const visibles = misCargas.filter(l => !(l.cantidad < 0 && (l.notas || '').startsWith('[ANULADO]')));
         if (!visibles.length) return null;
 
         return (
           <div className="m-card" style={{margin:'14px 16px 100px'}}>
             <div className="m-card-header">
-              <div className="m-card-title">Mis cargas de hoy · {visibles.length}</div>
+              <div className="m-card-title">Cargas de hoy · {visibles.length}</div>
+              {isAdmin && (
+                <div style={{fontSize:10, color:'var(--ink-muted)', fontWeight:600, marginTop:2}}>Toda la planta</div>
+              )}
             </div>
-            <div>
+            <div style={{maxHeight:'70vh', overflowY:'auto'}}>
               {visibles.map((l, i) => {
                 const info = window.SKU_DB[l.sku] || {};
                 const ch = window.CARRIERS[l.channel_id] || { label: l.channel_id };
                 const yaAnulado = idsAnulados.has(l.id);
                 const esCorregido = (l.notas || '').startsWith('[CORREGIDO]');
+                const operarioName = l.operario?.name || l.operario?.username || null;
                 return (
                   <div key={l.id} style={{
                     display:'flex', alignItems:'center', gap:10, padding:'10px 14px',
@@ -338,6 +347,11 @@ function ScanPage({ onNav }) {
                       <div style={{fontSize:11, color:'var(--ink-soft)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textDecoration: yaAnulado ? 'line-through' : 'none'}}>
                         {info.modelo || ''}{info.color && info.color !== '—' ? ` · ${info.color}` : ''}
                       </div>
+                      {isAdmin && operarioName && (
+                        <div style={{fontSize:10, color:'var(--ink-muted)', fontWeight:600, marginTop:2}}>
+                          {operarioName}
+                        </div>
+                      )}
                     </div>
                     <div style={{fontFamily:'var(--mono)', fontWeight:800, fontSize:14, minWidth:38, textAlign:'right', textDecoration: yaAnulado ? 'line-through' : 'none'}}>
                       +{l.cantidad}
@@ -362,9 +376,9 @@ function ScanPage({ onNav }) {
 
       <ProduceModal open={registerOpen} onClose={() => setRegisterOpen(false)} defaultSku={pendingSku}/>
 
-      {/* Modal Editar carga */}
-      {editLog && (
-        <EditLogModal
+      {/* Modal Editar carga (compartido — vive en modals.jsx) */}
+      {editLog && window.EditLogModal && (
+        <window.EditLogModal
           log={editLog}
           onClose={() => setEditLog(null)}
           onSaved={() => { setEditLog(null); recargarMisCargas(); }}
@@ -393,89 +407,5 @@ function ScanPage({ onNav }) {
     </div>
   );
 }
-
-/* ── Modal: editar una carga existente (corrige cantidad y/o destino) ── */
-function EditLogModal({ log, onClose, onSaved }) {
-  const toast = useToast();
-  const info = window.SKU_DB[log.sku] || {};
-  const [cantidad, setCantidad] = useState(log.cantidad);
-  const [channelId, setChannelId] = useState(log.channel_id);
-  const [motivo, setMotivo] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  const submit = async () => {
-    if (cantidad === log.cantidad && channelId === log.channel_id) {
-      toast.info('No cambiaste nada');
-      return;
-    }
-    if (cantidad <= 0) { toast.error('Cantidad debe ser > 0'); return; }
-    setBusy(true);
-    try {
-      await window.MOCK_ACTIONS.corregirLog({
-        logId: log.id,
-        nuevaCantidad: cantidad,
-        nuevoChannelId: channelId !== log.channel_id ? channelId : null,
-        motivo: motivo || null,
-        anular: false,
-      });
-      toast.success('Carga corregida');
-      onSaved?.();
-    } catch (e) {
-      toast.error(e.message || 'No se pudo corregir');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const channels = ['colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino']
-    .filter(id => window.CARRIERS[id]);
-
-  return (
-    <Modal open={true} onClose={() => !busy && onClose()} title={`Editar carga · ${log.sku}`} footer={
-      <>
-        <button className="btn-ghost" onClick={onClose} disabled={busy}>Cancelar</button>
-        <button className="btn-primary" onClick={submit} disabled={busy}>
-          {busy ? <span className="loader" style={{borderColor:'rgba(255,255,255,.3)', borderTopColor:'#fff'}}/> : <><Icon n="check" s={14}/> Guardar corrección</>}
-        </button>
-      </>
-    }>
-      <div style={{padding:'10px 12px', background:'var(--paper-off)', border:'1px solid var(--border)', borderRadius:6, marginBottom:14, fontSize:12, color:'var(--ink-soft)'}}>
-        <div><strong>{log.sku}</strong> · {info.modelo}{info.color && info.color !== '—' ? ` · ${info.color}` : ''}</div>
-        <div style={{fontSize:11, color:'var(--ink-muted)', marginTop:4}}>
-          Original: {log.cantidad} uds · {window.CARRIERS[log.channel_id]?.label} · {log.hora?.slice(0,5)}
-        </div>
-      </div>
-
-      <div className="field-group">
-        <label className="field-label">Cantidad correcta</label>
-        <div style={{display:'flex', gap:6, alignItems:'center'}}>
-          <button onClick={() => setCantidad(Math.max(1, cantidad-1))} className="btn-ghost" style={{padding:'10px 14px', fontSize:18, lineHeight:1}}>−</button>
-          <input type="number" min="1" value={cantidad} onChange={e => setCantidad(Math.max(1, parseInt(e.target.value)||1))} className="qty-input"/>
-          <button onClick={() => setCantidad(cantidad+1)} className="btn-ghost" style={{padding:'10px 14px', fontSize:18, lineHeight:1}}>+</button>
-        </div>
-      </div>
-
-      <div className="field-group">
-        <label className="field-label">Destino</label>
-        <select className="field-input" value={channelId} onChange={e => setChannelId(e.target.value)}>
-          {channels.map(id => (
-            <option key={id} value={id}>{window.CARRIERS[id].label}</option>
-          ))}
-        </select>
-      </div>
-
-      <div className="field-group">
-        <label className="field-label">Motivo (opcional)</label>
-        <input className="field-input" value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Ej: tipeé mal la cantidad"/>
-      </div>
-
-      <div style={{padding:'10px 12px', background:'var(--blue-bg)', border:'1px solid rgba(37,99,235,.2)', borderRadius:6, fontSize:11, color:'var(--ink-soft)', lineHeight:1.6}}>
-        <Icon n="info" s={11}/> Al guardar: se anula el original y se registra la corrección. El faltante del canal se recalcula al instante. La acción queda registrada en el historial.
-      </div>
-    </Modal>
-  );
-}
-
-window.EditLogModal = EditLogModal;
 
 window.ScanPage = ScanPage;

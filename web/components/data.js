@@ -754,49 +754,61 @@ window.MOCK_ACTIONS = {
     return data;
   },
 
-  /* "Mis cargas" del operario actual — últimas N de hoy + las
-     compensaciones que afectan a esos logs (aunque haya hecho la
-     compensación un admin distinto). El frontend usa esto para detectar
-     qué logs originales están "ya anulados" sin tener que volver a
-     consultar la BD por cada fila. */
-  async getMisCargasHoy(limit = 20) {
+  /* Cargas de hoy con JOIN al profile del operario.
+     scope='mias'  → solo del usuario actual (vista operario)
+     scope='todas' → toda la planta (admin/encargado/owner)
+     scope='auto'  → decide segun rol del profile en cache.
+     Las RLS de production_logs hacen el corte real en BD; el scope solo
+     determina si el frontend pide el filtro o no.
+     Tambien trae las compensaciones de los logs visibles, para poder
+     marcar los originales como "ya anulados" sin N+1. */
+  async getCargasHoy({ limit = 100, scope = 'auto' } = {}) {
     const { data: { session } } = await supa.auth.getSession();
     if (!session) return [];
     const today = new Date().toISOString().slice(0, 10);
 
-    // 1) Mis cargas del día
-    const { data: misLogs, error: e1 } = await supa
+    let effectiveScope = scope;
+    if (scope === 'auto') {
+      const role = (window.MOCK?.user?.role || '').toLowerCase();
+      effectiveScope = ['owner', 'admin', 'encargado'].includes(role) ? 'todas' : 'mias';
+    }
+
+    // 1) Cargas del dia (con o sin filtro de operario, segun scope)
+    let q = supa
       .from('production_logs')
-      .select('*')
-      .eq('operario_id', session.user.id)
+      .select('*, operario:profiles!production_logs_operario_id_fkey(name,username)')
       .eq('fecha', today)
       .order('created_at', { ascending: false })
       .limit(limit);
+    if (effectiveScope === 'mias') q = q.eq('operario_id', session.user.id);
+    const { data: logs, error: e1 } = await q;
     if (e1) throw new Error(e1.message);
 
-    // 2) Compensaciones de hoy que referencian alguno de mis logs.
-    //    Aunque las haya hecho un admin distinto, las traemos para que
-    //    el frontend pueda marcar el original como anulado.
-    const misIds = (misLogs || []).map(l => l.id);
-    let compensaciones = [];
-    if (misIds.length) {
-      const { data: comps, error: e2 } = await supa
+    // 2) Compensaciones del dia que referencian alguno de los logs visibles.
+    const ids = (logs || []).map(l => l.id);
+    let comps = [];
+    if (ids.length) {
+      const { data: c, error: e2 } = await supa
         .from('production_logs')
-        .select('*')
+        .select('*, operario:profiles!production_logs_operario_id_fkey(name,username)')
         .eq('fecha', today)
         .lt('cantidad', 0)
         .like('notas', '[ANULADO] log_id=%');
-      if (!e2 && comps) {
-        compensaciones = comps.filter(c => {
-          const m = (c.notas || '').match(/^\[ANULADO\] log_id=([0-9a-f-]+)/);
-          return m && misIds.includes(m[1]);
+      if (!e2 && c) {
+        comps = c.filter(x => {
+          const m = (x.notas || '').match(/^\[ANULADO\] log_id=([0-9a-f-]+)/);
+          return m && ids.includes(m[1]);
         });
       }
     }
 
-    // Combinar y ordenar por created_at desc
-    return [...(misLogs || []), ...compensaciones]
+    return [...(logs || []), ...comps]
       .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+  },
+
+  /* Alias por compatibilidad. Mobile/scan.jsx puede seguir usandolo. */
+  async getMisCargasHoy(limit = 20) {
+    return this.getCargasHoy({ limit, scope: 'auto' });
   },
 
   /* Carga manual de pedido (carrito atomico).

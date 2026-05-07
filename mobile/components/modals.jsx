@@ -1248,6 +1248,90 @@ function OrderHistoryModal({ open, onClose, channel, orderNumber }) {
   );
 }
 
+/* ── Modal: editar una carga existente (corrige cantidad y/o destino).
+   Compartido web + mobile. Lo invoca tanto la seccion "Cargas de hoy"
+   en Produccion (web) como ScanPage (mobile). ────────────────────── */
+function EditLogModal({ log, onClose, onSaved }) {
+  const toast = useToast();
+  const info = window.SKU_DB[log.sku] || {};
+  const [cantidad, setCantidad] = useState(log.cantidad);
+  const [channelId, setChannelId] = useState(log.channel_id);
+  const [motivo, setMotivo] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    if (cantidad === log.cantidad && channelId === log.channel_id) {
+      toast.info('No cambiaste nada');
+      return;
+    }
+    if (cantidad <= 0) { toast.error('Cantidad debe ser > 0'); return; }
+    setBusy(true);
+    try {
+      await window.MOCK_ACTIONS.corregirLog({
+        logId: log.id,
+        nuevaCantidad: cantidad,
+        nuevoChannelId: channelId !== log.channel_id ? channelId : null,
+        motivo: motivo || null,
+        anular: false,
+      });
+      toast.success('Carga corregida');
+      onSaved?.();
+    } catch (e) {
+      toast.error(e.message || 'No se pudo corregir');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const channels = ['colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino']
+    .filter(id => window.CARRIERS[id]);
+
+  return (
+    <Modal open={true} onClose={() => !busy && onClose()} title={`Editar carga · ${log.sku}`} footer={
+      <>
+        <button className="btn-ghost" onClick={onClose} disabled={busy}>Cancelar</button>
+        <button className="btn-primary" onClick={submit} disabled={busy}>
+          {busy ? <span className="loader" style={{borderColor:'rgba(255,255,255,.3)', borderTopColor:'#fff'}}/> : <><Icon n="check" s={14}/> Guardar corrección</>}
+        </button>
+      </>
+    }>
+      <div style={{padding:'10px 12px', background:'var(--paper-off)', border:'1px solid var(--border)', borderRadius:6, marginBottom:14, fontSize:12, color:'var(--ink-soft)'}}>
+        <div><strong>{log.sku}</strong> · {info.modelo}{info.color && info.color !== '—' ? ` · ${info.color}` : ''}</div>
+        <div style={{fontSize:11, color:'var(--ink-muted)', marginTop:4}}>
+          Original: {log.cantidad} uds · {window.CARRIERS[log.channel_id]?.label} · {log.hora?.slice(0,5)}
+        </div>
+      </div>
+
+      <div className="field-group">
+        <label className="field-label">Cantidad correcta</label>
+        <div style={{display:'flex', gap:6, alignItems:'center'}}>
+          <button onClick={() => setCantidad(Math.max(1, cantidad-1))} className="btn-ghost" style={{padding:'10px 14px', fontSize:18, lineHeight:1}}>−</button>
+          <input type="number" min="1" value={cantidad} onChange={e => setCantidad(Math.max(1, parseInt(e.target.value)||1))} className="qty-input"/>
+          <button onClick={() => setCantidad(cantidad+1)} className="btn-ghost" style={{padding:'10px 14px', fontSize:18, lineHeight:1}}>+</button>
+        </div>
+      </div>
+
+      <div className="field-group">
+        <label className="field-label">Destino</label>
+        <select className="field-input" value={channelId} onChange={e => setChannelId(e.target.value)}>
+          {channels.map(id => (
+            <option key={id} value={id}>{window.CARRIERS[id].label}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="field-group">
+        <label className="field-label">Motivo (opcional)</label>
+        <input className="field-input" value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Ej: tipeé mal la cantidad"/>
+      </div>
+
+      <div style={{padding:'10px 12px', background:'var(--blue-bg)', border:'1px solid rgba(37,99,235,.2)', borderRadius:6, fontSize:11, color:'var(--ink-soft)', lineHeight:1.6}}>
+        <Icon n="info" s={11}/> Al guardar: se anula el original y se registra la corrección. El faltante del canal se recalcula al instante. La acción queda registrada en el historial.
+      </div>
+    </Modal>
+  );
+}
+
 window.Modal = Modal;
 window.ProduceModal = ProduceModal;
 window.ImportModal = ImportModal;
@@ -1255,4 +1339,5 @@ window.ConfirmModal = ConfirmModal;
 window.CierreModal = CierreModal;
 window.ManualOrderModal = ManualOrderModal;
 window.OrderEditModal = OrderEditModal;
+window.EditLogModal = EditLogModal;
 window.OrderHistoryModal = OrderHistoryModal;

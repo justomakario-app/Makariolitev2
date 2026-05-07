@@ -6,6 +6,10 @@ function ProduccionPage() {
   const data = M.prod.todos;
   const [tabCanal, setTabCanal] = useState('todos');
   const [show, setShow] = useState(false);
+  // Edicion/anulacion de cargas desde la seccion "Cargas de hoy".
+  // Reusa EditLogModal y ConfirmModal de modals.jsx (compartidos web+mobile).
+  const [editLog, setEditLog] = useState(null);
+  const [confirmAnular, setConfirmAnular] = useState(null);
 
   /* Exportar XLSX — respeta el tab activo: si es "todos", exporta los 4
      canales con columna Canal. Si es un canal específico, solo ese.
@@ -52,8 +56,6 @@ function ProduccionPage() {
     const label = window.CARRIERS[tabCanal]?.label;
     if (label) rows = rows.filter(r => r.canal === label);
   }
-
-  const todayLogs = M.prodLogs.filter(l => l.fecha === '2026-04-25');
 
   return (
     <div style={{background:'var(--paper-off)', minHeight:'100vh'}}>
@@ -207,49 +209,128 @@ function ProduccionPage() {
           )}
         </div>
 
-        {/* Recientes */}
-        <div className="card" style={{marginTop:14}}>
-          <div className="card-header">
-            <div className="card-title">Producción registrada hoy</div>
-            <div style={{fontSize:11, color:'var(--ink-muted)', fontWeight:600}}>{todayLogs.length} registros</div>
-          </div>
-          {todayLogs.length === 0 ? (
-            <div className="empty">
-              <Icon n="package" s={26} c="var(--ink-faint)"/>
-              <div style={{fontSize:12, color:'var(--ink-muted)'}}>No hay registros para hoy. Registrá tu primera producción.</div>
-            </div>
-          ) : (
-            <table className="data-table">
-              <thead>
-                <tr><th>Hora</th><th>SKU</th><th>Producto</th><th>Canal</th><th>Sector</th><th style={{textAlign:'right'}}>Uds.</th><th>Operario</th></tr>
-              </thead>
-              <tbody>
-                {todayLogs.map(l => {
-                  const info = window.SKU_DB[l.sku] || {};
-                  return (
-                    <tr key={l.id}>
-                      <td style={{fontSize:11, color:'var(--ink-muted)', fontFamily:'var(--mono)'}}>{l.hora}</td>
-                      <td><span className="order-num">{l.sku}</span></td>
-                      <td>
-                        <div style={{fontWeight:600, fontSize:12}}>{info.modelo || l.sku}</div>
-                        {info.color && info.color !== '—' && (
-                          <div style={{fontSize:10, color:'var(--ink-muted)', marginTop:1}}>{info.color}</div>
-                        )}
-                      </td>
-                      <td style={{fontSize:11, textTransform:'capitalize'}}>{l.subcanal}</td>
-                      <td style={{fontSize:11, color:'var(--ink-soft)'}}>{l.sector}</td>
-                      <td style={{textAlign:'right'}}><span className="cell-color-num">{l.unidades}</span></td>
-                      <td style={{fontSize:11, color:'var(--ink-soft)'}}>{l.operario}</td>
+        {/* Cargas de hoy — todos los canales y operarios.
+            Las RLS de production_logs ya cortan a nivel BD (operario solo
+            ve las suyas). Aca filtramos las compensaciones (cantidad<0)
+            para que no aparezcan como ruido, pero las usamos para marcar
+            el original como "ya anulado" y deshabilitar sus botones.
+            Refresco automatico via M.prodLogs (loadProdLogs + realtime). */}
+        {(() => {
+          const today = new Date().toISOString().slice(0, 10);
+          const todayLogs = M.prodLogs.filter(l => l.fecha === today);
+          const idsAnulados = new Set();
+          for (const l of todayLogs) {
+            const m = (l.notas || '').match(/^\[ANULADO\] log_id=([0-9a-f-]+)/);
+            if (m) idsAnulados.add(m[1]);
+          }
+          const visibles = todayLogs.filter(l =>
+            !(l.unidades < 0 && (l.notas || '').startsWith('[ANULADO]'))
+          );
+          return (
+            <div className="card" style={{marginTop:14}}>
+              <div className="card-header">
+                <div className="card-title">Cargas de hoy</div>
+                <div style={{fontSize:11, color:'var(--ink-muted)', fontWeight:600}}>
+                  {visibles.length} {visibles.length === 1 ? 'registro' : 'registros'}
+                </div>
+              </div>
+              {visibles.length === 0 ? (
+                <div className="empty">
+                  <Icon n="package" s={26} c="var(--ink-faint)"/>
+                  <div style={{fontSize:12, color:'var(--ink-muted)'}}>No hay registros para hoy. Registrá tu primera producción.</div>
+                </div>
+              ) : (
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Hora</th><th>SKU</th><th>Producto</th><th>Canal</th>
+                      <th>Sector</th><th>Operario</th>
+                      <th style={{textAlign:'right'}}>Uds.</th>
+                      <th></th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
+                  </thead>
+                  <tbody>
+                    {visibles.map(l => {
+                      const info = window.SKU_DB[l.sku] || {};
+                      const yaAnulado = idsAnulados.has(l.id);
+                      const esCorregido = (l.notas || '').startsWith('[CORREGIDO]');
+                      const tachado = yaAnulado ? { textDecoration: 'line-through' } : {};
+                      // EditLogModal/ConfirmModal esperan campos raw del log
+                      // (cantidad, channel_id). M.prodLogs los expone como
+                      // unidades/subcanal — los re-mapeamos al pasar.
+                      const logRaw = { ...l, cantidad: l.unidades, channel_id: l.subcanal };
+                      return (
+                        <tr key={l.id} style={{opacity: yaAnulado ? 0.5 : 1}}>
+                          <td style={{fontSize:11, color:'var(--ink-muted)', fontFamily:'var(--mono)'}}>{l.hora}</td>
+                          <td>
+                            <span className="order-num" style={tachado}>{l.sku}</span>
+                            {yaAnulado && <span style={{marginLeft:6, fontSize:9, fontWeight:700, padding:'1px 6px', borderRadius:6, background:'var(--paper-dim)', color:'var(--ink-muted)'}}>ANULADO</span>}
+                            {esCorregido && !yaAnulado && <span style={{marginLeft:6, fontSize:9, fontWeight:700, padding:'1px 6px', borderRadius:6, background:'var(--blue-bg)', color:'var(--blue)'}}>CORRECCIÓN</span>}
+                          </td>
+                          <td>
+                            <div style={{fontWeight:600, fontSize:12, ...tachado}}>{info.modelo || l.sku}</div>
+                            {info.color && info.color !== '—' && (
+                              <div style={{fontSize:10, color:'var(--ink-muted)', marginTop:1}}>{info.color}</div>
+                            )}
+                          </td>
+                          <td style={{fontSize:11, textTransform:'capitalize'}}>{l.subcanal}</td>
+                          <td style={{fontSize:11, color:'var(--ink-soft)'}}>{l.sector}</td>
+                          <td style={{fontSize:11, color:'var(--ink-soft)', fontWeight:600}}>{l.operario}</td>
+                          <td style={{textAlign:'right'}}><span className="cell-color-num" style={tachado}>{l.unidades}</span></td>
+                          <td style={{textAlign:'right', width:1, whiteSpace:'nowrap'}}>
+                            {!yaAnulado ? (
+                              <>
+                                <button className="btn-ghost" style={{padding:'5px 8px', fontSize:10, marginRight:4}} title="Editar carga" onClick={() => setEditLog(logRaw)}>
+                                  <Icon n="edit" s={11}/>
+                                </button>
+                                <button className="btn-ghost" style={{padding:'5px 8px', fontSize:10, color:'var(--red)', borderColor:'rgba(220,38,38,.32)', background:'var(--red-bg)'}} title="Anular carga" onClick={() => setConfirmAnular(logRaw)}>
+                                  <Icon n="trash" s={11}/>
+                                </button>
+                              </>
+                            ) : (
+                              <span style={{fontSize:10, color:'var(--ink-faint)'}}>—</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       <ProduceModal open={show} onClose={() => setShow(false)}/>
+
+      {/* Modal Editar carga (compartido — vive en modals.jsx) */}
+      {editLog && window.EditLogModal && (
+        <window.EditLogModal
+          log={editLog}
+          onClose={() => setEditLog(null)}
+          onSaved={() => setEditLog(null)}
+        />
+      )}
+
+      {/* Confirm Anular */}
+      <ConfirmModal
+        open={!!confirmAnular}
+        onClose={() => setConfirmAnular(null)}
+        title="Anular carga"
+        message={confirmAnular
+          ? `Vas a anular la carga de ${confirmAnular.cantidad} × ${confirmAnular.sku} (${window.CARRIERS[confirmAnular.channel_id]?.label || confirmAnular.channel_id}). Se va a registrar una entrada compensatoria que descuenta lo cargado. Queda registrado.`
+          : ''}
+        confirmText="Sí, anular"
+        danger
+        onConfirm={async () => {
+          try {
+            await window.MOCK_ACTIONS.corregirLog({ logId: confirmAnular.id, anular: true });
+            toast.success('Carga anulada');
+            setConfirmAnular(null);
+          } catch (e) { toast.error(e.message || 'No se pudo anular'); }
+        }}
+      />
     </div>
   );
 }
