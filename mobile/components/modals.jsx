@@ -36,7 +36,12 @@ function ProduceModal({ open, onClose, defaultSku, defaultSubcanal }) {
   const [step, setStep] = useState(1);
   const [sku, setSku] = useState(defaultSku || skus[0]);
   const [search, setSearch] = useState('');
-  const [subcanal, setSubcanal] = useState(defaultSubcanal || 'colecta');
+  // Default vacio en lugar de 'colecta' — si la vía de carga no aporta
+  // contexto de canal (Producción, Scan QR), el operario tiene que
+  // elegir explícitamente en step 2 antes de avanzar. Bug 2026-05-13:
+  // el default 'colecta' hacía que cargas hechas desde Producción/Scan
+  // se fueran al canal equivocado si el operario no tocaba el selector.
+  const [subcanal, setSubcanal] = useState(defaultSubcanal || '');
   const [cantidad, setCantidad] = useState(1);
   const [fecha, setFecha] = useState(new Date().toISOString().slice(0,10));
   const [nota, setNota] = useState('');
@@ -51,7 +56,7 @@ function ProduceModal({ open, onClose, defaultSku, defaultSubcanal }) {
       setStep(hasSku && hasCanal ? 3 : hasSku ? 2 : 1);
       setSku(defaultSku || skus[0]);
       setSearch('');
-      setSubcanal(defaultSubcanal || 'colecta');
+      setSubcanal(defaultSubcanal || '');
       setCantidad(1); setFecha(new Date().toISOString().slice(0,10));
       setNota(''); setScanning(false);
       setJornadaIdOverride(null);
@@ -122,7 +127,7 @@ function ProduceModal({ open, onClose, defaultSku, defaultSubcanal }) {
       <>
         {step > 1 && <button className="btn-ghost" onClick={() => setStep(step - 1)}>Atrás</button>}
         <button className="btn-ghost" onClick={onClose}>Cancelar</button>
-        {step < 3 && <button className="btn-primary" onClick={() => setStep(step + 1)} disabled={!sku}>Siguiente</button>}
+        {step < 3 && <button className="btn-primary" onClick={() => setStep(step + 1)} disabled={(step === 1 && !sku) || (step === 2 && !subcanal)}>Siguiente</button>}
         {step === 3 && (
           <button className="btn-primary" onClick={submit} disabled={busy || cantidad < 1}>
             {busy ? <span className="loader" style={{borderColor:'rgba(255,255,255,.3)', borderTopColor:'#fff'}}/> : <><Icon n="check" s={14}/> Confirmar registro</>}
