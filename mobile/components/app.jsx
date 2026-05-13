@@ -67,6 +67,15 @@ function App() {
     if (page === 'perfil')      return <PerfilPage onLogout={handleLogout}/>;
     if (['colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino'].includes(page))
       return <CarrierPage channel={page} onBack={() => setPage('dashboard')}/>;
+    if (page === 'stock') {
+      // Guard: stock solo para owner/admin/encargado. Operario que llegue
+      // por URL hack o cache vuelve al dashboard sin warning.
+      const role = (M.user.role || '').toLowerCase();
+      if (!['owner','admin','encargado'].includes(role)) return <DashboardPage onNav={setPage}/>;
+      return window.StockPage
+        ? <window.StockPage onBack={() => setPage('dashboard')}/>
+        : <DashboardPage onNav={setPage}/>;
+    }
     return <DashboardPage onNav={setPage}/>;
   };
 

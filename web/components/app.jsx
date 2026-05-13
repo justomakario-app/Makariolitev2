@@ -59,6 +59,15 @@ function App() {
     if (page === 'dashboard')   return <DashboardPage onNav={setPage}/>;
     if (['colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino'].includes(page))
       return <CarrierPage channel={page} onBack={() => setPage('dashboard')} onNav={setPage}/>;
+    if (page === 'stock') {
+      // Guard: stock solo para owner/admin/encargado. Operario que llegue
+      // por URL hack o cache vuelve al dashboard sin warning.
+      const role = (M.user.role || '').toLowerCase();
+      if (!['owner','admin','encargado'].includes(role)) return <DashboardPage onNav={setPage}/>;
+      return window.StockPage
+        ? <window.StockPage onBack={() => setPage('dashboard')}/>
+        : <DashboardPage onNav={setPage}/>;
+    }
     if (page === 'produccion' || page === 'registrar') return <ProduccionPage/>;
     if (page === 'qr')             return <QRPage/>;
     if (page === 'historico')      return <HistoricoPage/>;

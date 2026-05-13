@@ -8,6 +8,7 @@ function Sidebar({ current, onNav, onLogout, unread }) {
   const all = [
     { sec:'principal', label:'Principal' },
     { id:'dashboard',     label:'Dashboard',          icon:'home' },
+    { id:'stock',         label:'Stock',              icon:'package' },
 
     { sec:'produccion', label:'Producción' },
     { id:'produccion',    label:'Producción',         icon:'tools' },

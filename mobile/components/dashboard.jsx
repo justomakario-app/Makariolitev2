@@ -97,7 +97,7 @@ function DashboardPage({ onNav }) {
         </div>
       </div>
 
-      {/* Canales 2 columnas (con 6 canales se ven 3 filas) */}
+      {/* Canales 2 columnas + Stock al final (solo para admin/encargado/owner) */}
       <div className="m-channel-grid">
         {canalesIds.map(id => {
           const c = C[id] || {}; const count = counts[id]; const empty = count === 0;
@@ -112,6 +112,20 @@ function DashboardPage({ onNav }) {
             </div>
           );
         })}
+        {['owner','admin','encargado'].includes((M.user.role||'').toLowerCase()) && (() => {
+          const stockTotal = window.MOCK_ACTIONS.getStockTotal();
+          const empty = stockTotal === 0;
+          return (
+            <div key="stock" className="channel-card" data-channel="stock" onClick={() => onNav('stock')}>
+              <div style={{position:'absolute', top:0, left:0, right:0, height:3, background:'#7c3aed'}}/>
+              <div className="channel-card-label" style={{color:'#7c3aed'}}>Stock</div>
+              <div className="channel-card-num" style={{color: empty?'var(--ink-faint)':'var(--ink)', fontSize:32}}>
+                {empty ? <Icon n="package" s={32} c="var(--ink-faint)"/> : stockTotal}
+              </div>
+              <div className="channel-card-sub" style={{fontSize:10}}>Almacén central</div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

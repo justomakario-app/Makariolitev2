@@ -122,7 +122,8 @@ function DashboardPage({ onNav }) {
         </div>
       </div>
 
-      {/* Channels — 3 columnas (2 filas con 6 canales) — armónico en cualquier viewport */}
+      {/* Channels — 3 columnas (2 filas con 6 canales) — armónico en cualquier viewport.
+          Stock se renderiza como un cuadrito mas solo para owner/admin/encargado. */}
       <div className="channel-grid" style={{gridTemplateColumns:'repeat(3, 1fr)'}}>
         {canalesIds.map(id => (
           <ChannelCard
@@ -135,6 +136,16 @@ function DashboardPage({ onNav }) {
             onClick={() => onNav(id)}
           />
         ))}
+        {['owner','admin','encargado'].includes((M.user.role||'').toLowerCase()) && (
+          <ChannelCard
+            id="stock"
+            label="Stock"
+            sub="Almacén central"
+            count={window.MOCK_ACTIONS.getStockTotal()}
+            color="#7c3aed"
+            onClick={() => onNav('stock')}
+          />
+        )}
       </div>
     </div>
   );
