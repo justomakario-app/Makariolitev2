@@ -631,9 +631,11 @@ window.MOCK_ACTIONS = {
     window.MOCK_BUS.emit();
   },
 
-  async assignFreeStock({ sku, cantidad, channelId, jornadaId }) {
+  /* Stock libre → canal. motivo opcional (migration 0026). */
+  async assignFreeStock({ sku, cantidad, channelId, jornadaId, motivo }) {
     const params = { p_sku: sku, p_cantidad: cantidad, p_target_channel_id: channelId };
     if (jornadaId) params.p_target_jornada_id = jornadaId;
+    if (motivo)    params.p_motivo = motivo;
     const { data, error } = await supa.rpc('rpc_assign_free_stock', params);
     if (error) throw new Error(error.message);
     await Promise.all([loadCarriers(), loadProdLogs(), loadFreeStock(), loadJornadas()]);

@@ -1440,7 +1440,7 @@ function StockMovementModal({ open, onClose, context, onMoved }) {
       if (source !== 'stock' && target === 'stock') {
         await window.MOCK_ACTIONS.enviarAStock({ sku, cantidad, sourceChannelId: source, motivo });
       } else if (source === 'stock' && target !== 'stock') {
-        await window.MOCK_ACTIONS.assignFreeStock({ sku, cantidad, channelId: target });
+        await window.MOCK_ACTIONS.assignFreeStock({ sku, cantidad, channelId: target, motivo });
       } else if (source !== 'stock' && target !== 'stock') {
         await window.MOCK_ACTIONS.transferirEntreCanales({ sku, cantidad, sourceChannelId: source, targetChannelId: target, motivo });
       }

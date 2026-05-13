@@ -650,10 +650,13 @@ window.MOCK_ACTIONS = {
 
   /* Mueve cantidad del stock libre del SKU al canal target (genera
      production_log positivo en la jornada destino). Si no se pasa
-     jornada destino, usa la activa del canal o crea una de hoy. */
-  async assignFreeStock({ sku, cantidad, channelId, jornadaId }) {
+     jornada destino, usa la activa del canal o crea una de hoy.
+     motivo opcional — desde migration 0026 queda en la nota del log
+     ([FROM_FREE_STOCK] cantidad=N motivo=...). */
+  async assignFreeStock({ sku, cantidad, channelId, jornadaId, motivo }) {
     const params = { p_sku: sku, p_cantidad: cantidad, p_target_channel_id: channelId };
     if (jornadaId) params.p_target_jornada_id = jornadaId;
+    if (motivo)    params.p_motivo = motivo;
     const { data, error } = await supa.rpc('rpc_assign_free_stock', params);
     if (error) throw new Error(error.message);
     await Promise.all([loadCarriers(), loadProdLogs(), loadFreeStock(), loadJornadas()]);
