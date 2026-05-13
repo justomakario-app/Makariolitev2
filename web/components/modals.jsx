@@ -390,7 +390,12 @@ function ImportModal({ open, onClose, channel: defaultChannel }) {
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [channel, setChannel] = useState(defaultChannel || 'colecta');
+  // Default vacio en lugar de 'colecta' — consistencia con ProduceModal.
+  // El autodetect por filename (onPickFile) y por contenido del Excel
+  // (extractOrders.canalDetectado) sigue activo y setea channel cuando
+  // corresponda. Si ni se pasa defaultChannel ni se detecta canal, el
+  // operario tiene que elegir explicitamente antes de poder importar.
+  const [channel, setChannel] = useState(defaultChannel || '');
   const [detected, setDetected] = useState(null);
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState(null);
@@ -496,7 +501,7 @@ function ImportModal({ open, onClose, channel: defaultChannel }) {
     <Modal open={open} onClose={onClose} title="Importar ventas desde Excel" size="lg" footer={
       <>
         <button className="btn-ghost" onClick={onClose}>Cancelar</button>
-        <button className="btn-primary" onClick={submit} disabled={!file || !orders.length || busy || parsing}>
+        <button className="btn-primary" onClick={submit} disabled={!file || !orders.length || busy || parsing || !channel}>
           {busy ? <span className="loader" style={{borderColor:'rgba(255,255,255,.3)', borderTopColor:'#fff'}}/> : <><Icon n="upload" s={14}/> Importar {orders.length>0 ? `${orders.length} pedidos` : ''} a {C.label}</>}
         </button>
       </>
