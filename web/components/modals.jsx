@@ -722,6 +722,7 @@ function CierreModal({ open, onClose, onConfirm, channel, defaultJornadaId }) {
             <div>✓ Los pedidos <strong>completados</strong> se archivan en el histórico.</div>
             <div>✓ El <strong>faltante</strong> se arrastra al día siguiente como nueva línea.</div>
             <div>✓ Se genera un snapshot que <strong>no se puede modificar</strong>.</div>
+            <div>✓ El <strong>sobrante</strong> (si lo hay) se transfiere automáticamente al <strong>Stock central</strong>.</div>
             {data.jornadaActivaId === selectedId && abiertas.length >= 2 && (
               <div>✓ La marca <strong>activa para producción</strong> pasa a la siguiente jornada abierta automáticamente.</div>
             )}
