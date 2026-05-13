@@ -308,11 +308,12 @@ async function loadCarriers() {
     const faltante  = r.faltante  || 0;
     const stock     = r.stock     || 0;
 
-    // Skip filas sin actividad pendiente. Si pedido=0 y faltante=0,
-    // no hay nada pendiente que mostrar — solo stock acumulado del
-    // canal (legítimo, generado por jornadas cerradas o producción
-    // adelantada). El stock se ve en KPIs y en Catálogo, no aca.
-    if (pedido === 0 && faltante === 0) {
+    // Skip filas totalmente vacías. Si hay stock>0 (aunque pedido=0,
+    // faltante=0), la mostramos: representa stock acumulado que admin
+    // puede mover desde este canal. La UI renderiza diferente este caso
+    // (faltante=✓, stock prominente, botón Registrar disabled, botón
+    // Mover habilitado).
+    if (pedido === 0 && faltante === 0 && stock === 0) {
       continue;
     }
 

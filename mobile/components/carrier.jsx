@@ -14,12 +14,16 @@ function CarrierPage({ channel, onBack }) {
   const [editingOrder, setEditingOrder]       = useState(null);
   const [historyOrder, setHistoryOrder]       = useState(null);
   const [openOrders, setOpenOrders]           = useState(false);
+  // Mover stock (Cambio 1 Step 5)
+  const [showStockMover, setShowStockMover] = useState(false);
+  const [stockMoverCtx, setStockMoverCtx]   = useState(null);
 
   if (!data || !C) return null;
 
   const empty = data.kpis.activos === 0 && data.table.length === 0;
   const userRole = window.MOCK.user.role;
   const puedeEliminarLote = ['owner','admin','encargado'].includes(userRole);
+  const puedeMoverStock = puedeEliminarLote;
   const featurePedidos = !!window.FEATURE_PEDIDOS_MANUALES && channel !== 'distribuidor';
   const puedeCargarManual = featurePedidos && ['owner','admin','encargado'].includes(userRole);
 
@@ -144,21 +148,29 @@ function CarrierPage({ channel, onBack }) {
                       )}
                     </div>
                     <div style={{textAlign:'right'}}>
-                      <div style={{fontFamily:'var(--mono)', fontSize:18, fontWeight:800, color: r.faltante>0?'var(--red)':'var(--green)'}}>
+                      <div style={{fontFamily:'var(--mono)', fontSize:18, fontWeight:800,
+                        color: r.faltante>0 ? 'var(--red)' : r.stock>0 ? '#7c3aed' : 'var(--green)'}}>
                         {r.faltante > 0 ? r.faltante : '✓'}
                       </div>
                       <div style={{fontSize:9, color:'var(--ink-muted)', textTransform:'uppercase', letterSpacing:'.06em', fontWeight:700, marginTop:1}}>
-                        {r.faltante > 0 ? 'faltan' : 'OK'}
+                        {r.faltante > 0 ? 'faltan' : r.stock > 0 ? `+${r.stock} stock` : 'OK'}
                       </div>
                     </div>
                   </div>
-                  <div style={{display:'flex', alignItems:'center', gap:10, marginTop:10}}>
+                  <div style={{display:'flex', alignItems:'center', gap:8, marginTop:10}}>
                     <div style={{flex:1, fontSize:11, color:'var(--ink-soft)'}}>
                       Pedido: <strong style={{fontFamily:'var(--mono)'}}>{r.pedido}</strong> · Hecho: <strong style={{fontFamily:'var(--mono)', color:'var(--green)'}}>{r.producido}</strong>
+                      {r.stock > 0 && <> · Stock: <strong style={{fontFamily:'var(--mono)', color:'#7c3aed'}}>+{r.stock}</strong></>}
                     </div>
                     {r.faltante > 0 && (
-                      <button className="btn-primary" style={{padding:'7px 14px', fontSize:10}} onClick={() => { setPendingSku(r.sku); setRegisterOpen(true); }}>
+                      <button className="btn-primary" style={{padding:'7px 12px', fontSize:10}} onClick={() => { setPendingSku(r.sku); setRegisterOpen(true); }}>
                         <Icon n="plus" s={11}/> Cargar
+                      </button>
+                    )}
+                    {puedeMoverStock && r.stock > 0 && (
+                      <button className="btn-ghost" style={{padding:'7px 12px', fontSize:10, color:'#7c3aed', borderColor:'rgba(124,58,237,.3)'}}
+                        onClick={() => { setStockMoverCtx({ source: channel, sku: r.sku }); setShowStockMover(true); }}>
+                        <Icon n="arrow-right" s={11}/> Mover
                       </button>
                     )}
                   </div>
@@ -302,6 +314,16 @@ function CarrierPage({ channel, onBack }) {
           onClose={() => setHistoryOrder(null)}
           channel={channel}
           orderNumber={historyOrder}
+        />
+      )}
+
+      {/* StockMovementModal — Cambio 1 Step 5 (mobile). */}
+      {showStockMover && window.StockMovementModal && (
+        <window.StockMovementModal
+          open={true}
+          onClose={() => setShowStockMover(false)}
+          context={stockMoverCtx}
+          onMoved={() => { setShowStockMover(false); toast.success('Movimiento registrado'); }}
         />
       )}
 

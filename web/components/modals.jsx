@@ -1585,29 +1585,46 @@ function StockMovementModal({ open, onClose, context, onMoved }) {
       )}
 
       {/* Step 5 — Confirmación */}
-      {step === 5 && (
-        <div>
-          <div style={{padding:14, background:'var(--paper-off)', border:'1px solid var(--border)', borderRadius:6, marginBottom:14}}>
-            <div style={{display:'grid', gridTemplateColumns:'80px 1fr', gap:6, fontSize:12}}>
-              <div style={{color:'var(--ink-muted)', fontWeight:600}}>De</div>
-              <div><strong>{sourceL}</strong></div>
-              <div style={{color:'var(--ink-muted)', fontWeight:600}}>A</div>
-              <div><strong>{targetL}</strong></div>
-              <div style={{color:'var(--ink-muted)', fontWeight:600}}>SKU</div>
-              <div><span className="order-num">{sku}</span> · {window.SKU_DB[sku]?.modelo || ''}</div>
-              <div style={{color:'var(--ink-muted)', fontWeight:600}}>Unidades</div>
-              <div><strong>{cantidad}</strong> de {disponible} disponibles</div>
-              {motivo && (<>
-                <div style={{color:'var(--ink-muted)', fontWeight:600}}>Motivo</div>
-                <div>{motivo}</div>
-              </>)}
+      {step === 5 && (() => {
+        // Detectar si el destino tiene pedido pendiente del SKU. Si no,
+        // mostrar warning informativo (no bloqueante) — el cliente puede
+        // estar haciendo prefarming de stock para pedidos futuros.
+        // Stock como destino siempre se considera "esperado" (no warning).
+        const targetTienePedido = target === 'stock'
+          ? true
+          : (() => {
+              const row = M.carriers[target]?.table?.find(r => r.sku === sku);
+              return !!row && row.faltante > 0;
+            })();
+        return (
+          <div>
+            <div style={{padding:14, background:'var(--paper-off)', border:'1px solid var(--border)', borderRadius:6, marginBottom:14}}>
+              <div style={{display:'grid', gridTemplateColumns:'80px 1fr', gap:6, fontSize:12}}>
+                <div style={{color:'var(--ink-muted)', fontWeight:600}}>De</div>
+                <div><strong>{sourceL}</strong></div>
+                <div style={{color:'var(--ink-muted)', fontWeight:600}}>A</div>
+                <div><strong>{targetL}</strong></div>
+                <div style={{color:'var(--ink-muted)', fontWeight:600}}>SKU</div>
+                <div><span className="order-num">{sku}</span> · {window.SKU_DB[sku]?.modelo || ''}{window.SKU_DB[sku]?.color && window.SKU_DB[sku]?.color !== '—' ? ` · ${window.SKU_DB[sku].color}` : ''}</div>
+                <div style={{color:'var(--ink-muted)', fontWeight:600}}>Unidades</div>
+                <div><strong>{cantidad}</strong> de {disponible} disponibles</div>
+                {motivo && (<>
+                  <div style={{color:'var(--ink-muted)', fontWeight:600}}>Motivo</div>
+                  <div>{motivo}</div>
+                </>)}
+              </div>
+            </div>
+            {!targetTienePedido && (
+              <div style={{padding:'10px 12px', background:'var(--amber-bg)', border:'1px solid rgba(217,119,6,.3)', borderRadius:6, fontSize:11, color:'var(--ink-soft)', lineHeight:1.6, marginBottom:10}}>
+                <Icon n="alert" s={11} c="var(--amber)"/> <strong>{targetL}</strong> no tiene pedidos pendientes de <strong>{sku}</strong>{window.SKU_DB[sku]?.color && window.SKU_DB[sku]?.color !== '—' ? ` ${window.SKU_DB[sku].color}` : ''}. Las <strong>{cantidad}</strong> {cantidad === 1 ? 'unidad va a quedar' : 'unidades van a quedar'} como stock acumulado disponible para futuros pedidos.
+              </div>
+            )}
+            <div style={{padding:'10px 12px', background:'var(--blue-bg)', border:'1px solid rgba(37,99,235,.2)', borderRadius:6, fontSize:11, color:'var(--ink-soft)', lineHeight:1.6}}>
+              <Icon n="info" s={11}/> Al confirmar se descuentan <strong>{cantidad}</strong> uds. de <strong>{sourceL}</strong> y se suman a <strong>{targetL}</strong>. El movimiento queda registrado en el historial.
             </div>
           </div>
-          <div style={{padding:'10px 12px', background:'var(--blue-bg)', border:'1px solid rgba(37,99,235,.2)', borderRadius:6, fontSize:11, color:'var(--ink-soft)', lineHeight:1.6}}>
-            <Icon n="info" s={11}/> Al confirmar se descuentan <strong>{cantidad}</strong> uds. de <strong>{sourceL}</strong> y se suman a <strong>{targetL}</strong>. El movimiento queda registrado en el historial.
-          </div>
-        </div>
-      )}
+        );
+      })()}
     </Modal>
   );
 }

@@ -309,7 +309,8 @@ async function loadCarriers() {
 
     // Skip filas sin actividad pendiente. Si pedido=0 y faltante=0,
     // no hay nada pendiente que mostrar — solo stock acumulado del canal.
-    if (pedido === 0 && faltante === 0) {
+    // v2: incluir filas con stock>0 aunque pedido=0/faltante=0 (Cambio 1 Step 5).
+    if (pedido === 0 && faltante === 0 && stock === 0) {
       continue;
     }
 

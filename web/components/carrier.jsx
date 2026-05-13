@@ -25,10 +25,15 @@ function CarrierPage({ channel, onBack, onNav }) {
   const [showManualOrder, setShowManualOrder] = useState(false);
   const [editingOrder, setEditingOrder]       = useState(null); // string order_number
   const [historyOrder, setHistoryOrder]       = useState(null); // string order_number
+  // Mover stock (Cambio 1 Step 5): admin/encargado/owner puede abrir el
+  // StockMovementModal desde una fila SKU. Contexto preselecciona source=canal+sku.
+  const [showStockMover, setShowStockMover] = useState(false);
+  const [stockMoverCtx, setStockMoverCtx]   = useState(null);
   const featurePedidos = !!window.FEATURE_PEDIDOS_MANUALES && channel !== 'distribuidor';
 
   const userRole = window.MOCK.user.role;
   const puedeEliminarLote = ['owner','admin','encargado'].includes(userRole);
+  const puedeMoverStock = puedeEliminarLote;  // mismo set de roles
 
   if (!data) return null;
 
@@ -299,13 +304,22 @@ function CarrierPage({ channel, onBack, onNav }) {
                         <td style={{textAlign:'right'}}><FaltanteBadge value={r.faltante}/></td>
                         <td style={{textAlign:'right'}}>
                           {r.stock > 0
-                            ? <span className="cell-stock-pos" title="Excedente disponible">+{r.stock}</span>
+                            ? <span className="cell-stock-pos" title="Stock acumulado disponible — mover desde botón Mover" style={{color:'#7c3aed', fontWeight:700}}>+{r.stock}</span>
                             : <span style={{fontFamily:'var(--mono)', fontSize:11, color:'var(--ink-faint)'}}>—</span>}
                         </td>
-                        <td style={{textAlign:'right', width:1}}>
-                          <button className="btn-ghost" style={{padding:'5px 10px', fontSize:10}} onClick={() => { setProduceCtx({ sku: r.sku, subcanal: channel }); setShowProduce(true); }} disabled={r.faltante<=0}>
+                        <td style={{textAlign:'right', width:1, whiteSpace:'nowrap'}}>
+                          <button className="btn-ghost" style={{padding:'5px 10px', fontSize:10, marginRight: puedeMoverStock && r.stock>0 ? 4 : 0}}
+                            onClick={() => { setProduceCtx({ sku: r.sku, subcanal: channel }); setShowProduce(true); }}
+                            disabled={r.faltante<=0}>
                             <Icon n="plus" s={11}/> Registrar
                           </button>
+                          {puedeMoverStock && r.stock > 0 && (
+                            <button className="btn-ghost" style={{padding:'5px 10px', fontSize:10, color:'#7c3aed', borderColor:'rgba(124,58,237,.3)'}}
+                              onClick={() => { setStockMoverCtx({ source: channel, sku: r.sku }); setShowStockMover(true); }}
+                              title="Mover stock de este SKU a otro canal o al almacén central">
+                              <Icon n="arrow-right" s={11}/> Mover
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );
@@ -555,6 +569,16 @@ function CarrierPage({ channel, onBack, onNav }) {
           onClose={() => setHistoryOrder(null)}
           channel={channel}
           orderNumber={historyOrder}
+        />
+      )}
+
+      {/* StockMovementModal — Cambio 1 Step 5. Solo admin/encargado/owner. */}
+      {showStockMover && window.StockMovementModal && (
+        <window.StockMovementModal
+          open={true}
+          onClose={() => setShowStockMover(false)}
+          context={stockMoverCtx}
+          onMoved={() => { setShowStockMover(false); toast.success('Movimiento registrado'); }}
         />
       )}
     </div>
