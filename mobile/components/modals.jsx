@@ -1342,6 +1342,243 @@ function EditLogModal({ log, onClose, onSaved }) {
   );
 }
 
+/* ── StockMovementModal — paridad con web/modals.jsx StockMovementModal.
+   5 steps: Origen, SKU, Cantidad, Destino, Confirmar.
+   Routing: canal→stock = enviarAStock | stock→canal = assignFreeStock |
+   canal→canal = transferirEntreCanales. */
+function StockMovementModal({ open, onClose, context, onMoved }) {
+  const toast = useToast();
+  const M = window.useMockData();
+
+  const initialSource = context?.source || '';
+  const initialSku    = context?.sku || '';
+  const initialStep   = (initialSource && initialSku) ? 3 : (initialSku ? 2 : 1);
+
+  const [step, setStep]         = useState(initialStep);
+  const [source, setSource]     = useState(initialSource);
+  const [sku, setSku]           = useState(initialSku);
+  const [cantidad, setCantidad] = useState(1);
+  const [target, setTarget]     = useState('');
+  const [motivo, setMotivo]     = useState('');
+  const [busy, setBusy]         = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setStep(initialStep);
+      setSource(initialSource); setSku(initialSku);
+      setCantidad(1); setTarget(''); setMotivo(''); setBusy(false);
+    }
+  }, [open]);
+
+  const lugares = [
+    { v:'stock', l:'Stock (almacén)', c:'#7c3aed' },
+    { v:'colecta', l:'Colecta', c:'#6366f1' },
+    { v:'flex', l:'Flex', c:'#15803d' },
+    { v:'tiendanube', l:'Tienda Nube', c:'#2563eb' },
+    { v:'distribuidor', l:'Distribuidores', c:'#d97706' },
+    { v:'no_flex', l:'No Flex', c:'#db2777' },
+    { v:'correo_argentino', l:'Correo Arg.', c:'#0891b2' },
+  ];
+
+  const skusDisponibles = (() => {
+    if (!source) return [];
+    if (source === 'stock') {
+      return window.MOCK_ACTIONS.getStockAgregado();
+    }
+    const table = M.carriers[source]?.table || [];
+    return table
+      .filter(r => (r.stock || 0) > 0)
+      .map(r => {
+        const info = window.SKU_DB[r.sku] || {};
+        return { sku: r.sku, cantidad: r.stock, modelo: info.modelo || r.sku, color: info.color || null };
+      });
+  })();
+
+  const disponible = (() => {
+    if (!source || !sku) return 0;
+    if (source === 'stock') return window.MOCK.freeStock?.[sku] || 0;
+    const row = M.carriers[source]?.table?.find(r => r.sku === sku);
+    return row?.stock || 0;
+  })();
+
+  const sourceL = lugares.find(l => l.v === source)?.l || '';
+  const targetL = lugares.find(l => l.v === target)?.l || '';
+
+  const submit = async () => {
+    if (!source || !sku || !cantidad || !target) return;
+    if (source === target) { toast.error('Origen y destino deben ser distintos'); return; }
+    if (cantidad > disponible) { toast.error(`Solo hay ${disponible} disponibles`); return; }
+    setBusy(true);
+    try {
+      if (source !== 'stock' && target === 'stock') {
+        await window.MOCK_ACTIONS.enviarAStock({ sku, cantidad, sourceChannelId: source, motivo });
+      } else if (source === 'stock' && target !== 'stock') {
+        await window.MOCK_ACTIONS.assignFreeStock({ sku, cantidad, channelId: target });
+      } else if (source !== 'stock' && target !== 'stock') {
+        await window.MOCK_ACTIONS.transferirEntreCanales({ sku, cantidad, sourceChannelId: source, targetChannelId: target, motivo });
+      }
+      toast.success(`${cantidad} × ${sku}: ${sourceL} → ${targetL}`);
+      onMoved?.();
+    } catch (e) {
+      toast.error(e.message || 'No se pudo mover el stock');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const canAdvance =
+    (step === 1 && !!source) ||
+    (step === 2 && !!sku) ||
+    (step === 3 && cantidad > 0 && cantidad <= disponible) ||
+    (step === 4 && !!target && target !== source);
+
+  return (
+    <Modal open={open} onClose={() => !busy && onClose()} title="Mover stock" footer={
+      <>
+        {step > 1 && <button className="btn-ghost" onClick={() => setStep(step - 1)} disabled={busy}>Atrás</button>}
+        <button className="btn-ghost" onClick={onClose} disabled={busy}>Cancelar</button>
+        {step < 5 && (
+          <button className="btn-primary" onClick={() => setStep(step + 1)} disabled={!canAdvance}>
+            Siguiente
+          </button>
+        )}
+        {step === 5 && (
+          <button className="btn-primary" onClick={submit} disabled={busy}>
+            {busy ? <span className="loader" style={{borderColor:'rgba(255,255,255,.3)', borderTopColor:'#fff'}}/>
+              : <><Icon n="check" s={14}/> Confirmar</>}
+          </button>
+        )}
+      </>
+    }>
+      {/* Stepper compacto */}
+      <div style={{display:'flex', gap:4, marginBottom:16, fontSize:9, fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em'}}>
+        {['Origen','SKU','Cant','Destino','OK'].map((lbl, i) => {
+          const n = i + 1, active = step === n, done = step > n;
+          return (
+            <span key={lbl} style={{
+              flex:1, textAlign:'center', padding:'5px 2px', borderRadius:3,
+              background: done?'var(--green-bg)':active?'var(--ink)':'var(--paper-off)',
+              color: done?'var(--green)':active?'#fff':'var(--ink-muted)',
+            }}>{n}.{lbl}</span>
+          );
+        })}
+      </div>
+
+      {step === 1 && (
+        <div className="field-group">
+          <label className="field-label">¿De dónde sale?</label>
+          <div className="radio-card-group">
+            {lugares.map(o => (
+              <label key={o.v} className={`radio-card ${source===o.v?'selected':''}`}
+                style={{'--sel-color':o.c, '--sel-bg':`${o.c}1a`}}>
+                <input type="radio" checked={source===o.v} onChange={() => { setSource(o.v); setSku(''); }}/>
+                <div className="radio-card-dot"/>
+                <div className="radio-card-info"><div className="radio-card-label">{o.l}</div></div>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {step === 2 && (
+        <div className="field-group">
+          <label className="field-label">¿Qué SKU? (disponible en {sourceL})</label>
+          {skusDisponibles.length === 0 ? (
+            <div style={{padding:12, background:'var(--amber-bg)', border:'1px solid rgba(217,119,6,.3)', borderRadius:6, fontSize:11, color:'var(--ink-soft)'}}>
+              No hay stock disponible en {sourceL}.
+            </div>
+          ) : (
+            <div style={{maxHeight:280, overflowY:'auto', border:'1px solid var(--border)', borderRadius:6}}>
+              {skusDisponibles.map(s => {
+                const sel = sku === s.sku;
+                return (
+                  <button key={s.sku} onClick={() => setSku(s.sku)} style={{
+                    display:'flex', alignItems:'center', gap:10, width:'100%', padding:'10px 12px',
+                    border:'none', borderBottom:'1px solid var(--border)',
+                    background: sel ? 'var(--ink)' : 'transparent',
+                    color: sel ? '#fff' : 'var(--ink)', cursor:'pointer', textAlign:'left',
+                  }}>
+                    <span style={{minWidth:56, fontFamily:'var(--mono)', fontSize:10, fontWeight:700, color: sel?'rgba(255,255,255,.8)':'var(--ink-muted)'}}>{s.sku}</span>
+                    <div style={{flex:1, minWidth:0}}>
+                      <div style={{fontSize:11, fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{s.modelo}</div>
+                      {s.color && s.color !== '—' && <div style={{fontSize:9, color: sel?'rgba(255,255,255,.7)':'var(--ink-muted)'}}>{s.color}</div>}
+                    </div>
+                    <span style={{fontFamily:'var(--mono)', fontWeight:700, fontSize:12, color: sel?'#fff':'#7c3aed'}}>{s.cantidad}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {step === 3 && (
+        <div className="field-group">
+          <div style={{padding:10, background:'var(--paper-off)', border:'1px solid var(--border)', borderRadius:6, marginBottom:12, fontSize:11, color:'var(--ink-soft)'}}>
+            <div><strong>{sku}</strong> desde <strong>{sourceL}</strong></div>
+            <div style={{fontSize:10, color:'var(--ink-muted)', marginTop:3}}>
+              Disponible: <strong style={{color:'#7c3aed'}}>{disponible}</strong>
+            </div>
+          </div>
+          <label className="field-label">¿Cuántas unidades?</label>
+          <div style={{display:'flex', gap:6, alignItems:'center'}}>
+            <button onClick={() => setCantidad(Math.max(1, cantidad-1))} className="btn-ghost" style={{padding:'10px 14px', fontSize:18}}>−</button>
+            <input type="number" min="1" max={disponible} value={cantidad}
+              onChange={e => setCantidad(Math.max(1, Math.min(disponible, parseInt(e.target.value)||1)))}
+              className="qty-input"/>
+            <button onClick={() => setCantidad(Math.min(disponible, cantidad+1))} className="btn-ghost" style={{padding:'10px 14px', fontSize:18}}>+</button>
+          </div>
+          <button className="btn-ghost" style={{marginTop:8, fontSize:11, width:'100%'}} onClick={() => setCantidad(disponible)}>
+            Tomar todo ({disponible})
+          </button>
+        </div>
+      )}
+
+      {step === 4 && (
+        <div className="field-group">
+          <label className="field-label">¿A dónde va?</label>
+          <div className="radio-card-group">
+            {lugares.filter(o => o.v !== source).map(o => (
+              <label key={o.v} className={`radio-card ${target===o.v?'selected':''}`}
+                style={{'--sel-color':o.c, '--sel-bg':`${o.c}1a`}}>
+                <input type="radio" checked={target===o.v} onChange={() => setTarget(o.v)}/>
+                <div className="radio-card-dot"/>
+                <div className="radio-card-info"><div className="radio-card-label">{o.l}</div></div>
+              </label>
+            ))}
+          </div>
+          <label className="field-label" style={{marginTop:12}}>Motivo (opcional)</label>
+          <input className="field-input" value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Ej: pedido grande de TN"/>
+        </div>
+      )}
+
+      {step === 5 && (
+        <div>
+          <div style={{padding:12, background:'var(--paper-off)', border:'1px solid var(--border)', borderRadius:6, marginBottom:12}}>
+            <div style={{display:'grid', gridTemplateColumns:'70px 1fr', gap:5, fontSize:11}}>
+              <div style={{color:'var(--ink-muted)', fontWeight:600}}>De</div>
+              <div><strong>{sourceL}</strong></div>
+              <div style={{color:'var(--ink-muted)', fontWeight:600}}>A</div>
+              <div><strong>{targetL}</strong></div>
+              <div style={{color:'var(--ink-muted)', fontWeight:600}}>SKU</div>
+              <div><span className="order-num">{sku}</span></div>
+              <div style={{color:'var(--ink-muted)', fontWeight:600}}>Unids.</div>
+              <div><strong>{cantidad}</strong> de {disponible}</div>
+              {motivo && (<>
+                <div style={{color:'var(--ink-muted)', fontWeight:600}}>Motivo</div>
+                <div>{motivo}</div>
+              </>)}
+            </div>
+          </div>
+          <div style={{padding:10, background:'var(--blue-bg)', border:'1px solid rgba(37,99,235,.2)', borderRadius:6, fontSize:10, color:'var(--ink-soft)', lineHeight:1.5}}>
+            <Icon n="info" s={10}/> Se descuentan <strong>{cantidad}</strong> de <strong>{sourceL}</strong> y se suman a <strong>{targetL}</strong>. Queda registrado.
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 window.Modal = Modal;
 window.ProduceModal = ProduceModal;
 window.ImportModal = ImportModal;
@@ -1351,3 +1588,4 @@ window.ManualOrderModal = ManualOrderModal;
 window.OrderEditModal = OrderEditModal;
 window.EditLogModal = EditLogModal;
 window.OrderHistoryModal = OrderHistoryModal;
+window.StockMovementModal = StockMovementModal;
