@@ -134,9 +134,9 @@ window.MOCK = {
   },
 
   ROLE_NAV: {
-    owner:     { landing:'dashboard',  items:['dashboard','colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino','produccion','registrar','historico','catalogo','equipo','notificaciones','perfil'] },
-    admin:     { landing:'dashboard',  items:['dashboard','colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino','produccion','registrar','historico','catalogo','equipo','notificaciones','perfil'] },
-    encargado: { landing:'produccion', items:['produccion','registrar','notificaciones','perfil'] },
+    owner:     { landing:'dashboard',  items:['dashboard','colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino','stock','produccion','registrar','historico','catalogo','equipo','notificaciones','perfil'] },
+    admin:     { landing:'dashboard',  items:['dashboard','colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino','stock','produccion','registrar','historico','catalogo','equipo','notificaciones','perfil'] },
+    encargado: { landing:'produccion', items:['produccion','registrar','stock','notificaciones','perfil'] },
     cnc:       { landing:'produccion', items:['produccion','registrar','perfil'] },
     melamina:  { landing:'produccion', items:['produccion','registrar','perfil'] },
     pino:      { landing:'produccion', items:['produccion','registrar','perfil'] },
@@ -648,6 +648,104 @@ window.MOCK_ACTIONS = {
     await loadFreeStock();
     window.MOCK_BUS.emit();
     return data;
+  },
+
+  /* ── Stock central (Cambio 1, Step 2) ──────────────────────────────
+     Wrappers de los 2 RPCs nuevos de migration 0025 + loader del log
+     de movimientos para la tab "Movimientos" de StockPage. Permisos:
+     solo owner/admin/encargado (el backend lo enforza). */
+
+  async enviarAStock({ sku, cantidad, sourceChannelId, motivo }) {
+    const params = {
+      p_sku: sku,
+      p_cantidad: cantidad,
+      p_source_channel_id: sourceChannelId,
+    };
+    if (motivo) params.p_motivo = motivo;
+    const { data, error } = await supa.rpc('rpc_send_to_free_stock', params);
+    if (error) throw new Error(error.message);
+    await Promise.all([loadCarriers(), loadFreeStock(), loadProdLogs(), loadJornadas()]);
+    window.MOCK_BUS.emit();
+    return data;
+  },
+
+  async transferirEntreCanales({ sku, cantidad, sourceChannelId, targetChannelId, motivo }) {
+    const params = {
+      p_sku: sku,
+      p_cantidad: cantidad,
+      p_source_channel_id: sourceChannelId,
+      p_target_channel_id: targetChannelId,
+    };
+    if (motivo) params.p_motivo = motivo;
+    const { data, error } = await supa.rpc('rpc_transfer_between_channels', params);
+    if (error) throw new Error(error.message);
+    await Promise.all([loadCarriers(), loadProdLogs(), loadJornadas()]);
+    window.MOCK_BUS.emit();
+    return data;
+  },
+
+  async loadStockMovimientos({ limit = 200 } = {}) {
+    const { data, error } = await supa
+      .from('production_logs')
+      .select('*, operario:profiles!production_logs_operario_id_fkey(name,username)')
+      .or('notas.ilike.[TO_FREE_STOCK]%,notas.ilike.[FROM_FREE_STOCK]%,notas.ilike.[FREE_STOCK]%,notas.ilike.[TRANSFER_OUT%,notas.ilike.[TRANSFER_IN%')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (error) throw new Error(error.message);
+    return (data || []).map(l => {
+      const notas = l.notas || '';
+      let tipo = 'otro';
+      let detalle = null;
+      if (notas.startsWith('[TO_FREE_STOCK]'))      { tipo = 'canal_a_stock'; }
+      else if (notas.startsWith('[FROM_FREE_STOCK]')) { tipo = 'stock_a_canal'; }
+      else if (notas.startsWith('[FREE_STOCK]'))    { tipo = 'auto_cierre_a_stock'; }
+      else if (notas.startsWith('[TRANSFER_OUT')) {
+        tipo = 'transfer_out';
+        const m = notas.match(/^\[TRANSFER_OUT to=([a-z_]+)\]/);
+        if (m) detalle = m[1];
+      } else if (notas.startsWith('[TRANSFER_IN')) {
+        tipo = 'transfer_in';
+        const m = notas.match(/^\[TRANSFER_IN from=([a-z_]+)\]/);
+        if (m) detalle = m[1];
+      }
+      const motMatch = notas.match(/motivo=(.+)$/);
+      return {
+        id: l.id,
+        at: l.created_at,
+        fecha: l.fecha,
+        hora: l.hora ? String(l.hora).slice(0,5) : '',
+        sku: l.sku,
+        cantidad: l.cantidad,
+        channel_id: l.channel_id,
+        tipo,
+        contraparte: detalle,
+        motivo: motMatch ? motMatch[1].trim() : null,
+        operario: l.operario?.name || l.operario?.username || '—',
+        notas_raw: notas,
+      };
+    });
+  },
+
+  getStockTotal() {
+    return Object.values(window.MOCK.freeStock || {}).reduce((s, n) => s + (n || 0), 0);
+  },
+
+  getStockAgregado() {
+    const map = window.MOCK.freeStock || {};
+    return Object.entries(map)
+      .filter(([, c]) => c > 0)
+      .map(([sku, cantidad]) => {
+        const info = window.SKU_DB[sku] || {};
+        return {
+          sku,
+          cantidad,
+          modelo: info.modelo || sku,
+          color: info.color || null,
+          colorHex: info.colorHex || null,
+          categoria: info.categoria || null,
+        };
+      })
+      .sort((a, b) => a.sku.localeCompare(b.sku));
   },
 
   async importarLote({ channelId, filename, items, fileHash }) {
