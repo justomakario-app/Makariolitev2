@@ -38,8 +38,11 @@ function JornadaTabs({ M, role, onOpenNew, onSelect, onActivate }) {
         const isActive = j.id === activaId;
         const isSel    = j.id === selId;
         const bg = isSel ? 'var(--paper)' : 'var(--paper-off)';
+        // Color de acento por día de la semana (sky/emerald/violet/amber).
+        // La activa-seleccionada conserva verde (marca de "oficial").
+        const accentHex = window.getJornadaAccentColor(j.fecha).hex;
         const borderBottom = isSel
-          ? `3px solid ${isActive ? 'var(--green)' : 'var(--accent, #2563eb)'}`
+          ? `3px solid ${isActive ? 'var(--green)' : accentHex}`
           : '3px solid transparent';
         return (
           <button
@@ -228,6 +231,12 @@ function DashboardPage({ onNav }) {
   const [showProduce, setShowProduce]                 = useState(false);
   const [showConfirmProducir, setShowConfirmProducir] = useState(false);
 
+  // Refs para la transición slide+fade al cambiar de pestaña (técnica 5).
+  // Se manipulan imperativamente con style — evita que React sobrescriba
+  // la animación al re-renderear cuando cambian los datos.
+  const wrapperRef = useRef(null);
+  const heroRef    = useRef(null);
+
   /* Exportar Excel consolidado: todos los canales en un solo archivo,
      con columna "Canal" para identificar cada fila. Solo SKUs con
      faltante > 0 (lo que hay que fabricar). */
@@ -311,6 +320,63 @@ function DashboardPage({ onNav }) {
     else            setShowProduce(true);
   };
 
+  /* Click en una pestaña distinta (técnica 5: slide+fade).
+     1) fade out + slide 8px en la dirección del movimiento (200ms).
+     2) swap de datos (seleccionarJornada).
+     3) snap al lado opuesto SIN animar.
+     4) fade in + slide a 0 (250ms).
+     5) pulse del hero (scale 1→1.015→1, glow blanco) al iniciar el fade in.
+     Respeta prefers-reduced-motion: cambio instantáneo. */
+  const handleSelectTab = (id) => {
+    if (!id || id === selId) return;
+    const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const w = wrapperRef.current;
+    if (reduceMotion || !w) {
+      window.MOCK_ACTIONS.seleccionarJornada(id);
+      return;
+    }
+    const oldIdx = abiertas.findIndex(j => j.id === selId);
+    const newIdx = abiertas.findIndex(j => j.id === id);
+    const dir = newIdx > oldIdx ? 1 : -1;
+
+    // Fase 1: out (200ms)
+    w.style.transition = 'opacity 200ms ease, transform 200ms ease';
+    w.style.opacity = '0';
+    w.style.transform = `translateX(${dir * 8}px)`;
+
+    setTimeout(() => {
+      // Swap de datos
+      window.MOCK_ACTIONS.seleccionarJornada(id);
+      // Snap instantáneo al lado opuesto
+      w.style.transition = 'none';
+      w.style.transform = `translateX(${-dir * 8}px)`;
+      void w.offsetWidth; // force reflow
+
+      // Fase 2: in (250ms back to 0)
+      requestAnimationFrame(() => {
+        w.style.transition = 'opacity 250ms ease, transform 250ms ease';
+        w.style.opacity = '1';
+        w.style.transform = 'translateX(0)';
+      });
+
+      // Pulse del hero al iniciar el fade in
+      const h = heroRef.current;
+      if (h) {
+        setTimeout(() => {
+          if (!heroRef.current) return;
+          h.style.transition = 'transform 300ms cubic-bezier(.34,1.56,.64,1), box-shadow 300ms ease';
+          h.style.transform = 'scale(1.015)';
+          h.style.boxShadow = '0 0 24px rgba(255,255,255,0.08)';
+          setTimeout(() => {
+            if (!heroRef.current) return;
+            h.style.transform = 'scale(1)';
+            h.style.boxShadow = 'none';
+          }, 200);
+        }, 150);
+      }
+    }, 200);
+  };
+
   const handleCerrarConfirm = async ({ fecha, jornadaId } = {}) => {
     try {
       await window.MOCK_ACTIONS.cerrarJornada({ fecha });
@@ -346,7 +412,7 @@ function DashboardPage({ onNav }) {
           M={M}
           role={userRole}
           onOpenNew={() => setShowOpen(true)}
-          onSelect={(id) => window.MOCK_ACTIONS.seleccionarJornada(id)}
+          onSelect={handleSelectTab}
           onActivate={async (id) => {
             try {
               await window.MOCK_ACTIONS.setActiveJornada({ jornadaId: id });
@@ -360,32 +426,39 @@ function DashboardPage({ onNav }) {
         <EmptyStateNoJornada canOpen={puedeAdmin} onOpen={() => setShowOpen(true)}/>
       )}
 
-      {/* Chip "VIENDO X — VOLVER A ACTIVA Y" — arriba del hero (Cambio 2B hotfix 2.3) */}
-      {abiertas.length > 0 && viendoOtra && (
-        <div
-          onClick={() => window.MOCK_ACTIONS.seleccionarJornada(activa.id)}
-          title="Volver a la jornada activa"
-          style={{
-            padding: '8px 14px',
-            background: 'rgba(99,102,241,.10)',
-            border: '1px solid rgba(99,102,241,.32)',
-            borderRadius: 6,
-            marginBottom: 10,
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: '.06em',
-            color: '#4f46e5',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 10,
-          }}
-        >
-          <span>VIENDO {fmt.date(seleccionada.fecha)} — VOLVER A LA ACTIVA {fmt.date(activa.fecha)}</span>
-          <Icon n="arrow-right" s={14}/>
-        </div>
-      )}
+      {/* Wrapper para slide+fade al cambiar de pestaña (técnica 5).
+          Se manipula imperativamente vía wrapperRef desde handleSelectTab. */}
+      <div ref={wrapperRef} style={{willChange:'opacity, transform'}}>
+      {/* Chip "VIENDO X — VOLVER A ACTIVA Y" — arriba del hero.
+          Color de acento por día de la semana de la jornada VIENDO. */}
+      {abiertas.length > 0 && viendoOtra && (() => {
+        const accentHex = window.getJornadaAccentColor(seleccionada.fecha).hex;
+        return (
+          <div
+            onClick={() => handleSelectTab(activa.id)}
+            title="Volver a la jornada activa"
+            style={{
+              padding: '8px 14px',
+              background: window.jornadaAccentRgba(seleccionada.fecha, 0.10),
+              border: '1px solid ' + window.jornadaAccentRgba(seleccionada.fecha, 0.32),
+              borderRadius: 6,
+              marginBottom: 10,
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: '.06em',
+              color: accentHex,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 10,
+            }}
+          >
+            <span>VIENDO {fmt.date(seleccionada.fecha)} — VOLVER A LA ACTIVA {fmt.date(activa.fecha)}</span>
+            <Icon n="arrow-right" s={14}/>
+          </div>
+        );
+      })()}
 
       {/* Hero (solo si hay jornada abierta). Cambio 2B hotfix:
            - Fecha de la jornada SELECCIONADA como protagonista (línea grande).
@@ -393,10 +466,11 @@ function DashboardPage({ onNav }) {
            - Fondo cambia según activa vs no-activa (feedback "app nueva"). */}
       {abiertas.length > 0 && (
         <div
+          ref={heroRef}
           className="dash-hero"
           style={viendoOtra
-            ? { background: '#1a1a2e', border: '1px solid rgba(99,102,241,.32)' }
-            : undefined}
+            ? { background: '#1a1a2e', border: '1px solid rgba(99,102,241,.32)', willChange:'transform, box-shadow' }
+            : { willChange:'transform, box-shadow' }}
         >
           <div className="dash-hero-grid"/>
           <div className="dash-hero-glow"/>
@@ -472,6 +546,7 @@ function DashboardPage({ onNav }) {
           />
         )}
       </div>
+      </div>{/* cierra wrapperRef */}
 
       {/* ── Modales globales del dashboard ── */}
       <JornadaOpenModal open={showOpen} onClose={() => setShowOpen(false)}/>

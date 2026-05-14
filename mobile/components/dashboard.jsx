@@ -14,8 +14,11 @@ function MJornadaTabs({ M, role, onOpenNew, onSelect, onActivate }) {
         const isActive = j.id === activaId;
         const isSel    = j.id === selId;
         const bg = isSel ? 'var(--paper)' : 'var(--paper-off)';
+        // Color de acento por día de la semana (sky/emerald/violet/amber).
+        // La activa-seleccionada conserva verde (marca de "oficial").
+        const accentHex = window.getJornadaAccentColor(j.fecha).hex;
         const borderBottom = isSel
-          ? `3px solid ${isActive ? 'var(--green)' : 'var(--accent, #2563eb)'}`
+          ? `3px solid ${isActive ? 'var(--green)' : accentHex}`
           : '3px solid transparent';
         return (
           <button
@@ -199,6 +202,10 @@ function DashboardPage({ onNav }) {
   const [showProduce, setShowProduce]                 = useState(false);
   const [showConfirmProducir, setShowConfirmProducir] = useState(false);
 
+  // Refs para slide+fade al cambiar de pestaña (técnica 5).
+  const wrapperRef = useRef(null);
+  const heroRef    = useRef(null);
+
   /* Exportar Excel consolidado: todos los canales con columna Canal,
      SKU, Modelo, Cantidad. Solo SKUs con faltante > 0. */
   const exportarTodos = () => {
@@ -268,6 +275,52 @@ function DashboardPage({ onNav }) {
     else            setShowProduce(true);
   };
 
+  /* Slide+fade al cambiar pestaña (técnica 5). Idéntico al web. */
+  const handleSelectTab = (id) => {
+    if (!id || id === selId) return;
+    const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const w = wrapperRef.current;
+    if (reduceMotion || !w) {
+      window.MOCK_ACTIONS.seleccionarJornada(id);
+      return;
+    }
+    const oldIdx = abiertas.findIndex(j => j.id === selId);
+    const newIdx = abiertas.findIndex(j => j.id === id);
+    const dir = newIdx > oldIdx ? 1 : -1;
+
+    w.style.transition = 'opacity 200ms ease, transform 200ms ease';
+    w.style.opacity = '0';
+    w.style.transform = `translateX(${dir * 8}px)`;
+
+    setTimeout(() => {
+      window.MOCK_ACTIONS.seleccionarJornada(id);
+      w.style.transition = 'none';
+      w.style.transform = `translateX(${-dir * 8}px)`;
+      void w.offsetWidth;
+
+      requestAnimationFrame(() => {
+        w.style.transition = 'opacity 250ms ease, transform 250ms ease';
+        w.style.opacity = '1';
+        w.style.transform = 'translateX(0)';
+      });
+
+      const h = heroRef.current;
+      if (h) {
+        setTimeout(() => {
+          if (!heroRef.current) return;
+          h.style.transition = 'transform 300ms cubic-bezier(.34,1.56,.64,1), box-shadow 300ms ease';
+          h.style.transform = 'scale(1.015)';
+          h.style.boxShadow = '0 0 24px rgba(255,255,255,0.08)';
+          setTimeout(() => {
+            if (!heroRef.current) return;
+            h.style.transform = 'scale(1)';
+            h.style.boxShadow = 'none';
+          }, 200);
+        }, 150);
+      }
+    }, 200);
+  };
+
   const handleCerrarConfirm = async ({ fecha } = {}) => {
     try {
       await window.MOCK_ACTIONS.cerrarJornada({ fecha });
@@ -307,7 +360,7 @@ function DashboardPage({ onNav }) {
           M={M}
           role={userRole}
           onOpenNew={() => setShowOpen(true)}
-          onSelect={(id) => window.MOCK_ACTIONS.seleccionarJornada(id)}
+          onSelect={handleSelectTab}
           onActivate={async (id) => {
             try {
               await window.MOCK_ACTIONS.setActiveJornada({ jornadaId: id });
@@ -321,31 +374,37 @@ function DashboardPage({ onNav }) {
         <MEmptyStateNoJornada canOpen={puedeAdmin} onOpen={() => setShowOpen(true)}/>
       )}
 
-      {/* Chip "VIENDO X — VOLVER A ACTIVA Y" — arriba del hero (hotfix 2.3) */}
-      {abiertas.length > 0 && viendoOtra && (
-        <div
-          onClick={() => window.MOCK_ACTIONS.seleccionarJornada(activa.id)}
-          style={{
-            padding: '7px 12px',
-            background: 'rgba(99,102,241,.10)',
-            border: '1px solid rgba(99,102,241,.32)',
-            borderRadius: 6,
-            margin: '0 0 10px',
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: '.06em',
-            color: '#4f46e5',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 8,
-          }}
-        >
-          <span>VIENDO {fmt.date(seleccionada.fecha)} — VOLVER A ACTIVA {fmt.date(activa.fecha)}</span>
-          <Icon n="arrow-right" s={12}/>
-        </div>
-      )}
+      {/* Wrapper para slide+fade al cambiar pestaña (técnica 5) */}
+      <div ref={wrapperRef} style={{willChange:'opacity, transform'}}>
+
+      {/* Chip "VIENDO X — VOLVER A ACTIVA Y" — color de acento por día. */}
+      {abiertas.length > 0 && viendoOtra && (() => {
+        const accentHex = window.getJornadaAccentColor(seleccionada.fecha).hex;
+        return (
+          <div
+            onClick={() => handleSelectTab(activa.id)}
+            style={{
+              padding: '7px 12px',
+              background: window.jornadaAccentRgba(seleccionada.fecha, 0.10),
+              border: '1px solid ' + window.jornadaAccentRgba(seleccionada.fecha, 0.32),
+              borderRadius: 6,
+              margin: '0 0 10px',
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: '.06em',
+              color: accentHex,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 8,
+            }}
+          >
+            <span>VIENDO {fmt.date(seleccionada.fecha)} — VOLVER A ACTIVA {fmt.date(activa.fecha)}</span>
+            <Icon n="arrow-right" s={12}/>
+          </div>
+        );
+      })()}
 
       {/* Hero (solo si hay jornada abierta). Cambio 2B hotfix:
            - Fecha de la jornada SELECCIONADA como protagonista.
@@ -353,10 +412,11 @@ function DashboardPage({ onNav }) {
            - Fondo cambia según activa vs no-activa. */}
       {abiertas.length > 0 && (
         <div
+          ref={heroRef}
           className="m-hero"
           style={viendoOtra
-            ? { background: '#1a1a2e', border: '1px solid rgba(99,102,241,.32)' }
-            : undefined}
+            ? { background: '#1a1a2e', border: '1px solid rgba(99,102,241,.32)', willChange:'transform, box-shadow' }
+            : { willChange:'transform, box-shadow' }}
         >
           <div className="m-hero-grid"/>
           <div className="m-hero-glow"/>
@@ -433,6 +493,7 @@ function DashboardPage({ onNav }) {
           );
         })()}
       </div>
+      </div>{/* cierra wrapperRef */}
 
       {/* Modales globales */}
       <MJornadaOpenModal open={showOpen} onClose={() => setShowOpen(false)}/>

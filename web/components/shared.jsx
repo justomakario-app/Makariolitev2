@@ -211,6 +211,33 @@ function todayLocalStr(d = new Date()) {
   return `${y}-${m}-${day}`;
 }
 
+/* Color de acento por día de la semana (Cambio 2B hotfix parte 2).
+   Cada jornada tiene un acento sutil que rota según el día. La idea es
+   dar "personalidad" a cada día sin abrumar — se usa en el borde inferior
+   de la pestaña seleccionada y en el chip "VIENDO X". El punto verde de
+   la jornada activa NO se ve afectado (sigue verde fijo).
+   Mapping pedido por cliente:
+     lun/vie → azul cielo · mar/sab → verde menta
+     mié/dom → violeta lavanda · jue → ámbar suave */
+function getJornadaAccentColor(fechaStr) {
+  const d = parseLocalDate(fechaStr);
+  const day = d.getDay(); // 0=dom .. 6=sab
+  switch (day) {
+    case 1: case 5: return { name:'sky',     hex:'#3b82f6' };
+    case 2: case 6: return { name:'emerald', hex:'#10b981' };
+    case 3: case 0: return { name:'violet',  hex:'#8b5cf6' };
+    case 4:         return { name:'amber',   hex:'#f59e0b' };
+    default:        return { name:'sky',     hex:'#3b82f6' };
+  }
+}
+function jornadaAccentRgba(fechaStr, alpha) {
+  const hex = getJornadaAccentColor(fechaStr).hex;
+  const r = parseInt(hex.slice(1,3), 16);
+  const g = parseInt(hex.slice(3,5), 16);
+  const b = parseInt(hex.slice(5,7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 const fmt = {
   date: iso => {
     if (!iso) return '—';
@@ -235,4 +262,4 @@ const fmt = {
 };
 
 /* ── EXPORT GLOBALS ── */
-Object.assign(window, { Icon, Logo, ToastProvider, ToastCtx, useToast, useMockData, fmt, parseLocalDate, todayLocalStr });
+Object.assign(window, { Icon, Logo, ToastProvider, ToastCtx, useToast, useMockData, fmt, parseLocalDate, todayLocalStr, getJornadaAccentColor, jornadaAccentRgba });
