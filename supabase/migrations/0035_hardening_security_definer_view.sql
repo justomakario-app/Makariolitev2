@@ -1,0 +1,31 @@
+-- ════════════════════════════════════════════════════════════════════
+-- HARDENING — view_historico_dia: SECURITY DEFINER → SECURITY INVOKER
+-- ════════════════════════════════════════════════════════════════════
+-- Lint de Supabase (security_definer_view, nivel ERROR):
+--   "View public.view_historico_dia is defined with the SECURITY
+--    DEFINER property" — enforza permisos/RLS del creador de la view,
+--    no del usuario que consulta.
+--
+-- Fix: marcar la view con security_invoker = true. A partir de Postgres
+-- 15 esto es un ALTER VIEW de 1 línea — NO requiere DROP+CREATE, NO
+-- toca la definición ni los GRANT.
+--
+-- Análisis de seguridad:
+--   - Antes (DEFINER): la view leía production_logs/channels con los
+--     permisos del creador → bypaseaba la RLS de production_logs.
+--   - Después (INVOKER): la view aplica la RLS del usuario que consulta.
+--   - production_logs tiene RLS "SELECT is_active_user()": un usuario
+--     ACTIVO ve los mismos agregados que antes (sin cambio funcional).
+--     Un usuario NO activo / anon ahora ve vacío en vez de todo →
+--     estrictamente más seguro.
+--
+-- NO se toca la definición de la view ni view_carrier_with_meta (ya
+-- dropeada en 0033).
+-- ════════════════════════════════════════════════════════════════════
+
+ALTER VIEW public.view_historico_dia SET (security_invoker = true);
+
+-- ════════════════════════════════════════════════════════════════════
+-- ROLLBACK (manual, si se necesita volver a SECURITY DEFINER):
+--   ALTER VIEW public.view_historico_dia SET (security_invoker = false);
+-- ════════════════════════════════════════════════════════════════════
