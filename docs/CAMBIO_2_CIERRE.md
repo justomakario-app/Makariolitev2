@@ -182,3 +182,42 @@ su contraseña usando una clave que ya está comprometida públicamente.
 > Nota: este es un cambio de configuración de la plataforma, no del
 > código. No hay migration ni archivo en el repo asociado — esta
 > sección es el registro del pendiente.
+
+## 10. Lints diferidos: unused_index (Bloque 4 · Categoría C)
+
+El linter de performance de Supabase reporta 4 índices como "nunca
+usados" (`unused_index`, nivel INFO):
+
+| Índice | Tabla | Definición |
+|--------|-------|------------|
+| `idx_sku_catalog_categoria` | `sku_catalog` | `(categoria)` |
+| `idx_carrier_state_pendientes` | `carrier_state` | `(channel_id) WHERE faltante > 0` |
+| `idx_notifications_unread` | `notifications` | `(user_id) WHERE leida = false` |
+| `order_edit_log_user_idx` | `order_edit_log` | `(by_user, at DESC)` |
+
+**Por qué se difieren (NO se dropean ahora):**
+
+- Ninguno de los 4 fue creado en el Cambio 2 — son todos pre-existentes
+  del diseño original del esquema.
+- El `scans = 0` que reporta el linter **no es evidencia de que el
+  índice sea inútil**: la BD se reseteó a estado virgen varias veces
+  durante el desarrollo y todavía no hubo tráfico de producción real.
+  Las estadísticas de uso de índices (`pg_stat_user_indexes`) están
+  efectivamente en cero porque la app no se usó aún, no porque los
+  índices no sirvan.
+- Al menos 2 de ellos casi con seguridad se usan en operación normal:
+  `idx_notifications_unread` (badge de notificaciones no leídas) y
+  `order_edit_log_user_idx` (auditoría de ediciones por usuario).
+- Dropear un índice basándose en estadísticas de una BD virgen es
+  prematuro y arriesgado: si el índice se usa en alguna query, el DROP
+  degrada esa query sin aviso.
+
+**Acción futura:** re-evaluar esta categoría cuando la app tenga ~2-4
+semanas de tráfico de producción real. En ese momento, re-correr
+`get_advisors('performance')` y revisar `pg_stat_user_indexes.idx_scan`
+con datos reales. Si un índice sigue en `scans = 0` con tráfico real,
+ahí sí es candidato legítimo a DROP.
+
+> Decisión tomada en Bloque 4 (performance). Las otras 3 categorías
+> (FK indexes, RLS init plan, multiple permissive policies) sí se
+> resolvieron — ver migrations 0038, 0039, 0040.
