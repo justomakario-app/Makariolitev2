@@ -185,8 +185,12 @@ su contraseña usando una clave que ya está comprometida públicamente.
 
 ## 10. Lints diferidos: unused_index (Bloque 4 · Categoría C)
 
-El linter de performance de Supabase reporta 4 índices como "nunca
-usados" (`unused_index`, nivel INFO):
+El linter de performance de Supabase reporta índices como "nunca
+usados" (`unused_index`, nivel INFO). Tras aplicar el Bloque 4 son
+**13 índices** en total, en dos grupos:
+
+**Grupo 1 — 4 índices pre-existentes** (del diseño original del esquema,
+NO creados en el Cambio 2):
 
 | Índice | Tabla | Definición |
 |--------|-------|------------|
@@ -195,19 +199,35 @@ usados" (`unused_index`, nivel INFO):
 | `idx_notifications_unread` | `notifications` | `(user_id) WHERE leida = false` |
 | `order_edit_log_user_idx` | `order_edit_log` | `(by_user, at DESC)` |
 
-**Por qué se difieren (NO se dropean ahora):**
+**Grupo 2 — 9 índices FK creados en este mismo Bloque 4** (migration
+0038, Categoría A): `idx_prodlog_channel`, `idx_carrier_state_sku`,
+`idx_qrscans_order`, `idx_free_stock_source_jornada`,
+`idx_orders_created_by`, `idx_import_batches_imported_by`,
+`idx_jornada_audit_by_user`, `idx_jornadas_closed_by`,
+`idx_profiles_created_by`.
 
-- Ninguno de los 4 fue creado en el Cambio 2 — son todos pre-existentes
-  del diseño original del esquema.
+Que el Grupo 2 aparezca como "unused" es una **consecuencia prevista,
+no un bug**: son índices recién creados sobre tablas vacías, así que es
+imposible que tengan scans todavía. La migration 0038 los agregó para
+resolver el lint `unindexed_foreign_keys` (FKs sin índice de cobertura)
+— ese objetivo se cumplió. El "costo" es que el linter de `unused_index`
+ahora los cuenta a ellos. Es el trade-off normal de indexar FKs antes de
+que llegue el tráfico.
+
+**Por qué se difieren los 13 (NO se dropean ahora):**
+
 - El `scans = 0` que reporta el linter **no es evidencia de que el
   índice sea inútil**: la BD se reseteó a estado virgen varias veces
   durante el desarrollo y todavía no hubo tráfico de producción real.
   Las estadísticas de uso de índices (`pg_stat_user_indexes`) están
   efectivamente en cero porque la app no se usó aún, no porque los
   índices no sirvan.
-- Al menos 2 de ellos casi con seguridad se usan en operación normal:
+- Grupo 1: al menos 2 casi con seguridad se usan en operación normal —
   `idx_notifications_unread` (badge de notificaciones no leídas) y
   `order_edit_log_user_idx` (auditoría de ediciones por usuario).
+- Grupo 2: son índices de FK, práctica estándar; su valor aparece
+  cuando `orders` / `production_logs` / `qr_scans` / `carrier_state`
+  acumulen datos.
 - Dropear un índice basándose en estadísticas de una BD virgen es
   prematuro y arriesgado: si el índice se usa en alguna query, el DROP
   degrada esa query sin aviso.
