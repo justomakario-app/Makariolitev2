@@ -295,60 +295,15 @@ async function loadNotifications() {
 }
 
 async function loadCarriers() {
-  const { data, error } = await supa.from('view_carrier_with_meta').select('*').order('sku', { ascending: true });
-  if (error) { console.error('view_carrier_with_meta', error); return; }
-
-  // reset
-  for (const id of Object.keys(window.MOCK.carriers)) {
-    window.MOCK.carriers[id].table = [];
-    window.MOCK.carriers[id].kpis  = { activos:0, unidades:0, pendiente:0 };
-    window.MOCK.carriers[id].allDone = true;
-  }
-  window.MOCK.prod.todos.table = [];
-
-  for (const r of data || []) {
-    const id = r.channel_id;
-    if (!window.MOCK.carriers[id]) continue;
-
-    const pedido    = r.pedido    || 0;
-    const producido = r.producido || 0;
-    const faltante  = r.faltante  || 0;
-    const stock     = r.stock     || 0;
-
-    // Skip filas totalmente vacías. Si hay stock>0 (aunque pedido=0,
-    // faltante=0), la mostramos: representa stock acumulado que admin
-    // puede mover desde este canal. La UI renderiza diferente este caso
-    // (faltante=✓, stock prominente, botón Registrar disabled, botón
-    // Mover habilitado).
-    if (pedido === 0 && faltante === 0 && stock === 0) {
-      continue;
-    }
-
-    const row = { sku: r.sku, pedido, producido, faltante, stock };
-    window.MOCK.carriers[id].table.push(row);
-
-    const C = window.CARRIERS[id] || { label: id };
-    window.MOCK.prod.todos.table.push({
-      sku: r.sku, canal: C.label, pedido, producido, faltante, stock,
-    });
-  }
-
-  // KPIs por canal
-  for (const id of Object.keys(window.MOCK.carriers)) {
-    const c = window.MOCK.carriers[id];
-    c.kpis.unidades  = c.table.reduce((s, r) => s + r.pedido,    0);
-    c.kpis.pendiente = c.table.reduce((s, r) => s + r.faltante,  0);
-    c.kpis.activos   = c.table.filter(r => r.faltante > 0).length;
-    c.allDone        = c.kpis.pendiente === 0 && c.kpis.activos === 0;
-  }
-
-  // KPIs prod total
-  const prod = window.MOCK.prod.todos;
-  prod.kpis.totalPedido = prod.table.reduce((s, r) => s + r.pedido,    0);
-  prod.kpis.producido   = prod.table.reduce((s, r) => s + r.producido, 0);
-  prod.kpis.faltante    = prod.table.reduce((s, r) => s + r.faltante,  0);
-
-  // Si el usuario está mirando una jornada ≠ activa, sobrescribir con compute local.
+  // Housekeeping post-Cambio 2: loadCarriers YA NO consulta
+  // view_carrier_with_meta. Esa view es transversal por canal (no
+  // segmenta por jornada); desde el fix "aislar pedidos por jornada"
+  // el dashboard se alimenta EXCLUSIVAMENTE de
+  // applySelectedJornadaToCarriers (compute local sobre orders +
+  // prodLogs filtrados por jornada_id). La query a la view era un
+  // "dead read" — su resultado se sobrescribía de inmediato.
+  // Se conserva la función como punto de entrada para los callers
+  // de MOCK_ACTIONS (Promise.all([loadCarriers(), loadOrders(), ...])).
   applySelectedJornadaToCarriers();
 }
 
@@ -802,8 +757,6 @@ window.MOCK_ACTIONS = {
     window.MOCK_BUS.emit();
     return data;
   },
-  /* Alias deprecado para callers viejos (compat hasta 2C). */
-  async setJornadaActiva(args) { return this.setActiveJornada(args); },
 
   /* Cerrar jornada con disposiciones opcionales para los sobrantes.
      Cambio 2A/2B: cierra TODOS los canales del día — sin channelId.
