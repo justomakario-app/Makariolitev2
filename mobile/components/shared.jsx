@@ -188,11 +188,33 @@ function ToastProvider({ children }) {
 }
 
 /* ── HELPERS ── */
+/* Fix TZ (Cambio 2B hotfix): `YYYY-MM-DD` puro debe interpretarse como
+   fecha local. new Date('2026-05-14') lo parsea como UTC midnight, lo
+   que en Argentina (UTC-3) renderiza como "13 may" — bug visual que el
+   cliente reportó al abrir jornada. Para timestamps con hora (con 'T')
+   sigue comportándose como antes. */
+function parseLocalDate(iso) {
+  if (typeof iso === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+  return new Date(iso);
+}
+
+/* Helper público: devuelve la fecha LOCAL de hoy como "YYYY-MM-DD".
+   Usar este en lugar de `new Date().toISOString().slice(0,10)` para
+   evitar shifts de timezone al elegir fechas. */
+function todayLocalStr(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 const fmt = {
   date: iso => {
     if (!iso) return '—';
-    const d = new Date(iso);
-    return d.toLocaleDateString('es-AR', { day:'2-digit', month:'short' });
+    return parseLocalDate(iso).toLocaleDateString('es-AR', { day:'2-digit', month:'short' });
   },
   dateTime: iso => {
     if (!iso) return '—';
@@ -209,7 +231,8 @@ const fmt = {
     const d = Math.floor(hr / 24);
     return `hace ${d}d`;
   },
+  todayLocal: () => todayLocalStr(),
 };
 
 /* ── EXPORT GLOBALS ── */
-Object.assign(window, { Icon, Logo, ToastProvider, ToastCtx, useToast, useMockData, fmt });
+Object.assign(window, { Icon, Logo, ToastProvider, ToastCtx, useToast, useMockData, fmt, parseLocalDate, todayLocalStr });

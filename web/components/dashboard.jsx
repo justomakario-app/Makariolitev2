@@ -106,10 +106,13 @@ function JornadaTabs({ M, role, onOpenNew, onSelect, onActivate }) {
 function JornadaOpenModal({ open, onClose }) {
   const toast = useToast();
   const M = window.useMockData();
-  const today = new Date().toISOString().slice(0, 10);
+  // Fix TZ (hotfix 2B): usar fecha LOCAL en lugar de toISOString. En
+  // Argentina (UTC-3) después de las 21h, toISOString devuelve el día
+  // siguiente y el default queda shifted +1 día.
+  const today = window.todayLocalStr();
   const maxFecha = (() => {
     const d = new Date(); d.setDate(d.getDate() + 3);
-    return d.toISOString().slice(0, 10);
+    return window.todayLocalStr(d);
   })();
   // Default: la primera fecha disponible (hoy o el primer día tras la última abierta).
   const defaultFecha = (() => {
@@ -118,7 +121,7 @@ function JornadaOpenModal({ open, onClose }) {
     // Buscar el próximo día libre dentro de today..today+3
     for (let i = 1; i <= 3; i++) {
       const d = new Date(); d.setDate(d.getDate() + i);
-      const iso = d.toISOString().slice(0, 10);
+      const iso = window.todayLocalStr(d);
       if (!yaAbiertas.has(iso)) return iso;
     }
     return today;
@@ -278,7 +281,7 @@ function DashboardPage({ onNav }) {
   }
   const fechaTxt = now.toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
   const horaTxt = now.toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit', hour12:true });
-  const today = `${fechaTxt} · ${horaTxt}`;
+  const todayCtx = `${now.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'})} · ${horaTxt}`;
   const C = window.CARRIERS;
 
   const userRole = (M.user?.role || '').toLowerCase();
@@ -289,6 +292,17 @@ function DashboardPage({ onNav }) {
   const seleccionada = abiertas.find(j => j.id === selId);
   const activa       = abiertas.find(j => j.id === activaId);
   const viendoOtra   = !!(seleccionada && activa && seleccionada.id !== activa.id);
+
+  // Fecha de la jornada SELECCIONADA, formato largo en mayúsculas (protagonista del hero).
+  const fechaJornadaTxt = seleccionada
+    ? window.parseLocalDate(seleccionada.fecha)
+        .toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' })
+        .toUpperCase()
+    : '';
+
+  // Botón Cerrar: solo habilitado si seleccionada === activa Y la fecha es hoy.
+  const todayLocal = window.todayLocalStr();
+  const puedeCerrar = !!(seleccionada && activa && seleccionada.id === activa.id && seleccionada.fecha === todayLocal);
 
   /* Click "+ Producir": si la pestaña seleccionada NO es la activa, mostrar
      confirmación porque la producción siempre va a la jornada activa. */
@@ -346,32 +360,56 @@ function DashboardPage({ onNav }) {
         <EmptyStateNoJornada canOpen={puedeAdmin} onOpen={() => setShowOpen(true)}/>
       )}
 
-      {/* Hero (solo si hay jornada abierta) */}
+      {/* Chip "VIENDO X — VOLVER A ACTIVA Y" — arriba del hero (Cambio 2B hotfix 2.3) */}
+      {abiertas.length > 0 && viendoOtra && (
+        <div
+          onClick={() => window.MOCK_ACTIONS.seleccionarJornada(activa.id)}
+          title="Volver a la jornada activa"
+          style={{
+            padding: '8px 14px',
+            background: 'rgba(99,102,241,.10)',
+            border: '1px solid rgba(99,102,241,.32)',
+            borderRadius: 6,
+            marginBottom: 10,
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: '.06em',
+            color: '#4f46e5',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 10,
+          }}
+        >
+          <span>VIENDO {fmt.date(seleccionada.fecha)} — VOLVER A LA ACTIVA {fmt.date(activa.fecha)}</span>
+          <Icon n="arrow-right" s={14}/>
+        </div>
+      )}
+
+      {/* Hero (solo si hay jornada abierta). Cambio 2B hotfix:
+           - Fecha de la jornada SELECCIONADA como protagonista (línea grande).
+           - "Ventas activas" + "Hoy · DD/MM · HH:MM" en chico abajo.
+           - Fondo cambia según activa vs no-activa (feedback "app nueva"). */}
       {abiertas.length > 0 && (
-        <div className="dash-hero">
+        <div
+          className="dash-hero"
+          style={viendoOtra
+            ? { background: '#1a1a2e', border: '1px solid rgba(99,102,241,.32)' }
+            : undefined}
+        >
           <div className="dash-hero-grid"/>
           <div className="dash-hero-glow"/>
           <div className="dash-hero-left">
             <div className="dash-hero-number">{total}</div>
             <div className="dash-hero-meta">
+              <div style={{fontSize:26, fontWeight:700, color:'#fff', letterSpacing:'.02em', lineHeight:1.1, marginBottom:8}}>
+                {fechaJornadaTxt}
+              </div>
               <div className="dash-hero-label"><span className="dash-hero-dot"/>Ventas activas</div>
-              <div className="dash-hero-date">{today.toUpperCase()}</div>
-              {/* Banner sutil "viendo otra jornada" — Cambio 2B Ajuste 1 */}
-              {viendoOtra && (
-                <div
-                  onClick={() => window.MOCK_ACTIONS.seleccionarJornada(activa.id)}
-                  title="Volver a la jornada activa"
-                  style={{
-                    marginTop: 10,
-                    fontSize: 11,
-                    color: 'rgba(255,255,255,.6)',
-                    cursor: 'pointer',
-                    fontWeight: 400,
-                  }}
-                >
-                  Viendo jornada {fmt.date(seleccionada.fecha)} (activa: {fmt.date(activa.fecha)})
-                </div>
-              )}
+              <div className="dash-hero-date" style={{fontSize:10, opacity:.55, marginTop:2}}>
+                Hoy · {todayCtx.toUpperCase()}
+              </div>
             </div>
           </div>
           <div className="dash-hero-right">
@@ -394,7 +432,15 @@ function DashboardPage({ onNav }) {
             <Icon n="plus" s={13}/> Producir
           </button>
           {puedeAdmin && seleccionada && (
-            <button className="btn-success" onClick={() => setShowCierre(true)} title={`Cerrar la jornada del ${fmt.date(seleccionada.fecha)} (todos los canales)`}>
+            <button
+              className="btn-success"
+              onClick={() => puedeCerrar && setShowCierre(true)}
+              disabled={!puedeCerrar}
+              title={puedeCerrar
+                ? `Cerrar la jornada del ${fmt.date(seleccionada.fecha)} (todos los canales)`
+                : 'Solo se puede cerrar la jornada del día actual'}
+              style={!puedeCerrar ? {opacity:.5, cursor:'not-allowed'} : undefined}
+            >
               <Icon n="lock" s={13}/> Cerrar jornada del {fmt.date(seleccionada.fecha)}
             </button>
           )}
