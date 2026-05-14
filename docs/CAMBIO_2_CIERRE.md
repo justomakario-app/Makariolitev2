@@ -146,3 +146,39 @@ operativos):
   - Test B: `rpc_close_jornada(p_fecha)` sin `p_channel_id` funciona.
   - Test C: llamar con `p_channel_id` viejo falla con SQLSTATE 42883
     (función no existe), antes de ejecutar el body.
+
+## 9. Pendientes manuales del cliente
+
+Algunos hallazgos de seguridad no se arreglan con una migration —
+requieren un cambio de configuración en el panel de Supabase que solo
+el dueño de la cuenta puede hacer.
+
+### 9.1 Activar "Leaked Password Protection"
+
+**Qué es**: Supabase Auth puede chequear cada contraseña nueva contra la
+base de datos pública de HaveIBeenPwned.org y rechazarla si ya apareció
+en alguna filtración conocida. Viene **desactivado** por defecto.
+
+**Por qué importa**: sin esto, un usuario podría registrarse o cambiar
+su contraseña usando una clave que ya está comprometida públicamente.
+
+**Pasos para activarlo** (1 minuto, lo hace Aarón):
+
+1. Entrar al [dashboard de Supabase](https://supabase.com/dashboard)
+   con la cuenta dueña del proyecto.
+2. Seleccionar el proyecto **Macario Lite**
+   (ref `ditmbqkvzreekqnkimqv`).
+3. En el menú lateral: **Authentication → Policies**
+   (o **Authentication → Sign In / Providers**, según versión del panel).
+4. Buscar la sección **Password Security** /
+   **Leaked password protection**.
+5. Activar el toggle **"Prevent use of leaked passwords"**.
+6. Guardar.
+
+**Verificación**: tras activarlo, el lint
+`auth_leaked_password_protection` desaparece de
+**Advisors → Security** en el dashboard.
+
+> Nota: este es un cambio de configuración de la plataforma, no del
+> código. No hay migration ni archivo en el repo asociado — esta
+> sección es el registro del pendiente.
