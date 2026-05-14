@@ -519,10 +519,17 @@ function computeCarriersForJornada(jornadaId) {
     out[id] = { table: [], kpis: { activos:0, unidades:0, pendiente:0 }, allDone:true };
   }
 
-  // pedido[channel|sku] = SUM orders.cantidad (transversal — pedidos viven hasta archivarse)
+  // Sin jornada seleccionada → todo vacío (no hay segmentación posible).
+  if (!jornadaId) return out;
+
+  // pedido[channel|sku] = SUM orders.cantidad WHERE jornada_id = jornadaId.
+  // Aislado por jornada (Cambio 2B hot-fix final): un pedido cargado en la
+  // jornada 15-may solo aparece en la pestaña 15-may. Defensivo: orders
+  // con jornadaId=null (estado legacy/inesperado) NO se incluyen.
   const pedidoMap = {};
   for (const cid of Object.keys(window.MOCK.carriers)) {
     for (const o of window.MOCK.carriers[cid].orders || []) {
+      if (o.jornadaId !== jornadaId) continue;
       const k = cid + '|' + o.sku;
       pedidoMap[k] = (pedidoMap[k] || 0) + (o.cantidad || 0);
     }
@@ -559,16 +566,17 @@ function computeCarriersForJornada(jornadaId) {
 }
 
 /* ─────────────────────────────────────────────────────────────────
-   applySelectedJornadaToCarriers — si seleccionada ≠ activa, sobrescribe
-   table/kpis/allDone de MOCK.carriers + recomputa MOCK.prod.todos.
+   applySelectedJornadaToCarriers — SIEMPRE recomputa table/kpis/allDone
+   de MOCK.carriers + MOCK.prod.todos desde orders+prodLogs filtrados por
+   la jornada SELECCIONADA. Activa y no-activa siguen el mismo camino:
+   los cuadritos del dashboard reflejan EXACTAMENTE los pedidos y la
+   producción ATADOS a esa jornada. carrier_state (backend) queda como
+   tabla interna para cierres y RPCs — el frontend ya no la consume
+   para alimentar el dashboard.
    Preserva orders, lotes, cierres, lastClosure (datos no agregados).
    ─────────────────────────────────────────────────────────────────── */
 function applySelectedJornadaToCarriers() {
   const selId = window.MOCK.jornadas.seleccionadaId;
-  const actId = window.MOCK.jornadas.activaId;
-  // Default: si seleccionada === activa, la data poblada por loadCarriers
-  // (view_carrier_with_meta) ya refleja la activa — no hay que tocar nada.
-  if (!selId || selId === actId) return;
 
   const computed = computeCarriersForJornada(selId);
   for (const id of Object.keys(window.MOCK.carriers)) {
@@ -590,10 +598,12 @@ function applySelectedJornadaToCarriers() {
       todos.kpis.faltante    += r.faltante;
     }
   }
-  // "Producidos hoy" → re-interpretado como producido de la jornada seleccionada
-  todos.producidoHoy = (window.MOCK.prodLogs || [])
-    .filter(l => l.jornadaId === selId)
-    .reduce((s,l) => s + (l.unidades || 0), 0);
+  // "Producidos hoy" → producido de la jornada seleccionada (0 si no hay).
+  todos.producidoHoy = selId
+    ? (window.MOCK.prodLogs || [])
+        .filter(l => l.jornadaId === selId)
+        .reduce((s,l) => s + (l.unidades || 0), 0)
+    : 0;
 }
 
 async function loadProdLogs() {
