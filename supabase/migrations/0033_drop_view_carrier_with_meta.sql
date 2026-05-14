@@ -1,0 +1,38 @@
+-- ════════════════════════════════════════════════════════════════════
+-- HOUSEKEEPING — DROP view_carrier_with_meta (view huérfana)
+-- ════════════════════════════════════════════════════════════════════
+-- view_carrier_with_meta fue creada en migration 0009 para alimentar la
+-- tabla del carrier en el frontend (carrier_state JOIN sku_catalog).
+--
+-- Tras el Cambio 2B (modelo "jornada por día completo") el frontend dejó
+-- de consumirla: el dashboard y las tablas por canal se alimentan
+-- EXCLUSIVAMENTE de computeCarriersForJornada (compute local sobre
+-- orders + production_logs filtrados por jornada_id). En el commit de
+-- housekeeping 5db5c28 se eliminó el último `supa.from('view_carrier_
+-- with_meta')` de loadCarriers — desde entonces es una view huérfana.
+--
+-- Verificado antes del DROP:
+--   - 0 callers en código vivo (web/components, mobile/components).
+--   - 0 funciones/RPCs que la referencien (pg_proc.prosrc).
+--   - 0 views que dependan de ella (pg_depend).
+--   - Solo quedan menciones en comentarios y docs (no ejecutables).
+--
+-- La view view_historico_dia (también de 0009) NO se toca — sigue en
+-- uso por loadHistorico.
+-- ════════════════════════════════════════════════════════════════════
+
+DROP VIEW IF EXISTS public.view_carrier_with_meta;
+
+-- ════════════════════════════════════════════════════════════════════
+-- ROLLBACK (manual, si se necesita restaurar la view):
+-- Re-aplicar el CREATE OR REPLACE VIEW desde migration 0009_views.sql:
+--
+--   CREATE OR REPLACE VIEW public.view_carrier_with_meta AS
+--   SELECT cs.channel_id, cs.sku, sc.modelo, sc.color, sc.color_hex,
+--          sc.categoria, sc.es_fabricado, sc.activo AS sku_activo,
+--          cs.pedido, cs.producido, cs.faltante, cs.stock, cs.updated_at
+--   FROM public.carrier_state cs
+--   JOIN public.sku_catalog sc ON sc.sku = cs.sku
+--   WHERE sc.activo = true;
+--   GRANT SELECT ON public.view_carrier_with_meta TO authenticated;
+-- ════════════════════════════════════════════════════════════════════

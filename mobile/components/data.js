@@ -739,7 +739,9 @@ window.MOCK_ACTIONS = {
     if (!window.MOCK.jornadas.abiertas.some(j => j.id === jornadaId)) return;
     if (window.MOCK.jornadas.seleccionadaId === jornadaId) return;
     window.MOCK.jornadas.seleccionadaId = jornadaId;
-    // Si volvemos a la activa, restaurar tablas/KPIs originales desde view_carrier_with_meta.
+    // Recomputar tablas/KPIs de la jornada seleccionada. loadCarriers()
+    // es el wrapper async de applySelectedJornadaToCarriers() — ambas
+    // ramas recomputan lo mismo; la async preserva el await del refresh.
     if (jornadaId === window.MOCK.jornadas.activaId) {
       loadCarriers().finally(() => window.MOCK_BUS.emit());
     } else {
