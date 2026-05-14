@@ -304,17 +304,18 @@ function ProduceModal({ open, onClose, defaultSku, defaultSubcanal }) {
       {/* Paso 3: cantidad + fecha + nota + resumen */}
       {step === 3 && (
         <div>
-          {/* Selector de jornada — solo si hay 2+ abiertas en el canal.
+          {/* Selector de jornada — solo si hay 2+ abiertas globalmente.
+              Cambio 2A/2B: las jornadas son globales (no por canal).
               Default = la activa (RPC la elige sin que el usuario haga click). */}
           {(() => {
-            const abiertas = M.carriers[subcanal]?.jornadasAbiertas || [];
-            const activaId = M.carriers[subcanal]?.jornadaActivaId;
+            const abiertas = M.jornadas?.abiertas || [];
+            const activaId = M.jornadas?.activaId;
             if (abiertas.length < 2) return null;
             const selectedId = jornadaIdOverride || activaId || abiertas[0]?.id;
             return (
               <div style={{marginBottom:14, padding:'10px 12px', background:'#fef3c7', border:'1px solid #fbbf24', borderRadius:6}}>
                 <div style={{fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'.08em', color:'var(--ink-muted)', marginBottom:6}}>
-                  Hay {abiertas.length} jornadas abiertas en {window.CARRIERS[subcanal]?.label}
+                  Hay {abiertas.length} jornadas abiertas — elegí a cuál cargar
                 </div>
                 <select
                   className="field-input"
@@ -387,6 +388,7 @@ function ProduceModal({ open, onClose, defaultSku, defaultSubcanal }) {
 /* ── Importar Excel — selector canal + preview ── */
 function ImportModal({ open, onClose, channel: defaultChannel }) {
   const toast = useToast();
+  const M = window.useMockData();
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -396,6 +398,11 @@ function ImportModal({ open, onClose, channel: defaultChannel }) {
   // corresponda. Si ni se pasa defaultChannel ni se detecta canal, el
   // operario tiene que elegir explicitamente antes de poder importar.
   const [channel, setChannel] = useState(defaultChannel || '');
+  // Cambio 2B: la importación se hace contra la jornada seleccionada (o la
+  // activa si seleccionada === activa). Si no hay ninguna jornada abierta,
+  // bloqueamos el submit con banner explícito.
+  const jornadaDestinoId = M.jornadas?.seleccionadaId || M.jornadas?.activaId || null;
+  const jornadaDestino   = (M.jornadas?.abiertas || []).find(j => j.id === jornadaDestinoId);
   const [detected, setDetected] = useState(null);
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState(null);
@@ -472,6 +479,7 @@ function ImportModal({ open, onClose, channel: defaultChannel }) {
         channelId: channel,
         filename: file.name,
         items,
+        targetJornadaId: jornadaDestinoId,
       });
       setProgress(100);
       onClose();
@@ -501,11 +509,20 @@ function ImportModal({ open, onClose, channel: defaultChannel }) {
     <Modal open={open} onClose={onClose} title="Importar ventas desde Excel" size="lg" footer={
       <>
         <button className="btn-ghost" onClick={onClose}>Cancelar</button>
-        <button className="btn-primary" onClick={submit} disabled={!file || !orders.length || busy || parsing || !channel}>
+        <button className="btn-primary" onClick={submit} disabled={!file || !orders.length || busy || parsing || !channel || !jornadaDestino}>
           {busy ? <span className="loader" style={{borderColor:'rgba(255,255,255,.3)', borderTopColor:'#fff'}}/> : <><Icon n="upload" s={14}/> Importar {orders.length>0 ? `${orders.length} pedidos` : ''} a {C.label}</>}
         </button>
       </>
     }>
+      {/* Banner jornada destino — Cambio 2B */}
+      <div style={{padding:'8px 12px', background: jornadaDestino ? 'var(--green-bg)' : 'var(--red-bg)',
+                   border: '1px solid ' + (jornadaDestino ? 'rgba(22,163,74,.32)' : 'rgba(220,38,38,.32)'),
+                   borderRadius:6, marginBottom:14, fontSize:11, color: jornadaDestino ? 'var(--green)' : 'var(--red)'}}>
+        {jornadaDestino
+          ? <>Jornada destino: <strong>{fmt.date(jornadaDestino.fecha)}</strong>{jornadaDestino.id === M.jornadas?.activaId ? ' (activa)' : ''}</>
+          : <><Icon n="alert" s={12}/> No hay jornadas abiertas — abrí una desde el Dashboard antes de importar.</>}
+      </div>
+
       {/* Selector canal */}
       <label className="field-label">Canal de destino</label>
       <div className="radio-card-group" style={{marginBottom:14}}>
@@ -615,115 +632,83 @@ function ImportModal({ open, onClose, channel: defaultChannel }) {
   );
 }
 
-/* ── Cierre de jornada con preview snapshot ──
-   Recibe `channel` y opcionalmente `jornadaId` (la jornada específica
-   a cerrar). Si no se pasa jornadaId, muestra selector cuando hay 2+
-   abiertas y default = la más vieja. El preview filtra production_logs
-   por jornada — refleja exactamente lo que el RPC va a snapshotear. */
-function CierreModal({ open, onClose, onConfirm, channel, defaultJornadaId }) {
+/* ── Cierre de jornada GLOBAL (Cambio 2A/2B) ──
+   Cierra el día completo (todos los canales). Recibe `jornadaId` desde
+   el dashboard (es la jornada seleccionada por el usuario). El preview
+   se agrupa por canal y suma totales globales. El RPC v6 ignora
+   p_channel_id (shim) y genera snapshot agrupado por (channel_id, sku). */
+function CierreModal({ open, onClose, onConfirm, jornadaId }) {
   const M = window.useMockData();
-  const data = M.carriers[channel];
-  const C = window.CARRIERS[channel] || {};
-
-  const abiertas = (data?.jornadasAbiertas) || [];
-  // Default = jornada elegida → activa → la más vieja
-  const inicialId = defaultJornadaId
-    || abiertas.find(j => j.id === data?.jornadaActivaId)?.id
-    || abiertas[0]?.id
-    || null;
-  const [selectedId, setSelectedId] = useState(inicialId);
-
-  useEffect(() => {
-    if (open) setSelectedId(inicialId);
-  }, [open, inicialId]);
-
-  if (!data) return null;
-
-  const jornada = abiertas.find(j => j.id === selectedId) || abiertas[0];
+  const abiertas = M.jornadas?.abiertas || [];
+  const jornada = abiertas.find(j => j.id === jornadaId);
   const fechaCierre = jornada?.fecha;
+  const esActiva = jornadaId === M.jornadas?.activaId;
 
-  // Preview filtrado por jornada — agregamos prodLogs[].jornadaId === selectedId
-  const logs = (M.prodLogs || []).filter(l => l.subcanal === channel && l.jornadaId === selectedId);
-  const producidoPorSku = {};
-  for (const l of logs) {
-    producidoPorSku[l.sku] = (producidoPorSku[l.sku] || 0) + (l.unidades || 0);
-  }
-  // Pedidos: orders pendientes/arrastradas del canal — son trans-temporal
-  // (igual que el RPC). Vienen de carrier_state via data.table (el mismo
-  // bucket trans-temporal). Esto es consistente con la lógica del backend.
-  const pedidoPorSku = {};
-  for (const r of (data.table || [])) {
-    pedidoPorSku[r.sku] = r.pedido || 0;
-  }
-  // Universo de SKUs = los que tienen pedido en el canal O producción en esta jornada
-  const skus = Array.from(new Set([
-    ...Object.keys(pedidoPorSku),
-    ...Object.keys(producidoPorSku),
-  ])).sort();
+  if (!open) return null;
 
+  // Filas por (canal, sku) — replica la fórmula del RPC v6.
+  // pedido es transversal (suma orders pendientes/arrastradas del canal).
+  // producido se filtra por jornada_id.
+  const canalesIds = ['colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino'];
+  const filas = [];   // [{ channel, sku, pedido, producido, faltante, stock }]
   let totalPedido = 0, totalProducido = 0, totalFaltante = 0;
-  const filas = skus.map(sku => {
-    const pedido = pedidoPorSku[sku] || 0;
-    const producido = producidoPorSku[sku] || 0;
-    const faltante = Math.max(0, pedido - producido);
-    const stock = Math.max(0, producido - pedido);
-    totalPedido += pedido;
-    totalProducido += producido;
-    totalFaltante += faltante;
-    return { sku, pedido, producido, faltante, stock };
-  });
+
+  for (const cid of canalesIds) {
+    const orders = M.carriers[cid]?.orders || [];
+    const pedidoMap = {};
+    for (const o of orders) pedidoMap[o.sku] = (pedidoMap[o.sku] || 0) + (o.cantidad || 0);
+
+    const prodMap = {};
+    for (const l of (M.prodLogs || [])) {
+      if (l.subcanal !== cid || l.jornadaId !== jornadaId) continue;
+      prodMap[l.sku] = (prodMap[l.sku] || 0) + (l.unidades || 0);
+    }
+
+    const skus = Array.from(new Set([...Object.keys(pedidoMap), ...Object.keys(prodMap)])).sort();
+    for (const sku of skus) {
+      const pedido    = pedidoMap[sku] || 0;
+      const producido = prodMap[sku]   || 0;
+      if (pedido === 0 && producido === 0) continue;
+      const faltante = Math.max(0, pedido - producido);
+      const stock    = Math.max(0, producido - pedido);
+      filas.push({ channel: cid, sku, pedido, producido, faltante, stock });
+      totalPedido    += pedido;
+      totalProducido += producido;
+      totalFaltante  += faltante;
+    }
+  }
 
   const handleConfirm = () => {
-    onConfirm?.({ fecha: fechaCierre, jornadaId: selectedId });
+    onConfirm?.({ fecha: fechaCierre, jornadaId });
     onClose();
   };
 
   return (
-    <Modal open={open} onClose={onClose} title={`Cerrar jornada — ${C.label}`} size="lg" footer={
+    <Modal open={open} onClose={onClose} title={`Cerrar jornada del ${fechaCierre ? fmt.date(fechaCierre) : '—'}`} size="lg" footer={
       <>
         <button className="btn-ghost" onClick={onClose}>Cancelar</button>
-        <button className="btn-success" onClick={handleConfirm} disabled={!fechaCierre}>
+        <button className="btn-success" onClick={handleConfirm} disabled={!fechaCierre || !jornada}>
           <Icon n="lock" s={14}/> Confirmar cierre
         </button>
       </>
     }>
-      {abiertas.length === 0 ? (
+      {!jornada ? (
         <div style={{padding:'12px 14px', background:'var(--red-bg)', border:'1px solid rgba(220,38,38,.32)', borderRadius:6, color:'var(--red)', fontSize:12}}>
-          No hay jornadas abiertas para cerrar en {C.label}.
+          La jornada seleccionada no está disponible. Volvé al dashboard.
         </div>
       ) : (
         <>
-          {abiertas.length >= 2 && (
-            <div style={{marginBottom:14, padding:'10px 12px', background:'#fef3c7', border:'1px solid #fbbf24', borderRadius:6}}>
-              <div style={{fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'.08em', color:'var(--ink-muted)', marginBottom:6}}>
-                Hay {abiertas.length} jornadas abiertas — elegí cuál cerrás
-              </div>
-              <select
-                className="field-input"
-                value={selectedId || ''}
-                onChange={e => setSelectedId(e.target.value)}
-                style={{fontSize:12, fontWeight:600}}
-              >
-                {abiertas.map(j => (
-                  <option key={j.id} value={j.id}>
-                    {fmt.date(j.fecha)} {j.id === data.jornadaActivaId ? '· ACTIVA' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
           <div style={{fontSize:12, color:'var(--ink-soft)', lineHeight:1.6, marginBottom:12}}>
-            Vas a guardar un <strong>snapshot inmutable</strong> de <strong>{C.label} · {fechaCierre ? fmt.date(fechaCierre) : '—'}</strong>.
+            Vas a guardar un <strong>snapshot inmutable</strong> de toda la jornada del <strong>{fmt.date(fechaCierre)}</strong> (todos los canales).
           </div>
 
           <div style={{padding:'10px 12px', background:'var(--paper-off)', border:'1px solid var(--border)', borderRadius:6, marginBottom:14, fontSize:11, color:'var(--ink-soft)', lineHeight:1.6}}>
             <div style={{fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--ink-muted)', marginBottom:6}}>Qué pasa al cerrar</div>
-            <div>✓ Los pedidos <strong>completados</strong> se archivan en el histórico.</div>
+            <div>✓ Los pedidos <strong>completados</strong> de todos los canales se archivan en el histórico.</div>
             <div>✓ El <strong>faltante</strong> se arrastra al día siguiente como nueva línea.</div>
             <div>✓ Se genera un snapshot que <strong>no se puede modificar</strong>.</div>
             <div>✓ El <strong>sobrante</strong> (si lo hay) se transfiere automáticamente al <strong>Stock central</strong>.</div>
-            {data.jornadaActivaId === selectedId && abiertas.length >= 2 && (
+            {esActiva && abiertas.length >= 2 && (
               <div>✓ La marca <strong>activa para producción</strong> pasa a la siguiente jornada abierta automáticamente.</div>
             )}
           </div>
@@ -744,39 +729,51 @@ function CierreModal({ open, onClose, onConfirm, channel, defaultJornadaId }) {
           </div>
 
           <div style={{fontSize:11, fontWeight:700, color:'var(--ink-muted)', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:8}}>
-            Snapshot por SKU
+            Snapshot por canal
           </div>
           {filas.length === 0 ? (
             <div style={{padding:14, textAlign:'center', fontSize:12, color:'var(--ink-muted)', border:'1px dashed var(--border)', borderRadius:6}}>
               Sin pedidos ni producción para esta jornada.
             </div>
           ) : (
-          <table className="data-table" style={{borderRadius:6, overflow:'hidden', border:'1px solid var(--border)'}}>
-            <thead>
-              <tr>
-                <th>SKU</th>
-                <th>Producto</th>
-                <th style={{textAlign:'right'}}>Pedido</th>
-                <th style={{textAlign:'right'}}>Producido</th>
-                <th style={{textAlign:'right'}}>Arrastra</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filas.map(r => (
-                <tr key={r.sku}>
-                  <td><span className="order-num">{r.sku}</span></td>
-                  <td style={{fontSize:11, color:'var(--ink-soft)'}}>{window.skuName(r.sku)}</td>
-                  <td style={{textAlign:'right'}}><span className="cell-color-num">{r.pedido}</span></td>
-                  <td style={{textAlign:'right'}}><span className="cell-color-num" style={{color:'var(--green)'}}>{r.producido}</span></td>
-                  <td style={{textAlign:'right'}}>
-                    {r.faltante > 0
-                      ? <span className="cell-faltante-red">{r.faltante}</span>
-                      : <span className="cell-faltante-ok"><Icon n="check" s={12}/></span>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+            canalesIds.map(cid => {
+              const filasCanal = filas.filter(f => f.channel === cid);
+              if (filasCanal.length === 0) return null;
+              const C = window.CARRIERS[cid] || { label: cid, color: '#888' };
+              return (
+                <div key={cid} style={{marginBottom:14}}>
+                  <div style={{fontSize:11, fontWeight:700, color:C.color, marginBottom:6, textTransform:'uppercase', letterSpacing:'.06em'}}>
+                    {C.label}
+                  </div>
+                  <table className="data-table" style={{borderRadius:6, overflow:'hidden', border:'1px solid var(--border)'}}>
+                    <thead>
+                      <tr>
+                        <th>SKU</th>
+                        <th>Producto</th>
+                        <th style={{textAlign:'right'}}>Pedido</th>
+                        <th style={{textAlign:'right'}}>Producido</th>
+                        <th style={{textAlign:'right'}}>Arrastra</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filasCanal.map(r => (
+                        <tr key={cid + '|' + r.sku}>
+                          <td><span className="order-num">{r.sku}</span></td>
+                          <td style={{fontSize:11, color:'var(--ink-soft)'}}>{window.skuName(r.sku)}</td>
+                          <td style={{textAlign:'right'}}><span className="cell-color-num">{r.pedido}</span></td>
+                          <td style={{textAlign:'right'}}><span className="cell-color-num" style={{color:'var(--green)'}}>{r.producido}</span></td>
+                          <td style={{textAlign:'right'}}>
+                            {r.faltante > 0
+                              ? <span className="cell-faltante-red">{r.faltante}</span>
+                              : <span className="cell-faltante-ok"><Icon n="check" s={12}/></span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })
           )}
         </>
       )}
@@ -810,8 +807,9 @@ function ManualOrderModal({ open, onClose, channel }) {
   const M = window.useMockData();
   const C = window.CARRIERS[channel] || {};
   const data = M.carriers[channel];
-  const activaId = data?.jornadaActivaId;
-  const activa = (data?.jornadasAbiertas || []).find(j => j.id === activaId);
+  // Cambio 2A/2B: jornada es global. La activa = la que recibe la carga.
+  const activaId = M.jornadas?.activaId;
+  const activa = (M.jornadas?.abiertas || []).find(j => j.id === activaId);
 
   const [orderNumber, setOrderNumber] = useState('');
   const [cliente, setCliente]         = useState('');
@@ -848,7 +846,7 @@ function ManualOrderModal({ open, onClose, channel }) {
 
   const submit = async (forceMerge = false) => {
     if (!validItems.length) { toast.error('Agregá al menos un item con SKU y cantidad'); return; }
-    if (!activa) { toast.error('No hay jornada activa para ' + (C.label || channel)); return; }
+    if (!activa) { toast.error('No hay jornada activa — abrí una desde el Dashboard antes de cargar pedidos.'); return; }
 
     setBusy(true);
     try {
@@ -894,7 +892,7 @@ function ManualOrderModal({ open, onClose, channel }) {
                    borderRadius:6, marginBottom:14, fontSize:11, color: activa ? 'var(--green)' : 'var(--red)'}}>
         {activa
           ? <>Jornada destino: <strong>{fmt.date(activa.fecha)}</strong> (activa)</>
-          : <><Icon n="alert" s={12}/> No hay jornada activa para {C.label}. Pedíle al encargado que abra una.</>}
+          : <><Icon n="alert" s={12}/> No hay jornada activa. Pedíle al encargado que abra una desde el Dashboard.</>}
       </div>
 
       <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:14}}>
@@ -1009,8 +1007,9 @@ function OrderEditModal({ open, onClose, channel, orderNumber }) {
 
   // Items del pedido (snapshot al abrir)
   const itemsOriginales = (data?.orders || []).filter(o => o.numero === orderNumber);
+  // Cambio 2A/2B: historial es global (M.jornadas.historial), no por canal.
   const jornadaIdPedido = itemsOriginales[0]?.jornadaId;
-  const jornadaCerrada  = (data?.cierres || []).find(c => c.id === jornadaIdPedido);
+  const jornadaCerrada  = (M.jornadas?.historial || []).find(c => c.id === jornadaIdPedido);
   const isClosed        = !!jornadaCerrada;
   const cliente         = itemsOriginales[0]?.cliente || '';
 

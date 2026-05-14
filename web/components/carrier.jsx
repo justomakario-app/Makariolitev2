@@ -15,7 +15,9 @@ function CarrierPage({ channel, onBack, onNav }) {
   const [showProduce, setShowProduce] = useState(false);
   const [produceCtx, setProduceCtx]   = useState({}); // { sku, subcanal }
   const [showImport, setShowImport]   = useState(false);
-  const [showCierre, setShowCierre]   = useState(false);
+  // Cambio 2B: el cierre de jornada vive en el dashboard (botón global).
+  // CarrierPage solo lee la jornada seleccionada y muestra los números de
+  // ese día por canal. Sin botones de Abrir/Cerrar/marcar activa.
   const [openOrders, setOpenOrders]   = useState(false);
   const [openLotes, setOpenLotes]     = useState(false);
   const [openCierres, setOpenCierres] = useState(false);
@@ -106,27 +108,6 @@ function CarrierPage({ channel, onBack, onNav }) {
           }}>
             <Icon n="download" s={13}/> Exportar
           </button>
-          {/* Abrir jornada — solo admin/encargado/owner */}
-          {['owner','admin','encargado'].includes(userRole) && (
-            <button className="btn-ghost" onClick={async () => {
-              const fecha = window.prompt(
-                `Abrir jornada de ${C.label}\n\nFecha (YYYY-MM-DD), o vacío para hoy:`,
-                new Date().toISOString().slice(0, 10)
-              );
-              if (fecha === null) return;
-              try {
-                await window.MOCK_ACTIONS.abrirJornada({
-                  channelId: channel,
-                  fecha: fecha.trim() || undefined,
-                });
-                toast.success(`Jornada abierta · ${C.label}`);
-              } catch (e) {
-                toast.error(e.message || 'No se pudo abrir la jornada');
-              }
-            }}>
-              <Icon n="plus" s={13}/> Abrir jornada
-            </button>
-          )}
           {/* Cargar pedido manual — solo bajo feature flag, admin/encargado, no distribuidor */}
           {featurePedidos && ['owner','admin','encargado'].includes(userRole) && (
             <button className="btn-ghost" onClick={() => setShowManualOrder(true)}>
@@ -139,65 +120,38 @@ function CarrierPage({ channel, onBack, onNav }) {
         </div>
       </div>
 
-      {/* Chip de jornada activa — visible siempre, dropdown si hay 2+ abiertas */}
+      {/* Chip de jornada — read-only desde Cambio 2B (jornadas son globales).
+          La selección, apertura y cierre viven en el Dashboard. */}
       {(() => {
-        const abiertas = data.jornadasAbiertas || [];
-        const activaId = data.jornadaActivaId;
+        const abiertas = M.jornadas?.abiertas || [];
+        const activaId = M.jornadas?.activaId;
+        const selId    = M.jornadas?.seleccionadaId;
         if (abiertas.length === 0) {
           return (
-            <div className="carrier-banner" style={{background:'#fff3e0', borderColor:'rgba(217,119,6,.32)', color:'#92400e'}}>
+            <div className="carrier-banner" style={{background:'#fff3e0', borderColor:'rgba(217,119,6,.32)', color:'#92400e', cursor:'pointer'}} onClick={() => onNav?.('dashboard')}>
               <Icon n="alert" s={16}/>
-              <span>Sin jornada abierta. La próxima carga va a auto-crear una de hoy.</span>
+              <span>Sin jornada abierta. Abrí una desde el Dashboard.</span>
             </div>
           );
         }
-        const activa = abiertas.find(j => j.id === activaId);
-        const sinActiva = !activa && abiertas.length >= 2;
-        if (sinActiva) {
-          return (
-            <div className="carrier-banner" style={{background:'var(--red-bg)', borderColor:'rgba(220,38,38,.32)', color:'var(--red)'}}>
-              <Icon n="alert" s={16}/>
-              <span><strong>{abiertas.length} jornadas abiertas, ninguna activa.</strong> Las cargas nuevas van a fallar — marcá una como activa abajo.</span>
-            </div>
-          );
-        }
+        const seleccionada = abiertas.find(j => j.id === selId) || abiertas.find(j => j.id === activaId) || abiertas[0];
+        const esActiva = seleccionada.id === activaId;
         return (
-          <div style={{padding:'10px 24px', borderBottom:'1px solid var(--border)', background:'#fff', display:'flex', alignItems:'center', gap:12, flexWrap:'wrap'}}>
+          <div
+            onClick={() => onNav?.('dashboard')}
+            style={{padding:'10px 24px', borderBottom:'1px solid var(--border)', background:'#fff', display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', cursor:'pointer'}}
+            title="Volver al dashboard para cambiar de jornada"
+          >
             <div style={{fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'.08em', color:'var(--ink-muted)'}}>
-              Jornada activa
+              Viendo jornada
             </div>
-            {abiertas.length === 1 ? (
-              <div style={{fontSize:13, fontWeight:700}}>
-                {fmt.date(abiertas[0].fecha)}
-                <span style={{marginLeft:8, fontSize:10, color:'var(--green)', fontWeight:600}}>· única abierta</span>
-              </div>
-            ) : (
-              <select
-                value={activaId || ''}
-                onChange={async (e) => {
-                  if (!e.target.value || e.target.value === activaId) return;
-                  try {
-                    await window.MOCK_ACTIONS.setJornadaActiva({ jornadaId: e.target.value });
-                    toast.success('Jornada activa cambiada');
-                  } catch (err) {
-                    toast.error(err.message || 'No se pudo cambiar');
-                  }
-                }}
-                disabled={!['owner','admin','encargado'].includes(userRole)}
-                style={{
-                  padding:'4px 8px', fontSize:13, fontWeight:700,
-                  border:'1px solid var(--border)', borderRadius:4,
-                  background:'var(--paper)',
-                }}
-              >
-                {abiertas.map(j => (
-                  <option key={j.id} value={j.id}>
-                    {fmt.date(j.fecha)} {j.id === activaId ? '· ACTIVA' : ''}
-                  </option>
-                ))}
-              </select>
-            )}
-            <span style={{fontSize:11, color:'var(--ink-muted)'}}>
+            <div style={{fontSize:13, fontWeight:700}}>
+              {fmt.date(seleccionada.fecha)}
+              <span style={{marginLeft:8, fontSize:10, color: esActiva ? 'var(--green)' : 'var(--ink-muted)', fontWeight:600}}>
+                {esActiva ? '· activa' : '· no es la activa'}
+              </span>
+            </div>
+            <span style={{fontSize:11, color:'var(--ink-muted)', marginLeft:'auto'}}>
               {abiertas.length} jornada{abiertas.length===1?'':'s'} abierta{abiertas.length===1?'':'s'}
             </span>
           </div>
@@ -485,43 +439,14 @@ function CarrierPage({ channel, onBack, onNav }) {
               </div>
             )}
 
-            {/* Cerrar jornada — disponible para todos los canales (Etapa 2).
-                Solo se puede cerrar si hay una jornada abierta.
-                Solo admin/encargado/owner. */}
-            {(data.jornadasAbiertas?.length > 0) && ['owner','admin','encargado'].includes(userRole) && (
-              <div style={{marginTop:20, display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap'}}>
-                <div style={{fontSize:11, color:'var(--ink-muted)', maxWidth:520, lineHeight:1.5}}>
-                  <Icon n="info" s={12} style={{verticalAlign:'middle', marginRight:4}}/>
-                  Al cerrar: foto fija del estado, archivar pedidos completados, arrastrar faltante al día siguiente.
-                </div>
-                <button
-                  className="btn-success"
-                  onClick={() => setShowCierre(true)}
-                  style={(esHorario && vencida) ? {background:'var(--red)', animation:'pulseDot 1.5s infinite'} : undefined}
-                >
-                  <Icon n="lock" s={13}/> {esHorario && vencida ? 'Cerrar jornada (vencida)' : 'Cerrar jornada'}
-                </button>
-              </div>
-            )}
+            {/* Cambio 2B: el cierre de jornada se hace desde el Dashboard
+                (botón global). CarrierPage es solo vista. */}
           </>
         )}
       </div>
 
       <ProduceModal open={showProduce} onClose={() => setShowProduce(false)} defaultSku={produceCtx.sku} defaultSubcanal={produceCtx.subcanal}/>
       <ImportModal open={showImport} onClose={() => setShowImport(false)} channel={channel}/>
-      <CierreModal
-        open={showCierre}
-        onClose={() => setShowCierre(false)}
-        onConfirm={async ({ fecha, jornadaId } = {}) => {
-          try {
-            await window.MOCK_ACTIONS.cerrarJornada({ channelId: channel, fecha });
-            toast.success('Jornada cerrada · snapshot guardado');
-          } catch (e) {
-            toast.error(e.message || 'No se pudo cerrar la jornada');
-          }
-        }}
-        channel={channel}
-      />
 
       <ConfirmModal
         open={!!loteAEliminar}

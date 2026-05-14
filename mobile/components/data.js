@@ -102,13 +102,20 @@ window.MOCK = {
   bootstrapped: false,
   user: { name:'', initials:'', role:'owner', roleLabel:'', email:'', username:'' },
 
+  /* Cambio 2A/2B: jornadas son globales (día completo, no por canal).
+     - abiertas:       todas las jornadas con status='abierta'.
+     - activaId:       la marcada is_active=true (singleton global enforced en BD).
+     - seleccionadaId: la que el usuario está VIENDO en el dashboard (local, no BD).
+                       Por defecto = activaId. Cambia con seleccionarJornada(id). */
+  jornadas: { abiertas:[], activaId:null, seleccionadaId:null, historial:[] },
+
   carriers: {
-    colecta:          { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[], jornadasAbiertas:[], jornadaActivaId:null },
-    flex:             { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[], jornadasAbiertas:[], jornadaActivaId:null },
-    tiendanube:       { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[], jornadasAbiertas:[], jornadaActivaId:null },
-    distribuidor:     { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[], jornadasAbiertas:[], jornadaActivaId:null },
-    no_flex:          { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[], jornadasAbiertas:[], jornadaActivaId:null },
-    correo_argentino: { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[], jornadasAbiertas:[], jornadaActivaId:null },
+    colecta:          { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[] },
+    flex:             { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[] },
+    tiendanube:       { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[] },
+    distribuidor:     { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[] },
+    no_flex:          { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[] },
+    correo_argentino: { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[] },
   },
 
   prod: { todos: { producidoHoy:0, kpis:{ faltante:0, totalPedido:0, producido:0 }, table:[] } },
@@ -116,8 +123,8 @@ window.MOCK = {
   prodLogs: [],
   notifications: [],
   users: [],
-  freeStock: {},
-  categories: [],
+  freeStock: {}, // {sku: cantidad_total}
+  categories: [], // listado completo desde sku_categories (incluye categorías sin SKUs)
 
   historico: {
     year: new Date().getFullYear(),
@@ -209,7 +216,8 @@ async function loadCatalog() {
 }
 
 /* Carga el listado completo de categorías de la maestra sku_categories,
-   incluyendo las que aún no tienen SKUs asociados. Espejo del web. */
+   incluyendo las que aún no tienen SKUs asociados. Se usa para
+   alimentar el dropdown del modal de SKU (paridad web/mobile). */
 async function loadCategories() {
   const { data, error } = await supa
     .from('sku_categories')
@@ -307,9 +315,11 @@ async function loadCarriers() {
     const faltante  = r.faltante  || 0;
     const stock     = r.stock     || 0;
 
-    // Skip filas sin actividad pendiente. Si pedido=0 y faltante=0,
-    // no hay nada pendiente que mostrar — solo stock acumulado del canal.
-    // v2: incluir filas con stock>0 aunque pedido=0/faltante=0 (Cambio 1 Step 5).
+    // Skip filas totalmente vacías. Si hay stock>0 (aunque pedido=0,
+    // faltante=0), la mostramos: representa stock acumulado que admin
+    // puede mover desde este canal. La UI renderiza diferente este caso
+    // (faltante=✓, stock prominente, botón Registrar disabled, botón
+    // Mover habilitado).
     if (pedido === 0 && faltante === 0 && stock === 0) {
       continue;
     }
@@ -337,6 +347,9 @@ async function loadCarriers() {
   prod.kpis.totalPedido = prod.table.reduce((s, r) => s + r.pedido,    0);
   prod.kpis.producido   = prod.table.reduce((s, r) => s + r.producido, 0);
   prod.kpis.faltante    = prod.table.reduce((s, r) => s + r.faltante,  0);
+
+  // Si el usuario está mirando una jornada ≠ activa, sobrescribir con compute local.
+  applySelectedJornadaToCarriers();
 }
 
 async function loadOrders() {
@@ -377,6 +390,9 @@ async function loadOrders() {
       editsCount: editsMap[editsKey] || 0,
     });
   }
+
+  // computeCarriersForJornada lee de carriers[c].orders, así que recomputar acá.
+  applySelectedJornadaToCarriers();
 }
 
 async function loadBatches() {
@@ -398,6 +414,8 @@ async function loadBatches() {
   }
 }
 
+/* Carga el stock libre por SKU. Se acumula desde free_stock (PK por
+   (sku, source_jornada_id)) — agregamos la suma para el display. */
 async function loadFreeStock() {
   const { data, error } = await supa.from('free_stock').select('sku, cantidad');
   if (error) { console.error('free_stock', error); return; }
@@ -408,59 +426,185 @@ async function loadFreeStock() {
   window.MOCK.freeStock = map;
 }
 
+/* ─────────────────────────────────────────────────────────────────
+   loadJornadas (Cambio 2B) — modelo global "una jornada por día".
+   Tras migration 0028 la tabla jornadas YA NO tiene columna channel_id;
+   el snapshot inmutable se agrupa por (channel_id, sku) DENTRO del jsonb.
+   ─────────────────────────────────────────────────────────────────── */
 async function loadJornadas() {
   const { data, error } = await supa
     .from('jornadas').select('*')
-    .order('fecha', { ascending: false }).limit(100);
+    .order('fecha', { ascending: false }).limit(50);
   if (error) { console.error('jornadas', error); return; }
 
-  for (const id of Object.keys(window.MOCK.carriers)) {
-    window.MOCK.carriers[id].cierres         = [];
-    window.MOCK.carriers[id].lastClosure     = null;
-    window.MOCK.carriers[id].jornadasAbiertas = [];
-    window.MOCK.carriers[id].jornadaActivaId = null;
-  }
+  window.MOCK.jornadas.abiertas  = [];
+  window.MOCK.jornadas.activaId  = null;
+  window.MOCK.jornadas.historial = [];
 
   for (const j of data || []) {
-    const c = window.MOCK.carriers[j.channel_id];
-    if (!c) continue;
-
     if (j.status === 'cerrada') {
-      if (!c.lastClosure) c.lastClosure = j.closed_at;
-      c.cierres.push({
+      window.MOCK.jornadas.historial.push({
         id: j.id,
-        fecha:    j.closed_at,
-        fechaJornada: j.fecha,
+        fecha:    j.closed_at,       // momento del cierre
+        fechaJornada: j.fecha,       // día que cubre
         pedidos:  j.pedidos_count,
         unidadesProducidas: j.unidades_producidas,
         unidadesPedidas:    j.unidades_pedidas,
         faltante: j.faltante_arrastrado,
-        snapshot: j.snapshot || [],
+        snapshot: j.snapshot || [],  // [{channel_id, sku, modelo, color, pedido, producido, faltante, stock}]
         closedBy: j.closed_by,
       });
     } else {
-      c.jornadasAbiertas.push({
-        id: j.id,
-        fecha: j.fecha,
-        isActive: j.is_active,
-        abiertaAt: j.abierta_at,
+      window.MOCK.jornadas.abiertas.push({
+        id: j.id, fecha: j.fecha, isActive: j.is_active, abiertaAt: j.abierta_at,
       });
-      if (j.is_active) c.jornadaActivaId = j.id;
+      if (j.is_active) window.MOCK.jornadas.activaId = j.id;
     }
   }
 
-  for (const id of Object.keys(window.MOCK.carriers)) {
-    window.MOCK.carriers[id].jornadasAbiertas.sort(
-      (a, b) => (a.fecha || '').localeCompare(b.fecha || '')
-    );
+  // Ordenar abiertas por fecha asc (la más vieja primero) para tabs consistentes
+  window.MOCK.jornadas.abiertas.sort(
+    (a, b) => (a.fecha || '').localeCompare(b.fecha || '')
+  );
+
+  // Reconciliar seleccionadaId: si quedó huérfana (jornada cerrada o eliminada),
+  // volver a la activa. Default inicial también cae acá.
+  const validIds = window.MOCK.jornadas.abiertas.map(j => j.id);
+  if (!window.MOCK.jornadas.seleccionadaId || !validIds.includes(window.MOCK.jornadas.seleccionadaId)) {
+    window.MOCK.jornadas.seleccionadaId = window.MOCK.jornadas.activaId;
   }
+
+  // Derivar cierres + lastClosure POR CANAL (compat con header de CarrierPage y
+  // tab "Historial de cierres"). Filtra snapshot por channel_id del item.
+  for (const id of Object.keys(window.MOCK.carriers)) {
+    const cierresCanal = [];
+    for (const c of window.MOCK.jornadas.historial) {
+      const itemsCanal = (c.snapshot || []).filter(r => r.channel_id === id);
+      if (itemsCanal.length === 0) continue;
+      cierresCanal.push({
+        id: c.id,
+        fecha: c.fecha,
+        fechaJornada: c.fechaJornada,
+        // pedidos count no se puede derivar del snapshot agrupado por sku.
+        // El modal "Historial de cierres" en CarrierPage mostrará 0; las
+        // métricas reales viven en unidadesPedidas/Producidas/faltante.
+        pedidos: 0,
+        unidadesProducidas: itemsCanal.reduce((s,r) => s + (r.producido||0), 0),
+        unidadesPedidas:    itemsCanal.reduce((s,r) => s + (r.pedido||0), 0),
+        faltante:           itemsCanal.reduce((s,r) => s + (r.faltante||0), 0),
+        snapshot: itemsCanal,
+        closedBy: c.closedBy,
+      });
+    }
+    window.MOCK.carriers[id].cierres = cierresCanal;
+    window.MOCK.carriers[id].lastClosure = cierresCanal[0]?.fecha || null;
+  }
+
+  // Si la jornada seleccionada cambió respecto a la activa, recomputar carriers.
+  applySelectedJornadaToCarriers();
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   computeCarriersForJornada (Cambio 2B) — replica la fórmula del
+   snapshot del RPC rpc_close_jornada v6 para mostrar en vivo el
+   estado de una jornada NO activa. Lee de:
+     - MOCK.carriers[c].orders (pedidos pendientes/arrastrados — transversales)
+     - MOCK.prodLogs filtrados por jornada_id
+   y devuelve un mapa { channel_id → { table, kpis, allDone } } compatible
+   con el shape que ya consumen los .jsx.
+   ─────────────────────────────────────────────────────────────────── */
+function computeCarriersForJornada(jornadaId) {
+  const out = {};
+  for (const id of Object.keys(window.MOCK.carriers)) {
+    out[id] = { table: [], kpis: { activos:0, unidades:0, pendiente:0 }, allDone:true };
+  }
+
+  // pedido[channel|sku] = SUM orders.cantidad (transversal — pedidos viven hasta archivarse)
+  const pedidoMap = {};
+  for (const cid of Object.keys(window.MOCK.carriers)) {
+    for (const o of window.MOCK.carriers[cid].orders || []) {
+      const k = cid + '|' + o.sku;
+      pedidoMap[k] = (pedidoMap[k] || 0) + (o.cantidad || 0);
+    }
+  }
+  // producido[channel|sku] = SUM production_logs.cantidad WHERE jornada_id = jornadaId
+  const prodMap = {};
+  for (const l of window.MOCK.prodLogs || []) {
+    if (l.jornadaId !== jornadaId) continue;
+    const k = l.subcanal + '|' + l.sku;
+    prodMap[k] = (prodMap[k] || 0) + (l.unidades || 0);
+  }
+
+  const allKeys = new Set([...Object.keys(pedidoMap), ...Object.keys(prodMap)]);
+  for (const k of allKeys) {
+    const [cid, sku] = k.split('|');
+    if (!out[cid]) continue;
+    const pedido    = pedidoMap[k] || 0;
+    const producido = prodMap[k]   || 0;
+    const faltante  = Math.max(0, pedido - producido);
+    const stock     = Math.max(0, producido - pedido);
+    if (pedido === 0 && faltante === 0 && stock === 0) continue;
+    out[cid].table.push({ sku, pedido, producido, faltante, stock });
+  }
+
+  for (const id of Object.keys(out)) {
+    const c = out[id];
+    c.table.sort((a,b) => a.sku.localeCompare(b.sku));
+    c.kpis.unidades  = c.table.reduce((s,r) => s + r.pedido,    0);
+    c.kpis.pendiente = c.table.reduce((s,r) => s + r.faltante,  0);
+    c.kpis.activos   = c.table.filter(r => r.faltante > 0).length;
+    c.allDone        = c.kpis.pendiente === 0 && c.kpis.activos === 0;
+  }
+  return out;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   applySelectedJornadaToCarriers — si seleccionada ≠ activa, sobrescribe
+   table/kpis/allDone de MOCK.carriers + recomputa MOCK.prod.todos.
+   Preserva orders, lotes, cierres, lastClosure (datos no agregados).
+   ─────────────────────────────────────────────────────────────────── */
+function applySelectedJornadaToCarriers() {
+  const selId = window.MOCK.jornadas.seleccionadaId;
+  const actId = window.MOCK.jornadas.activaId;
+  // Default: si seleccionada === activa, la data poblada por loadCarriers
+  // (view_carrier_with_meta) ya refleja la activa — no hay que tocar nada.
+  if (!selId || selId === actId) return;
+
+  const computed = computeCarriersForJornada(selId);
+  for (const id of Object.keys(window.MOCK.carriers)) {
+    window.MOCK.carriers[id].table   = computed[id].table;
+    window.MOCK.carriers[id].kpis    = computed[id].kpis;
+    window.MOCK.carriers[id].allDone = computed[id].allDone;
+  }
+
+  // Recompute MOCK.prod.todos (hero del dashboard)
+  const todos = window.MOCK.prod.todos;
+  todos.table = [];
+  todos.kpis = { totalPedido:0, producido:0, faltante:0 };
+  for (const id of Object.keys(window.MOCK.carriers)) {
+    const cInfo = window.CARRIERS[id] || { label: id };
+    for (const r of window.MOCK.carriers[id].table) {
+      todos.table.push({ sku: r.sku, canal: cInfo.label, pedido: r.pedido, producido: r.producido, faltante: r.faltante, stock: r.stock });
+      todos.kpis.totalPedido += r.pedido;
+      todos.kpis.producido   += r.producido;
+      todos.kpis.faltante    += r.faltante;
+    }
+  }
+  // "Producidos hoy" → re-interpretado como producido de la jornada seleccionada
+  todos.producidoHoy = (window.MOCK.prodLogs || [])
+    .filter(l => l.jornadaId === selId)
+    .reduce((s,l) => s + (l.unidades || 0), 0);
 }
 
 async function loadProdLogs() {
+  // JOIN con profiles para traer el nombre del operario.
+  // Limit 1000 (antes 500, Cambio 2B) — computeCarriersForJornada filtra
+  // estos logs por jornada_id para construir tablas en vivo. Con 3 jornadas
+  // abiertas máx, sobra hasta ~300 logs/jornada.
   const { data, error } = await supa
     .from('production_logs')
     .select('*, operario:profiles!production_logs_operario_id_fkey(name,username)')
-    .order('created_at', { ascending: false }).limit(500);
+    .order('created_at', { ascending: false }).limit(1000);
   if (error) { console.error('production_logs', error); return; }
 
   const today = new Date().toISOString().slice(0, 10);
@@ -486,6 +630,9 @@ async function loadProdLogs() {
   });
 
   window.MOCK.prod.todos.producidoHoy = producidoHoy;
+
+  // Si la jornada seleccionada ≠ activa, recomputar tablas/KPIs con esta data fresca.
+  applySelectedJornadaToCarriers();
 }
 
 async function loadHistorico(opts = {}) {
@@ -600,29 +747,60 @@ window.MOCK_ACTIONS = {
     if (error) throw new Error(error.message);
     await Promise.all([loadCarriers(), loadProdLogs(), loadJornadas(), loadHistorico()]);
     window.MOCK_BUS.emit();
+    return data; // production_logs row
+  },
+
+  /* Abre una jornada nueva del día indicado (o de hoy si no se pasa fecha).
+     Cambio 2A/2B: las jornadas son GLOBALES — no se pasa channelId.
+     Validaciones de cliente (max 3 abiertas, fecha ≤ today+3) se hacen
+     en el modal antes de invocar este action. Solo owner/admin/encargado. */
+  async abrirJornada({ fecha } = {}) {
+    const params = {};
+    if (fecha) params.p_fecha = fecha;
+    const { data, error } = await supa.rpc('rpc_open_jornada', params);
+    if (error) throw new Error(error.message);
+    await Promise.all([loadCarriers(), loadJornadas()]);
+    // Autoseleccionar la jornada recién creada (UX: aparece en la tab que
+    // el usuario acaba de abrir, no en otra).
+    if (data?.id) window.MOCK.jornadas.seleccionadaId = data.id;
+    window.MOCK_BUS.emit();
     return data;
   },
 
-  async abrirJornada({ channelId, fecha }) {
-    const params = { p_channel_id: channelId };
-    if (fecha) params.p_fecha = fecha;
-    const { data, error } = await supa.rpc('rpc_open_jornada', params);
+  /* Cambia LOCALMENTE la jornada que el usuario está mirando (la "pestaña
+     seleccionada"). No toca BD. Recomputa tablas/KPIs en el acto y emite. */
+  seleccionarJornada(jornadaId) {
+    if (!jornadaId) return;
+    if (!window.MOCK.jornadas.abiertas.some(j => j.id === jornadaId)) return;
+    if (window.MOCK.jornadas.seleccionadaId === jornadaId) return;
+    window.MOCK.jornadas.seleccionadaId = jornadaId;
+    // Si volvemos a la activa, restaurar tablas/KPIs originales desde view_carrier_with_meta.
+    if (jornadaId === window.MOCK.jornadas.activaId) {
+      loadCarriers().finally(() => window.MOCK_BUS.emit());
+    } else {
+      applySelectedJornadaToCarriers();
+      window.MOCK_BUS.emit();
+    }
+  },
+
+  /* Cambia la jornada ACTIVA en BD (el "punto verde", la que recibe las
+     nuevas cargas). Singleton global. Solo owner/admin/encargado. */
+  async setActiveJornada({ jornadaId }) {
+    const { data, error } = await supa.rpc('rpc_set_active_jornada', { p_jornada_id: jornadaId });
     if (error) throw new Error(error.message);
     await Promise.all([loadCarriers(), loadJornadas()]);
     window.MOCK_BUS.emit();
     return data;
   },
+  /* Alias deprecado para callers viejos (compat hasta 2C). */
+  async setJornadaActiva(args) { return this.setActiveJornada(args); },
 
-  async setJornadaActiva({ jornadaId }) {
-    const { data, error } = await supa.rpc('rpc_set_active_jornada', { p_jornada_id: jornadaId });
-    if (error) throw new Error(error.message);
-    await loadJornadas();
-    window.MOCK_BUS.emit();
-    return data;
-  },
-
-  async cerrarJornada({ channelId, fecha, disposiciones }) {
-    const params = { p_channel_id: channelId };
+  /* Cerrar jornada con disposiciones opcionales para los sobrantes.
+     Cambio 2A/2B: cierra TODOS los canales del día — sin channelId.
+     disposiciones: [{sku, accion: 'free_stock', cantidad?}] — opcional.
+     Si se omite, todos los sobrantes se auto-disponen a Stock central (RPC v6). */
+  async cerrarJornada({ fecha, disposiciones } = {}) {
+    const params = {};
     if (fecha) params.p_fecha = fecha;
     if (disposiciones && disposiciones.length) params.p_disposiciones = disposiciones;
     const { error } = await supa.rpc('rpc_close_jornada', params);
@@ -631,7 +809,11 @@ window.MOCK_ACTIONS = {
     window.MOCK_BUS.emit();
   },
 
-  /* Stock libre → canal. motivo opcional (migration 0026). */
+  /* Mueve cantidad del stock libre del SKU al canal target (genera
+     production_log positivo en la jornada destino). Si no se pasa
+     jornada destino, usa la activa del canal o crea una de hoy.
+     motivo opcional — desde migration 0026 queda en la nota del log
+     ([FROM_FREE_STOCK] cantidad=N motivo=...). */
   async assignFreeStock({ sku, cantidad, channelId, jornadaId, motivo }) {
     const params = { p_sku: sku, p_cantidad: cantidad, p_target_channel_id: channelId };
     if (jornadaId) params.p_target_jornada_id = jornadaId;
@@ -643,6 +825,7 @@ window.MOCK_ACTIONS = {
     return data;
   },
 
+  /* Walk-in: consumir stock libre sin generar production_log. */
   async consumeFreeStock({ sku, cantidad, motivo }) {
     const params = { p_sku: sku, p_cantidad: cantidad };
     if (motivo) params.p_motivo = motivo;
@@ -658,6 +841,8 @@ window.MOCK_ACTIONS = {
      de movimientos para la tab "Movimientos" de StockPage. Permisos:
      solo owner/admin/encargado (el backend lo enforza). */
 
+  /* Mueve N unidades de un SKU desde un canal hacia el almacen central.
+     El stock del canal baja, el agregado de stock central sube. */
   async enviarAStock({ sku, cantidad, sourceChannelId, motivo }) {
     const params = {
       p_sku: sku,
@@ -672,6 +857,7 @@ window.MOCK_ACTIONS = {
     return data;
   },
 
+  /* Transferencia directa canal A -> canal B. Atomica en BD. */
   async transferirEntreCanales({ sku, cantidad, sourceChannelId, targetChannelId, motivo }) {
     const params = {
       p_sku: sku,
@@ -687,6 +873,9 @@ window.MOCK_ACTIONS = {
     return data;
   },
 
+  /* Lista de movimientos de stock para la tab "Movimientos" de StockPage.
+     Filtra production_logs por notas tipadas. JOIN con profiles para
+     el nombre del usuario. Limit 200 por default. */
   async loadStockMovimientos({ limit = 200 } = {}) {
     const { data, error } = await supa
       .from('production_logs')
@@ -696,6 +885,8 @@ window.MOCK_ACTIONS = {
       .limit(limit);
     if (error) throw new Error(error.message);
     return (data || []).map(l => {
+      // Parsear tipo de movimiento desde notas para que la UI no tenga
+      // que conocer la convencion de etiquetas.
       const notas = l.notas || '';
       let tipo = 'otro';
       let detalle = null;
@@ -720,8 +911,8 @@ window.MOCK_ACTIONS = {
         sku: l.sku,
         cantidad: l.cantidad,
         channel_id: l.channel_id,
-        tipo,
-        contraparte: detalle,
+        tipo,             // canal_a_stock | stock_a_canal | auto_cierre_a_stock | transfer_out | transfer_in
+        contraparte: detalle, // channel_id del otro lado (solo transfer)
         motivo: motMatch ? motMatch[1].trim() : null,
         operario: l.operario?.name || l.operario?.username || '—',
         notas_raw: notas,
@@ -729,10 +920,13 @@ window.MOCK_ACTIONS = {
     });
   },
 
+  /* Total agregado de stock central (suma global). Para el cuadrito del
+     dashboard. Lectura sincrónica de MOCK.freeStock. */
   getStockTotal() {
     return Object.values(window.MOCK.freeStock || {}).reduce((s, n) => s + (n || 0), 0);
   },
 
+  /* Lista por SKU con cantidad para la tabla de StockPage. Sincrónico. */
   getStockAgregado() {
     const map = window.MOCK.freeStock || {};
     return Object.entries(map)
@@ -751,12 +945,22 @@ window.MOCK_ACTIONS = {
       .sort((a, b) => a.sku.localeCompare(b.sku));
   },
 
-  async importarLote({ channelId, filename, items, fileHash }) {
-    // 0) Filtrar pedidos cancelados (defensa en profundidad — espejo del web).
+  async importarLote({ channelId, filename, items, fileHash, targetJornadaId }) {
+    // 0) Filtrar pedidos cancelados (defensa en profundidad).
+    //    Regla: estado.toLowerCase().startsWith('cancelada'). Cubre
+    //    "Cancelada. No despaches" y variantes con/sin punto.
+    //    Si un item viene sin campo `estado`, NO se cancela (default
+    //    seguro). Si la columna "Estado" no existe en el Excel
+    //    (planilla genérica), todos llegan con estado='' y nada
+    //    matchea — comportamiento pre-feature preservado.
     const isCancelled = (it) => (it.estado || '').toString().trim().toLowerCase().startsWith('cancelada');
     const cancelledCount = (items || []).filter(isCancelled).length;
     const itemsActivos = (items || []).filter(it => !isCancelled(it));
 
+    // Caso extremo: si TODOS los items vienen cancelados, no llamar al
+    // RPC en absoluto — no se crea import_batch ni queda registro en BD.
+    // Aceptamos que un re-import del mismo Excel se procese dos veces
+    // (file_hash no se guarda) — caso teórico raro y aceptable.
     if (itemsActivos.length === 0 && cancelledCount > 0) {
       return { skipped_all: true, cancelled_count_local: cancelledCount };
     }
@@ -773,8 +977,8 @@ window.MOCK_ACTIONS = {
       };
       if (it.order_number) cleaned.order_number = String(it.order_number).trim();
       if (it.cliente)      cleaned.cliente      = String(it.cliente).trim();
-      if (it.estado)       cleaned.estado       = String(it.estado).trim();
-      if (fecha)           cleaned.fecha_pedido = fecha;
+      if (it.estado)       cleaned.estado       = String(it.estado).trim();  // pasa al RPC para filtro defensivo
+      if (fecha)           cleaned.fecha_pedido = fecha;  // omit si null → RPC usa current_date
       return cleaned;
     }).filter(it => it.sku && it.cantidad > 0);
 
@@ -787,15 +991,26 @@ window.MOCK_ACTIONS = {
       p_file_hash = fnv64Quad(filename + '|' + JSON.stringify(normalizedItems));
     }
 
-    const { data, error } = await supa.rpc('rpc_import_batch', {
+    // Resolver jornada destino: 1) la pasada por parámetro, 2) la seleccionada,
+    // 3) la activa. Si no hay ninguna, el RPC fallará con mensaje claro.
+    const jornadaDestino = targetJornadaId
+      || window.MOCK.jornadas.seleccionadaId
+      || window.MOCK.jornadas.activaId
+      || null;
+    const rpcParams = {
       p_channel_id: channelId,
       p_filename: filename,
       p_file_hash,
       p_items: normalizedItems,
-    });
+    };
+    if (jornadaDestino) rpcParams.p_target_jornada_id = jornadaDestino;
+    const { data, error } = await supa.rpc('rpc_import_batch', rpcParams);
     if (error) throw new Error(error.message);
     await Promise.all([loadCarriers(), loadOrders(), loadBatches()]);
     window.MOCK_BUS.emit();
+    // Anexar el conteo local de cancelados al data devuelto. Si el RPC
+    // también lo retorna (cancelled_count), el frontend prioriza el
+    // local porque es la fuente del Excel real.
     return { ...(data || {}), cancelled_count_local: cancelledCount };
   },
 
@@ -1011,8 +1226,9 @@ window.MOCK_ACTIONS = {
   },
 
   async crearOActualizarSku(sku, payload, isNew) {
-    // Usa rpc_upsert_sku para atomicidad: si la categoría no existe
-    // en sku_categories, se crea ANTES del INSERT del SKU.
+    // Usa rpc_upsert_sku (SECURITY DEFINER) para atomicidad:
+    // si la categoría no existe en sku_categories, se crea ANTES del
+    // INSERT del SKU. Si el SKU falla, la categoría también rollback.
     const { data, error } = await supa.rpc('rpc_upsert_sku', {
       p_sku:          sku,
       p_modelo:       payload.modelo,
@@ -1026,9 +1242,10 @@ window.MOCK_ACTIONS = {
     });
     if (error) throw new Error(error.message);
     await loadCatalog();
+    // Refrescar lista de categorías por si se creó una nueva
     await loadCategories();
     window.MOCK_BUS.emit();
-    return data;
+    return data; // {sku, category_created, category}
   },
 
   async login({ username, password }) {
@@ -1078,9 +1295,13 @@ function subscribeRealtime() {
 /* ─────────────────────────────────────────────────────────────────
    FEATURE FLAGS — controlados desde frontend
    ───────────────────────────────────────────────────────────────── */
-/* CARGA MANUAL + EDICION DE PEDIDOS (mobile).
-   Activado desde el arranque - paridad con web que ya esta en
-   produccion con flag ON. */
+/* CARGA MANUAL + EDICION DE PEDIDOS.
+   Cuando false: ningun boton, badge ni modal de la feature aparece.
+   Sistema visualmente identico al pre-feature. Para activar: cambiar
+   a true + redeploy. Para desactivar: cambiar a false + redeploy.
+   Los RPCs y la tabla order_edit_log existen en BD pero nadie los
+   invoca con flag OFF.
+   Activado 2026-05-06 tras validacion visual con flag OFF. */
 window.FEATURE_PEDIDOS_MANUALES = true;
 
 /* ─────────────────────────────────────────────────────────────────
@@ -1095,7 +1316,7 @@ const _safe = (p, label) => p.catch(e => {
 
 (async function boot() {
   try {
-    // Public: catálogo + canales (no requieren auth)
+    // Public: catálogo + canales + categorías (no requieren auth)
     await Promise.allSettled([
       _safe(loadCatalog(),    'catalog'),
       _safe(loadCategories(), 'categories'),
@@ -1152,10 +1373,16 @@ setTimeout(() => {
 
 /* ═══════════════════════════════════════════════════════════════════
    REPORT_UTILS — generación on-demand de reportes de cierre
-   (idéntico al web — el snapshot es el mismo formato)
+   ───────────────────────────────────────────────────────────────────
+   El snapshot inmutable está en jornadas.snapshot (jsonb). Generamos
+   Excel y PDF al vuelo cuando el usuario los pide. Nada se sube a
+   Storage en V1 — los datos están a una query de distancia.
    ═══════════════════════════════════════════════════════════════════ */
 window.REPORT_UTILS = {
   async descargarReporteCierre(cierre, channel, format) {
+    // cierre: row de jornadas (snapshot, fecha, pedidos_count, etc.)
+    // channel: id del canal (colecta, flex, ...)
+    // format: 'xlsx' | 'pdf'
     const C = window.CARRIERS[channel] || { label: channel };
     const fechaJornada = cierre.fechaJornada || cierre.fecha;
     const fechaStr = (fechaJornada || '').slice(0, 10);
@@ -1167,9 +1394,13 @@ window.REPORT_UTILS = {
         throw new Error('Librería de Excel no cargada — refrescá la página');
       }
       const filas = snapshot.map(r => ({
-        SKU: r.sku, Modelo: r.modelo || '', Color: r.color || '',
-        Pedido: r.pedido || 0, Producido: r.producido || 0,
-        Faltante: r.faltante || 0, Sobrante: r.stock || 0,
+        SKU: r.sku,
+        Modelo: r.modelo || '',
+        Color: r.color || '',
+        Pedido: r.pedido || 0,
+        Producido: r.producido || 0,
+        Faltante: r.faltante || 0,
+        Sobrante: r.stock || 0,
       }));
       const meta = [
         { Campo: 'Canal', Valor: C.label },
@@ -1197,26 +1428,33 @@ window.REPORT_UTILS = {
       }
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+      const PAGE_W = 210;
       let y = 18;
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(16);
       doc.text(`Cierre ${C.label}`, 12, y); y += 7;
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
       doc.text(`Fecha jornada: ${fechaStr}`, 12, y); y += 5;
       doc.text(`Cerrada el: ${cierre.fecha ? new Date(cierre.fecha).toLocaleString('es-AR') : '—'}`, 12, y); y += 5;
       y += 2;
-      doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
       doc.text('Resumen', 12, y); y += 5;
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
       doc.text(`Pedidos: ${cierre.pedidos || 0}    Unidades pedidas: ${cierre.unidadesPedidas || 0}    Unidades producidas: ${cierre.unidadesProducidas || 0}    Faltante arrastrado: ${cierre.faltante || 0}`, 12, y);
       y += 8;
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
       doc.text('Detalle por SKU', 12, y); y += 6;
       doc.setFontSize(8);
+      // Tabla simple
       const headers = ['SKU', 'Modelo', 'Color', 'Pedido', 'Producido', 'Faltante', 'Sobrante'];
       const colW = [22, 60, 22, 18, 22, 20, 20];
       let x = 12;
       doc.setFillColor(240, 240, 240);
-      doc.rect(12, y - 4, 186, 6, 'F');
+      doc.rect(12, y - 4, PAGE_W - 24, 6, 'F');
       headers.forEach((h, i) => { doc.text(h, x + 1, y); x += colW[i]; });
       y += 4;
       doc.setFont('helvetica', 'normal');
@@ -1224,9 +1462,13 @@ window.REPORT_UTILS = {
         if (y > 280) { doc.addPage(); y = 18; }
         x = 12;
         const row = [
-          r.sku || '', (r.modelo || '').slice(0, 32), r.color || '',
-          String(r.pedido || 0), String(r.producido || 0),
-          String(r.faltante || 0), String(r.stock || 0),
+          r.sku || '',
+          (r.modelo || '').slice(0, 32),
+          r.color || '',
+          String(r.pedido || 0),
+          String(r.producido || 0),
+          String(r.faltante || 0),
+          String(r.stock || 0),
         ];
         row.forEach((cell, i) => { doc.text(cell, x + 1, y); x += colW[i]; });
         y += 5;

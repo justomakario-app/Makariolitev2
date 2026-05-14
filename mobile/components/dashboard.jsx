@@ -1,4 +1,187 @@
-/* ══ MOBILE DASHBOARD ══ */
+/* ══ MOBILE DASHBOARD — Cambio 2B: pestañas de jornadas globales ══ */
+
+/* ─── Pestañas de jornadas abiertas (mobile, scroll horizontal) ──── */
+function MJornadaTabs({ M, role, onOpenNew, onSelect, onActivate }) {
+  const abiertas = M.jornadas?.abiertas || [];
+  const activaId = M.jornadas?.activaId;
+  const selId    = M.jornadas?.seleccionadaId;
+  const puedeAdmin = ['owner','admin','encargado'].includes(role);
+  const maxAlcanzado = abiertas.length >= 3;
+
+  return (
+    <div style={{display:'flex', alignItems:'stretch', gap:6, marginBottom:14, overflowX:'auto', WebkitOverflowScrolling:'touch', padding:'0 0 4px'}}>
+      {abiertas.map(j => {
+        const isActive = j.id === activaId;
+        const isSel    = j.id === selId;
+        const bg = isSel ? 'var(--paper)' : 'var(--paper-off)';
+        const borderBottom = isSel
+          ? `3px solid ${isActive ? 'var(--green)' : 'var(--accent, #2563eb)'}`
+          : '3px solid transparent';
+        return (
+          <button
+            key={j.id}
+            onClick={() => onSelect(j.id)}
+            onDoubleClick={() => puedeAdmin && !isActive && onActivate(j.id)}
+            style={{
+              flex: '0 0 auto',
+              minWidth: 124,
+              padding: '8px 12px 6px',
+              background: bg,
+              border: '1px solid var(--border)',
+              borderBottom,
+              borderRadius: '6px 6px 0 0',
+              cursor: 'pointer',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-start',
+              gap: 2,
+              fontFamily: 'inherit',
+            }}
+          >
+            <div style={{display:'flex', alignItems:'center', gap:6}}>
+              {isActive && <span style={{width:6, height:6, borderRadius:'50%', background:'var(--green)'}}/>}
+              <span style={{fontSize:11, fontWeight:700, color:'var(--ink)'}}>{fmt.date(j.fecha)}</span>
+            </div>
+            <div style={{fontSize:9, color:'var(--ink-muted)', fontWeight:600}}>
+              {isActive ? 'ACTIVA' : (isSel ? 'VIENDO' : 'abierta')}
+            </div>
+          </button>
+        );
+      })}
+      {puedeAdmin && (
+        <button
+          onClick={onOpenNew}
+          disabled={maxAlcanzado}
+          style={{
+            flex: '0 0 auto',
+            minWidth: 110,
+            padding: '8px 12px',
+            background: maxAlcanzado ? 'var(--paper-off)' : 'var(--paper)',
+            border: '1px dashed var(--border-str)',
+            borderRadius: 6,
+            cursor: maxAlcanzado ? 'not-allowed' : 'pointer',
+            opacity: maxAlcanzado ? .5 : 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 5,
+            fontFamily: 'inherit',
+            fontSize: 11,
+            fontWeight: 700,
+            color: 'var(--ink-soft)',
+          }}
+        >
+          <Icon n="plus" s={12}/> Abrir
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ─── Modal abrir jornada (mobile) ───────────────────────────────── */
+function MJornadaOpenModal({ open, onClose }) {
+  const toast = useToast();
+  const M = window.useMockData();
+  const today = new Date().toISOString().slice(0, 10);
+  const maxFecha = (() => {
+    const d = new Date(); d.setDate(d.getDate() + 3);
+    return d.toISOString().slice(0, 10);
+  })();
+  const defaultFecha = (() => {
+    const yaAbiertas = new Set((M.jornadas?.abiertas || []).map(j => j.fecha));
+    if (!yaAbiertas.has(today)) return today;
+    for (let i = 1; i <= 3; i++) {
+      const d = new Date(); d.setDate(d.getDate() + i);
+      const iso = d.toISOString().slice(0, 10);
+      if (!yaAbiertas.has(iso)) return iso;
+    }
+    return today;
+  })();
+  const [fecha, setFecha] = useState(defaultFecha);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => { if (open) { setFecha(defaultFecha); setBusy(false); } }, [open, defaultFecha]);
+
+  if (!open) return null;
+
+  const abiertas = M.jornadas?.abiertas || [];
+  const fechaInvalida = fecha < today || fecha > maxFecha;
+  const fechaDuplicada = abiertas.some(j => j.fecha === fecha);
+  const maxAlcanzado  = abiertas.length >= 3;
+  const puedeConfirmar = !busy && !fechaInvalida && !fechaDuplicada && !maxAlcanzado;
+
+  const submit = async () => {
+    setBusy(true);
+    try {
+      await window.MOCK_ACTIONS.abrirJornada({ fecha });
+      toast.success(`Jornada del ${fmt.date(fecha)} abierta`);
+      onClose();
+    } catch (e) {
+      toast.error(e.message || 'No se pudo abrir la jornada');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={busy ? () => {} : onClose} title="Abrir nueva jornada" footer={
+      <>
+        <button className="btn-ghost" onClick={onClose} disabled={busy}>Cancelar</button>
+        <button className="btn-primary" onClick={submit} disabled={!puedeConfirmar}>
+          {busy ? <span className="loader" style={{borderColor:'rgba(255,255,255,.3)', borderTopColor:'#fff'}}/> : <><Icon n="plus" s={14}/> Abrir</>}
+        </button>
+      </>
+    }>
+      <label className="field-label">Fecha de la jornada</label>
+      <input type="date" className="field-input" value={fecha} min={today} max={maxFecha} onChange={e => setFecha(e.target.value)}/>
+      <div style={{fontSize:11, color:'var(--ink-muted)', marginTop:8, lineHeight:1.5}}>
+        Hoy o hasta 3 días en el futuro. <strong>{abiertas.length}</strong> abierta{abiertas.length===1?'':'s'} (límite 3).
+      </div>
+      {maxAlcanzado && (
+        <div style={{marginTop:10, padding:'8px 12px', background:'var(--red-bg)', border:'1px solid rgba(220,38,38,.32)', borderRadius:6, fontSize:11, color:'var(--red)'}}>
+          Ya hay 3 jornadas abiertas — cerrá una antes de abrir otra.
+        </div>
+      )}
+      {!maxAlcanzado && fechaDuplicada && (
+        <div style={{marginTop:10, padding:'8px 12px', background:'var(--red-bg)', border:'1px solid rgba(220,38,38,.32)', borderRadius:6, fontSize:11, color:'var(--red)'}}>
+          Ya hay una jornada abierta para esta fecha.
+        </div>
+      )}
+      {!maxAlcanzado && !fechaDuplicada && fechaInvalida && (
+        <div style={{marginTop:10, padding:'8px 12px', background:'var(--red-bg)', border:'1px solid rgba(220,38,38,.32)', borderRadius:6, fontSize:11, color:'var(--red)'}}>
+          La fecha debe estar entre hoy y {fmt.date(maxFecha)}.
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+/* ─── Estado vacío mobile ────────────────────────────────────────── */
+function MEmptyStateNoJornada({ canOpen, onOpen }) {
+  return (
+    <div style={{
+      padding: '28px 18px',
+      background: 'var(--paper)',
+      border: '1px solid var(--border)',
+      borderRadius: 10,
+      textAlign: 'center',
+      marginBottom: 14,
+    }}>
+      <Icon n="calendar" s={36} c="var(--ink-faint)"/>
+      <div style={{fontSize:15, fontWeight:700, marginTop:10, color:'var(--ink)'}}>Abrí tu primera jornada del día</div>
+      <div style={{fontSize:11, color:'var(--ink-muted)', maxWidth:300, margin:'8px auto 14px', lineHeight:1.5}}>
+        Las cargas y la importación de pedidos necesitan una jornada abierta.
+      </div>
+      {canOpen ? (
+        <button className="btn-primary" onClick={onOpen} style={{padding:'10px 18px', fontSize:13}}>
+          <Icon n="plus" s={13}/> Abrir jornada
+        </button>
+      ) : (
+        <div style={{fontSize:11, color:'var(--ink-muted)'}}>Pedíle al encargado o admin.</div>
+      )}
+    </div>
+  );
+}
 
 function DashboardPage({ onNav }) {
   const M = window.useMockData();
@@ -8,6 +191,12 @@ function DashboardPage({ onNav }) {
     const t = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(t);
   }, []);
+
+  // Modales del dashboard
+  const [showOpen, setShowOpen]                       = useState(false);
+  const [showCierre, setShowCierre]                   = useState(false);
+  const [showProduce, setShowProduce]                 = useState(false);
+  const [showConfirmProducir, setShowConfirmProducir] = useState(false);
 
   /* Exportar Excel consolidado: todos los canales con columna Canal,
      SKU, Modelo, Cantidad. Solo SKUs con faltante > 0. */
@@ -53,6 +242,29 @@ function DashboardPage({ onNav }) {
   const horaTxt = now.toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' });
   const C = window.CARRIERS;
 
+  const userRole   = (M.user?.role || '').toLowerCase();
+  const puedeAdmin = ['owner','admin','encargado'].includes(userRole);
+  const abiertas   = M.jornadas?.abiertas || [];
+  const activaId   = M.jornadas?.activaId;
+  const selId      = M.jornadas?.seleccionadaId;
+  const seleccionada = abiertas.find(j => j.id === selId);
+  const activa       = abiertas.find(j => j.id === activaId);
+  const viendoOtra   = !!(seleccionada && activa && seleccionada.id !== activa.id);
+
+  const handleProducirClick = () => {
+    if (viendoOtra) setShowConfirmProducir(true);
+    else            setShowProduce(true);
+  };
+
+  const handleCerrarConfirm = async ({ fecha } = {}) => {
+    try {
+      await window.MOCK_ACTIONS.cerrarJornada({ fecha });
+      toast.success(`Jornada del ${fmt.date(fecha)} cerrada · snapshot guardado`);
+    } catch (e) {
+      toast.error(e.message || 'No se pudo cerrar la jornada');
+    }
+  };
+
   return (
     <div className="m-page">
       <div className="m-page-header">
@@ -77,25 +289,76 @@ function DashboardPage({ onNav }) {
         </div>
       </div>
 
-      {/* Hero */}
-      <div className="m-hero">
-        <div className="m-hero-grid"/>
-        <div className="m-hero-glow"/>
-        <div style={{position:'relative', zIndex:2}}>
-          <div className="m-hero-label"><span className="m-hero-dot"/>Ventas activas</div>
-          <div className="m-hero-number">{total}</div>
-          <div style={{display:'flex', gap:18, marginTop:10}}>
-            <div>
-              <div className="m-hero-stat-label">Pendientes</div>
-              <div className="m-hero-stat-val">{M.prod.todos.kpis.faltante}</div>
+      {/* Pestañas o estado vacío */}
+      {abiertas.length > 0 ? (
+        <MJornadaTabs
+          M={M}
+          role={userRole}
+          onOpenNew={() => setShowOpen(true)}
+          onSelect={(id) => window.MOCK_ACTIONS.seleccionarJornada(id)}
+          onActivate={async (id) => {
+            try {
+              await window.MOCK_ACTIONS.setActiveJornada({ jornadaId: id });
+              toast.success('Jornada activa cambiada');
+            } catch (e) {
+              toast.error(e.message || 'No se pudo cambiar');
+            }
+          }}
+        />
+      ) : (
+        <MEmptyStateNoJornada canOpen={puedeAdmin} onOpen={() => setShowOpen(true)}/>
+      )}
+
+      {/* Hero (solo si hay jornada abierta) */}
+      {abiertas.length > 0 && (
+        <div className="m-hero">
+          <div className="m-hero-grid"/>
+          <div className="m-hero-glow"/>
+          <div style={{position:'relative', zIndex:2}}>
+            <div className="m-hero-label"><span className="m-hero-dot"/>Ventas activas</div>
+            <div className="m-hero-number">{total}</div>
+            <div style={{display:'flex', gap:18, marginTop:10}}>
+              <div>
+                <div className="m-hero-stat-label">Pendientes</div>
+                <div className="m-hero-stat-val">{M.prod.todos.kpis.faltante}</div>
+              </div>
+              <div>
+                <div className="m-hero-stat-label">Producido</div>
+                <div className="m-hero-stat-val">{M.prod.todos.producidoHoy}</div>
+              </div>
             </div>
-            <div>
-              <div className="m-hero-stat-label">Hoy</div>
-              <div className="m-hero-stat-val">{M.prod.todos.producidoHoy}</div>
-            </div>
+            {/* Banner sutil "viendo otra jornada" */}
+            {viendoOtra && (
+              <div
+                onClick={() => window.MOCK_ACTIONS.seleccionarJornada(activa.id)}
+                style={{
+                  marginTop: 10,
+                  fontSize: 10,
+                  color: 'rgba(255,255,255,.6)',
+                  cursor: 'pointer',
+                  fontWeight: 400,
+                }}
+              >
+                Viendo {fmt.date(seleccionada.fecha)} (activa: {fmt.date(activa.fecha)})
+              </div>
+            )}
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Acciones rápidas: + Producir / Cerrar jornada */}
+      {abiertas.length > 0 && (
+        <div style={{display:'flex', gap:8, margin:'8px 0 14px', flexWrap:'wrap'}}>
+          <button className="btn-ghost" onClick={handleProducirClick} style={{flex:1, minWidth:120}}>
+            <Icon n="plus" s={13}/> Producir
+          </button>
+          {puedeAdmin && seleccionada && (
+            <button className="btn-success" onClick={() => setShowCierre(true)} style={{flex:1, minWidth:140}}>
+              <Icon n="lock" s={13}/> Cerrar {fmt.date(seleccionada.fecha)}
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Canales 2 columnas + Stock al final (solo para admin/encargado/owner) */}
       <div className="m-channel-grid">
@@ -112,7 +375,7 @@ function DashboardPage({ onNav }) {
             </div>
           );
         })}
-        {['owner','admin','encargado'].includes((M.user.role||'').toLowerCase()) && (() => {
+        {['owner','admin','encargado'].includes(userRole) && (() => {
           const stockTotal = window.MOCK_ACTIONS.getStockTotal();
           const empty = stockTotal === 0;
           return (
@@ -127,6 +390,38 @@ function DashboardPage({ onNav }) {
           );
         })()}
       </div>
+
+      {/* Modales globales */}
+      <MJornadaOpenModal open={showOpen} onClose={() => setShowOpen(false)}/>
+      <ProduceModal      open={showProduce} onClose={() => setShowProduce(false)}/>
+      <CierreModal
+        open={showCierre}
+        onClose={() => setShowCierre(false)}
+        onConfirm={handleCerrarConfirm}
+        jornadaId={selId}
+      />
+      {/* Confirmación: producir desde pestaña no-activa */}
+      <Modal
+        open={showConfirmProducir}
+        onClose={() => setShowConfirmProducir(false)}
+        title="Confirmar producción"
+        footer={
+          <>
+            <button className="btn-ghost" onClick={() => setShowConfirmProducir(false)}>Cancelar</button>
+            <button className="btn-primary" onClick={() => { setShowConfirmProducir(false); setShowProduce(true); }}>
+              Sí, continuar
+            </button>
+          </>
+        }
+      >
+        <div style={{fontSize:13, color:'var(--ink-soft)', lineHeight:1.6}}>
+          Vas a cargar producción a la jornada <strong>activa</strong>
+          {activa && <> ({fmt.date(activa.fecha)})</>}, no a la jornada que estás viendo
+          {seleccionada && <> ({fmt.date(seleccionada.fecha)})</>}.
+          <br/><br/>
+          ¿Continuar?
+        </div>
+      </Modal>
     </div>
   );
 }

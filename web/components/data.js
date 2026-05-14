@@ -102,13 +102,20 @@ window.MOCK = {
   bootstrapped: false,
   user: { name:'', initials:'', role:'owner', roleLabel:'', email:'', username:'' },
 
+  /* Cambio 2A/2B: jornadas son globales (día completo, no por canal).
+     - abiertas:       todas las jornadas con status='abierta'.
+     - activaId:       la marcada is_active=true (singleton global enforced en BD).
+     - seleccionadaId: la que el usuario está VIENDO en el dashboard (local, no BD).
+                       Por defecto = activaId. Cambia con seleccionarJornada(id). */
+  jornadas: { abiertas:[], activaId:null, seleccionadaId:null, historial:[] },
+
   carriers: {
-    colecta:          { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[], jornadasAbiertas:[], jornadaActivaId:null },
-    flex:             { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[], jornadasAbiertas:[], jornadaActivaId:null },
-    tiendanube:       { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[], jornadasAbiertas:[], jornadaActivaId:null },
-    distribuidor:     { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[], jornadasAbiertas:[], jornadaActivaId:null },
-    no_flex:          { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[], jornadasAbiertas:[], jornadaActivaId:null },
-    correo_argentino: { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[], jornadasAbiertas:[], jornadaActivaId:null },
+    colecta:          { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[] },
+    flex:             { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[] },
+    tiendanube:       { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[] },
+    distribuidor:     { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[] },
+    no_flex:          { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[] },
+    correo_argentino: { lastClosure:null, allDone:true, kpis:{activos:0,unidades:0,pendiente:0}, table:[], orders:[], lotes:[], cierres:[] },
   },
 
   prod: { todos: { producidoHoy:0, kpis:{ faltante:0, totalPedido:0, producido:0 }, table:[] } },
@@ -340,6 +347,9 @@ async function loadCarriers() {
   prod.kpis.totalPedido = prod.table.reduce((s, r) => s + r.pedido,    0);
   prod.kpis.producido   = prod.table.reduce((s, r) => s + r.producido, 0);
   prod.kpis.faltante    = prod.table.reduce((s, r) => s + r.faltante,  0);
+
+  // Si el usuario está mirando una jornada ≠ activa, sobrescribir con compute local.
+  applySelectedJornadaToCarriers();
 }
 
 async function loadOrders() {
@@ -380,6 +390,9 @@ async function loadOrders() {
       editsCount: editsMap[editsKey] || 0,
     });
   }
+
+  // computeCarriersForJornada lee de carriers[c].orders, así que recomputar acá.
+  applySelectedJornadaToCarriers();
 }
 
 async function loadBatches() {
@@ -413,64 +426,185 @@ async function loadFreeStock() {
   window.MOCK.freeStock = map;
 }
 
+/* ─────────────────────────────────────────────────────────────────
+   loadJornadas (Cambio 2B) — modelo global "una jornada por día".
+   Tras migration 0028 la tabla jornadas YA NO tiene columna channel_id;
+   el snapshot inmutable se agrupa por (channel_id, sku) DENTRO del jsonb.
+   ─────────────────────────────────────────────────────────────────── */
 async function loadJornadas() {
   const { data, error } = await supa
     .from('jornadas').select('*')
-    .order('fecha', { ascending: false }).limit(100);
+    .order('fecha', { ascending: false }).limit(50);
   if (error) { console.error('jornadas', error); return; }
 
-  for (const id of Object.keys(window.MOCK.carriers)) {
-    window.MOCK.carriers[id].cierres         = [];
-    window.MOCK.carriers[id].lastClosure     = null;
-    window.MOCK.carriers[id].jornadasAbiertas = [];
-    window.MOCK.carriers[id].jornadaActivaId = null;
-  }
+  window.MOCK.jornadas.abiertas  = [];
+  window.MOCK.jornadas.activaId  = null;
+  window.MOCK.jornadas.historial = [];
 
   for (const j of data || []) {
-    const c = window.MOCK.carriers[j.channel_id];
-    if (!c) continue;
-
     if (j.status === 'cerrada') {
-      if (!c.lastClosure) c.lastClosure = j.closed_at;
-      c.cierres.push({
+      window.MOCK.jornadas.historial.push({
         id: j.id,
-        fecha:    j.closed_at,
-        fechaJornada: j.fecha,
+        fecha:    j.closed_at,       // momento del cierre
+        fechaJornada: j.fecha,       // día que cubre
         pedidos:  j.pedidos_count,
         unidadesProducidas: j.unidades_producidas,
         unidadesPedidas:    j.unidades_pedidas,
         faltante: j.faltante_arrastrado,
-        snapshot: j.snapshot || [],
+        snapshot: j.snapshot || [],  // [{channel_id, sku, modelo, color, pedido, producido, faltante, stock}]
         closedBy: j.closed_by,
       });
     } else {
-      // status === 'abierta'
-      c.jornadasAbiertas.push({
-        id: j.id,
-        fecha: j.fecha,
-        isActive: j.is_active,
-        abiertaAt: j.abierta_at,
+      window.MOCK.jornadas.abiertas.push({
+        id: j.id, fecha: j.fecha, isActive: j.is_active, abiertaAt: j.abierta_at,
       });
-      if (j.is_active) c.jornadaActivaId = j.id;
+      if (j.is_active) window.MOCK.jornadas.activaId = j.id;
     }
   }
 
-  // Ordenar abiertas por fecha asc (la más vieja primero) para selector consistente
-  for (const id of Object.keys(window.MOCK.carriers)) {
-    window.MOCK.carriers[id].jornadasAbiertas.sort(
-      (a, b) => (a.fecha || '').localeCompare(b.fecha || '')
-    );
+  // Ordenar abiertas por fecha asc (la más vieja primero) para tabs consistentes
+  window.MOCK.jornadas.abiertas.sort(
+    (a, b) => (a.fecha || '').localeCompare(b.fecha || '')
+  );
+
+  // Reconciliar seleccionadaId: si quedó huérfana (jornada cerrada o eliminada),
+  // volver a la activa. Default inicial también cae acá.
+  const validIds = window.MOCK.jornadas.abiertas.map(j => j.id);
+  if (!window.MOCK.jornadas.seleccionadaId || !validIds.includes(window.MOCK.jornadas.seleccionadaId)) {
+    window.MOCK.jornadas.seleccionadaId = window.MOCK.jornadas.activaId;
   }
+
+  // Derivar cierres + lastClosure POR CANAL (compat con header de CarrierPage y
+  // tab "Historial de cierres"). Filtra snapshot por channel_id del item.
+  for (const id of Object.keys(window.MOCK.carriers)) {
+    const cierresCanal = [];
+    for (const c of window.MOCK.jornadas.historial) {
+      const itemsCanal = (c.snapshot || []).filter(r => r.channel_id === id);
+      if (itemsCanal.length === 0) continue;
+      cierresCanal.push({
+        id: c.id,
+        fecha: c.fecha,
+        fechaJornada: c.fechaJornada,
+        // pedidos count no se puede derivar del snapshot agrupado por sku.
+        // El modal "Historial de cierres" en CarrierPage mostrará 0; las
+        // métricas reales viven en unidadesPedidas/Producidas/faltante.
+        pedidos: 0,
+        unidadesProducidas: itemsCanal.reduce((s,r) => s + (r.producido||0), 0),
+        unidadesPedidas:    itemsCanal.reduce((s,r) => s + (r.pedido||0), 0),
+        faltante:           itemsCanal.reduce((s,r) => s + (r.faltante||0), 0),
+        snapshot: itemsCanal,
+        closedBy: c.closedBy,
+      });
+    }
+    window.MOCK.carriers[id].cierres = cierresCanal;
+    window.MOCK.carriers[id].lastClosure = cierresCanal[0]?.fecha || null;
+  }
+
+  // Si la jornada seleccionada cambió respecto a la activa, recomputar carriers.
+  applySelectedJornadaToCarriers();
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   computeCarriersForJornada (Cambio 2B) — replica la fórmula del
+   snapshot del RPC rpc_close_jornada v6 para mostrar en vivo el
+   estado de una jornada NO activa. Lee de:
+     - MOCK.carriers[c].orders (pedidos pendientes/arrastrados — transversales)
+     - MOCK.prodLogs filtrados por jornada_id
+   y devuelve un mapa { channel_id → { table, kpis, allDone } } compatible
+   con el shape que ya consumen los .jsx.
+   ─────────────────────────────────────────────────────────────────── */
+function computeCarriersForJornada(jornadaId) {
+  const out = {};
+  for (const id of Object.keys(window.MOCK.carriers)) {
+    out[id] = { table: [], kpis: { activos:0, unidades:0, pendiente:0 }, allDone:true };
+  }
+
+  // pedido[channel|sku] = SUM orders.cantidad (transversal — pedidos viven hasta archivarse)
+  const pedidoMap = {};
+  for (const cid of Object.keys(window.MOCK.carriers)) {
+    for (const o of window.MOCK.carriers[cid].orders || []) {
+      const k = cid + '|' + o.sku;
+      pedidoMap[k] = (pedidoMap[k] || 0) + (o.cantidad || 0);
+    }
+  }
+  // producido[channel|sku] = SUM production_logs.cantidad WHERE jornada_id = jornadaId
+  const prodMap = {};
+  for (const l of window.MOCK.prodLogs || []) {
+    if (l.jornadaId !== jornadaId) continue;
+    const k = l.subcanal + '|' + l.sku;
+    prodMap[k] = (prodMap[k] || 0) + (l.unidades || 0);
+  }
+
+  const allKeys = new Set([...Object.keys(pedidoMap), ...Object.keys(prodMap)]);
+  for (const k of allKeys) {
+    const [cid, sku] = k.split('|');
+    if (!out[cid]) continue;
+    const pedido    = pedidoMap[k] || 0;
+    const producido = prodMap[k]   || 0;
+    const faltante  = Math.max(0, pedido - producido);
+    const stock     = Math.max(0, producido - pedido);
+    if (pedido === 0 && faltante === 0 && stock === 0) continue;
+    out[cid].table.push({ sku, pedido, producido, faltante, stock });
+  }
+
+  for (const id of Object.keys(out)) {
+    const c = out[id];
+    c.table.sort((a,b) => a.sku.localeCompare(b.sku));
+    c.kpis.unidades  = c.table.reduce((s,r) => s + r.pedido,    0);
+    c.kpis.pendiente = c.table.reduce((s,r) => s + r.faltante,  0);
+    c.kpis.activos   = c.table.filter(r => r.faltante > 0).length;
+    c.allDone        = c.kpis.pendiente === 0 && c.kpis.activos === 0;
+  }
+  return out;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   applySelectedJornadaToCarriers — si seleccionada ≠ activa, sobrescribe
+   table/kpis/allDone de MOCK.carriers + recomputa MOCK.prod.todos.
+   Preserva orders, lotes, cierres, lastClosure (datos no agregados).
+   ─────────────────────────────────────────────────────────────────── */
+function applySelectedJornadaToCarriers() {
+  const selId = window.MOCK.jornadas.seleccionadaId;
+  const actId = window.MOCK.jornadas.activaId;
+  // Default: si seleccionada === activa, la data poblada por loadCarriers
+  // (view_carrier_with_meta) ya refleja la activa — no hay que tocar nada.
+  if (!selId || selId === actId) return;
+
+  const computed = computeCarriersForJornada(selId);
+  for (const id of Object.keys(window.MOCK.carriers)) {
+    window.MOCK.carriers[id].table   = computed[id].table;
+    window.MOCK.carriers[id].kpis    = computed[id].kpis;
+    window.MOCK.carriers[id].allDone = computed[id].allDone;
+  }
+
+  // Recompute MOCK.prod.todos (hero del dashboard)
+  const todos = window.MOCK.prod.todos;
+  todos.table = [];
+  todos.kpis = { totalPedido:0, producido:0, faltante:0 };
+  for (const id of Object.keys(window.MOCK.carriers)) {
+    const cInfo = window.CARRIERS[id] || { label: id };
+    for (const r of window.MOCK.carriers[id].table) {
+      todos.table.push({ sku: r.sku, canal: cInfo.label, pedido: r.pedido, producido: r.producido, faltante: r.faltante, stock: r.stock });
+      todos.kpis.totalPedido += r.pedido;
+      todos.kpis.producido   += r.producido;
+      todos.kpis.faltante    += r.faltante;
+    }
+  }
+  // "Producidos hoy" → re-interpretado como producido de la jornada seleccionada
+  todos.producidoHoy = (window.MOCK.prodLogs || [])
+    .filter(l => l.jornadaId === selId)
+    .reduce((s,l) => s + (l.unidades || 0), 0);
 }
 
 async function loadProdLogs() {
   // JOIN con profiles para traer el nombre del operario.
-  // Limit 500 (antes 200) — necesario para que CierreModal pueda calcular
-  // preview por jornada incluso para jornadas con muchos logs.
+  // Limit 1000 (antes 500, Cambio 2B) — computeCarriersForJornada filtra
+  // estos logs por jornada_id para construir tablas en vivo. Con 3 jornadas
+  // abiertas máx, sobra hasta ~300 logs/jornada.
   const { data, error } = await supa
     .from('production_logs')
     .select('*, operario:profiles!production_logs_operario_id_fkey(name,username)')
-    .order('created_at', { ascending: false }).limit(500);
+    .order('created_at', { ascending: false }).limit(1000);
   if (error) { console.error('production_logs', error); return; }
 
   const today = new Date().toISOString().slice(0, 10);
@@ -496,6 +630,9 @@ async function loadProdLogs() {
   });
 
   window.MOCK.prod.todos.producidoHoy = producidoHoy;
+
+  // Si la jornada seleccionada ≠ activa, recomputar tablas/KPIs con esta data fresca.
+  applySelectedJornadaToCarriers();
 }
 
 async function loadHistorico(opts = {}) {
@@ -613,33 +750,57 @@ window.MOCK_ACTIONS = {
     return data; // production_logs row
   },
 
-  /* Abre una jornada nueva (o reactiva la abierta existente) y la marca
-     como activa para producción del canal. Solo owner/admin/encargado. */
-  async abrirJornada({ channelId, fecha }) {
-    const params = { p_channel_id: channelId };
+  /* Abre una jornada nueva del día indicado (o de hoy si no se pasa fecha).
+     Cambio 2A/2B: las jornadas son GLOBALES — no se pasa channelId.
+     Validaciones de cliente (max 3 abiertas, fecha ≤ today+3) se hacen
+     en el modal antes de invocar este action. Solo owner/admin/encargado. */
+  async abrirJornada({ fecha } = {}) {
+    const params = {};
     if (fecha) params.p_fecha = fecha;
     const { data, error } = await supa.rpc('rpc_open_jornada', params);
+    if (error) throw new Error(error.message);
+    await Promise.all([loadCarriers(), loadJornadas()]);
+    // Autoseleccionar la jornada recién creada (UX: aparece en la tab que
+    // el usuario acaba de abrir, no en otra).
+    if (data?.id) window.MOCK.jornadas.seleccionadaId = data.id;
+    window.MOCK_BUS.emit();
+    return data;
+  },
+
+  /* Cambia LOCALMENTE la jornada que el usuario está mirando (la "pestaña
+     seleccionada"). No toca BD. Recomputa tablas/KPIs en el acto y emite. */
+  seleccionarJornada(jornadaId) {
+    if (!jornadaId) return;
+    if (!window.MOCK.jornadas.abiertas.some(j => j.id === jornadaId)) return;
+    if (window.MOCK.jornadas.seleccionadaId === jornadaId) return;
+    window.MOCK.jornadas.seleccionadaId = jornadaId;
+    // Si volvemos a la activa, restaurar tablas/KPIs originales desde view_carrier_with_meta.
+    if (jornadaId === window.MOCK.jornadas.activaId) {
+      loadCarriers().finally(() => window.MOCK_BUS.emit());
+    } else {
+      applySelectedJornadaToCarriers();
+      window.MOCK_BUS.emit();
+    }
+  },
+
+  /* Cambia la jornada ACTIVA en BD (el "punto verde", la que recibe las
+     nuevas cargas). Singleton global. Solo owner/admin/encargado. */
+  async setActiveJornada({ jornadaId }) {
+    const { data, error } = await supa.rpc('rpc_set_active_jornada', { p_jornada_id: jornadaId });
     if (error) throw new Error(error.message);
     await Promise.all([loadCarriers(), loadJornadas()]);
     window.MOCK_BUS.emit();
     return data;
   },
-
-  /* Cambia manualmente la jornada activa para producción del canal.
-     Solo owner/admin/encargado. */
-  async setJornadaActiva({ jornadaId }) {
-    const { data, error } = await supa.rpc('rpc_set_active_jornada', { p_jornada_id: jornadaId });
-    if (error) throw new Error(error.message);
-    await loadJornadas();
-    window.MOCK_BUS.emit();
-    return data;
-  },
+  /* Alias deprecado para callers viejos (compat hasta 2C). */
+  async setJornadaActiva(args) { return this.setActiveJornada(args); },
 
   /* Cerrar jornada con disposiciones opcionales para los sobrantes.
-     disposiciones: [{sku, accion: 'free_stock', cantidad?}]
-     Si se omite, todos los sobrantes se arrastran (carrier_state.stock). */
-  async cerrarJornada({ channelId, fecha, disposiciones }) {
-    const params = { p_channel_id: channelId };
+     Cambio 2A/2B: cierra TODOS los canales del día — sin channelId.
+     disposiciones: [{sku, accion: 'free_stock', cantidad?}] — opcional.
+     Si se omite, todos los sobrantes se auto-disponen a Stock central (RPC v6). */
+  async cerrarJornada({ fecha, disposiciones } = {}) {
+    const params = {};
     if (fecha) params.p_fecha = fecha;
     if (disposiciones && disposiciones.length) params.p_disposiciones = disposiciones;
     const { error } = await supa.rpc('rpc_close_jornada', params);
@@ -784,7 +945,7 @@ window.MOCK_ACTIONS = {
       .sort((a, b) => a.sku.localeCompare(b.sku));
   },
 
-  async importarLote({ channelId, filename, items, fileHash }) {
+  async importarLote({ channelId, filename, items, fileHash, targetJornadaId }) {
     // 0) Filtrar pedidos cancelados (defensa en profundidad).
     //    Regla: estado.toLowerCase().startsWith('cancelada'). Cubre
     //    "Cancelada. No despaches" y variantes con/sin punto.
@@ -830,12 +991,20 @@ window.MOCK_ACTIONS = {
       p_file_hash = fnv64Quad(filename + '|' + JSON.stringify(normalizedItems));
     }
 
-    const { data, error } = await supa.rpc('rpc_import_batch', {
+    // Resolver jornada destino: 1) la pasada por parámetro, 2) la seleccionada,
+    // 3) la activa. Si no hay ninguna, el RPC fallará con mensaje claro.
+    const jornadaDestino = targetJornadaId
+      || window.MOCK.jornadas.seleccionadaId
+      || window.MOCK.jornadas.activaId
+      || null;
+    const rpcParams = {
       p_channel_id: channelId,
       p_filename: filename,
       p_file_hash,
       p_items: normalizedItems,
-    });
+    };
+    if (jornadaDestino) rpcParams.p_target_jornada_id = jornadaDestino;
+    const { data, error } = await supa.rpc('rpc_import_batch', rpcParams);
     if (error) throw new Error(error.message);
     await Promise.all([loadCarriers(), loadOrders(), loadBatches()]);
     window.MOCK_BUS.emit();
