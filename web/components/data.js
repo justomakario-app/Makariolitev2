@@ -1095,13 +1095,20 @@ window.MOCK_ACTIONS = {
 
   /* Carga manual de pedido (carrito atomico).
      items: [{sku, cantidad}]. orderNumber/cliente/motivo opcionales.
-     forceMerge: true → permite agregar items a un order_number existente. */
-  async crearPedidoManual({ channelId, orderNumber, cliente, items, motivo, forceMerge }) {
+     forceMerge: true → permite agregar items a un order_number existente.
+     targetJornadaId: jornada destino (RPC v2 lo requiere si hay 2+ abiertas);
+       fallback a la seleccionada y luego a la activa. */
+  async crearPedidoManual({ channelId, orderNumber, cliente, items, motivo, forceMerge, targetJornadaId }) {
     const params = { p_channel_id: channelId, p_items: items || [] };
     if (orderNumber) params.p_order_number = orderNumber;
     if (cliente) params.p_cliente = cliente;
     if (motivo) params.p_motivo = motivo;
     if (forceMerge) params.p_force_merge = true;
+    const jornadaDestino = targetJornadaId
+      || window.MOCK.jornadas.seleccionadaId
+      || window.MOCK.jornadas.activaId
+      || null;
+    if (jornadaDestino) params.p_target_jornada_id = jornadaDestino;
     const { data, error } = await supa.rpc('rpc_create_manual_order', params);
     if (error) throw new Error(error.message);
     await Promise.all([loadCarriers(), loadOrders(), loadJornadas()]);

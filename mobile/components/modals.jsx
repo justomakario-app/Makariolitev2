@@ -799,9 +799,14 @@ function ManualOrderModal({ open, onClose, channel }) {
   const M = window.useMockData();
   const C = window.CARRIERS[channel] || {};
   const data = M.carriers[channel];
-  // Cambio 2A/2B: jornada es global. La activa = la que recibe la carga.
-  const activaId = M.jornadas?.activaId;
-  const activa = (M.jornadas?.abiertas || []).find(j => j.id === activaId);
+  // Hot-fix: RPC rpc_create_manual_order v2 requiere p_target_jornada_id
+  // cuando hay 2+ jornadas abiertas. Pasamos la SELECCIONADA del dashboard
+  // (fallback activa).
+  const activaId       = M.jornadas?.activaId;
+  const seleccionadaId = M.jornadas?.seleccionadaId || activaId;
+  const seleccionada   = (M.jornadas?.abiertas || []).find(j => j.id === seleccionadaId);
+  const activa         = (M.jornadas?.abiertas || []).find(j => j.id === activaId);
+  const esActiva       = !!seleccionada && seleccionada.id === activaId;
 
   const [orderNumber, setOrderNumber] = useState('');
   const [cliente, setCliente]         = useState('');
@@ -838,7 +843,7 @@ function ManualOrderModal({ open, onClose, channel }) {
 
   const submit = async (forceMerge = false) => {
     if (!validItems.length) { toast.error('Agregá al menos un item con SKU y cantidad'); return; }
-    if (!activa) { toast.error('No hay jornada activa — abrí una desde el Dashboard antes de cargar pedidos.'); return; }
+    if (!seleccionada) { toast.error('No hay jornada abierta — abrí una desde el Dashboard antes de cargar pedidos.'); return; }
 
     setBusy(true);
     try {
@@ -849,6 +854,7 @@ function ManualOrderModal({ open, onClose, channel }) {
         items: validItems.map(r => ({ sku: r.sku.toUpperCase(), cantidad: parseInt(r.cantidad, 10) })),
         motivo: motivo.trim() || undefined,
         forceMerge,
+        targetJornadaId: seleccionada.id,
       });
       toast.success('Pedido cargado · ' + result.order_number);
       onClose();
@@ -877,13 +883,13 @@ function ManualOrderModal({ open, onClose, channel }) {
         </button>
       </>
     }>
-      {/* Info de jornada destino */}
-      <div style={{padding:'8px 12px', background: activa ? 'var(--green-bg)' : 'var(--red-bg)',
-                   border: '1px solid ' + (activa ? 'rgba(22,163,74,.32)' : 'rgba(220,38,38,.32)'),
-                   borderRadius:6, marginBottom:14, fontSize:11, color: activa ? 'var(--green)' : 'var(--red)'}}>
-        {activa
-          ? <>Jornada destino: <strong>{fmt.date(activa.fecha)}</strong> (activa)</>
-          : <><Icon n="alert" s={12}/> No hay jornada activa. Pedíle al encargado que abra una desde el Dashboard.</>}
+      {/* Info de jornada destino — la SELECCIONADA en el dashboard. */}
+      <div style={{padding:'8px 12px', background: seleccionada ? 'var(--green-bg)' : 'var(--red-bg)',
+                   border: '1px solid ' + (seleccionada ? 'rgba(22,163,74,.32)' : 'rgba(220,38,38,.32)'),
+                   borderRadius:6, marginBottom:14, fontSize:11, color: seleccionada ? 'var(--green)' : 'var(--red)'}}>
+        {seleccionada
+          ? <>Jornada destino: <strong>{fmt.date(seleccionada.fecha)}</strong> {esActiva ? '(activa)' : '(abierta)'}</>
+          : <><Icon n="alert" s={12}/> No hay jornada abierta. Pedíle al encargado que abra una desde el Dashboard.</>}
       </div>
 
       <div style={{display:'flex', flexDirection:'column', gap:10, marginBottom:14}}>
