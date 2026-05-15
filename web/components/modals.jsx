@@ -666,7 +666,13 @@ function CierreModal({ open, onClose, onConfirm, jornadaId }) {
   for (const cid of canalesIds) {
     const orders = M.carriers[cid]?.orders || [];
     const pedidoMap = {};
-    for (const o of orders) pedidoMap[o.sku] = (pedidoMap[o.sku] || 0) + (o.cantidad || 0);
+    // Bugfix: MOCK.carriers[cid].orders es transversal a todas las jornadas
+    // abiertas (ver data.js:466). El loop de prodLogs ya filtra por
+    // jornadaId, pero orders también debe filtrar — sino sumaba 14+15.
+    for (const o of orders) {
+      if (o.jornadaId !== jornadaId) continue;
+      pedidoMap[o.sku] = (pedidoMap[o.sku] || 0) + (o.cantidad || 0);
+    }
 
     const prodMap = {};
     for (const l of (M.prodLogs || [])) {
