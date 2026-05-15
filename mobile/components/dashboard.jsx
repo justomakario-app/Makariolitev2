@@ -268,7 +268,8 @@ function DashboardPage({ onNav }) {
     : '';
 
   const todayLocal = window.todayLocalStr();
-  const puedeCerrar = !!(seleccionada && activa && seleccionada.id === activa.id && seleccionada.fecha === todayLocal);
+  // Hotfix migration 0041: permitir cerrar jornadas pasadas que quedaron abiertas (fecha <= hoy).
+  const puedeCerrar = !!(seleccionada && activa && seleccionada.id === activa.id && seleccionada.fecha <= todayLocal);
 
   const handleProducirClick = () => {
     if (viendoOtra) setShowConfirmProducir(true);
@@ -374,6 +375,26 @@ function DashboardPage({ onNav }) {
         <MEmptyStateNoJornada canOpen={puedeAdmin} onOpen={() => setShowOpen(true)}/>
       )}
 
+      {/* Banner: la jornada activa no es de hoy (probable olvido de cierre).
+          Hotfix migration 0041 — visibilidad del estado anómalo. */}
+      {abiertas.length > 0 && activa && activa.fecha < todayLocal && (
+        <div
+          style={{
+            padding: '10px 14px',
+            background: 'var(--amber-bg)',
+            border: '1px solid rgba(217, 119, 6, .32)',
+            borderRadius: 6,
+            marginBottom: 10,
+            fontSize: 12,
+            fontWeight: 600,
+            color: 'var(--amber)',
+            lineHeight: 1.5,
+          }}
+        >
+          ⚠️ La jornada activa es del <strong>{fmt.date(activa.fecha)}</strong> (no es hoy). Quizás te olvidaste de cerrar.
+        </div>
+      )}
+
       {/* Wrapper para slide+fade al cambiar pestaña (técnica 5) */}
       <div ref={wrapperRef} style={{willChange:'opacity, transform'}}>
 
@@ -454,7 +475,7 @@ function DashboardPage({ onNav }) {
               className="btn-success"
               onClick={() => puedeCerrar && setShowCierre(true)}
               disabled={!puedeCerrar}
-              title={puedeCerrar ? '' : 'Solo se puede cerrar la jornada del día actual'}
+              title={puedeCerrar ? '' : 'Solo se puede cerrar la jornada activa si es de hoy o anterior'}
               style={{flex:1, minWidth:140, ...(!puedeCerrar ? {opacity:.5, cursor:'not-allowed'} : {})}}
             >
               <Icon n="lock" s={13}/> Cerrar {fmt.date(seleccionada.fecha)}

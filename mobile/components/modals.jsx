@@ -640,9 +640,19 @@ function CierreModal({ open, onClose, onConfirm, jornadaId }) {
 
   if (!open) return null;
 
+  // Hotfix migration 0041: banner "fecha pasada" si se cierra una jornada de un día anterior.
+  const todayLocal = window.todayLocalStr();
+  const isPasada = !!(fechaCierre && fechaCierre < todayLocal);
+  const nextDayTxt = (() => {
+    if (!fechaCierre) return '';
+    const d = window.parseLocalDate(fechaCierre);
+    d.setDate(d.getDate() + 1);
+    return d.toLocaleDateString('es-AR', { day:'2-digit', month:'short' });
+  })();
+
   const canalesIds = ['colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino'];
   const filas = [];
-  let totalPedido = 0, totalProducido = 0, totalFaltante = 0;
+  let totalPedido = 0, totalProducido = 0, totalFaltante = 0, totalSobrante = 0;
 
   for (const cid of canalesIds) {
     const orders = M.carriers[cid]?.orders || [];
@@ -666,6 +676,7 @@ function CierreModal({ open, onClose, onConfirm, jornadaId }) {
       totalPedido    += pedido;
       totalProducido += producido;
       totalFaltante  += faltante;
+      totalSobrante  += stock;
     }
   }
 
@@ -704,7 +715,26 @@ function CierreModal({ open, onClose, onConfirm, jornadaId }) {
             )}
           </div>
 
-          <div style={{display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, marginBottom:14}}>
+          {/* Banner "fecha pasada" — hotfix migration 0041. */}
+          {isPasada && (
+            <div
+              style={{
+                padding: '10px 12px',
+                background: 'var(--amber-bg)',
+                border: '1px solid rgba(217, 119, 6, .32)',
+                borderRadius: 6,
+                marginBottom: 14,
+                fontSize: 12,
+                fontWeight: 500,
+                color: 'var(--amber)',
+                lineHeight: 1.5,
+              }}
+            >
+              ⚠️ Estás cerrando la jornada del <strong>{fmt.date(fechaCierre)}</strong> (fecha anterior a hoy). El faltante se arrastrará al <strong>{nextDayTxt}</strong> (si esa jornada existe, se reutiliza).
+            </div>
+          )}
+
+          <div style={{display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, marginBottom:14}}>
             <div className="stat-card" style={{padding:12}}>
               <div style={{fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--ink-muted)', marginBottom:4}}>Pedidos</div>
               <div style={{fontFamily:'var(--mono)', fontSize:22, fontWeight:700}}>{totalPedido}</div>
@@ -716,6 +746,10 @@ function CierreModal({ open, onClose, onConfirm, jornadaId }) {
             <div className="stat-card" style={{padding:12, borderLeft: totalFaltante>0?'3px solid var(--red)':'3px solid var(--green)'}}>
               <div style={{fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--ink-muted)', marginBottom:4}}>Arrastra</div>
               <div style={{fontFamily:'var(--mono)', fontSize:22, fontWeight:700, color: totalFaltante>0?'var(--red)':'var(--green)'}}>{totalFaltante}</div>
+            </div>
+            <div className="stat-card" style={{padding:12, borderLeft: totalSobrante>0?'3px solid var(--green)':'3px solid var(--border)'}}>
+              <div style={{fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--ink-muted)', marginBottom:4}}>Stock central</div>
+              <div style={{fontFamily:'var(--mono)', fontSize:22, fontWeight:700, color: totalSobrante>0?'var(--green)':'var(--ink-muted)'}}>{totalSobrante}</div>
             </div>
           </div>
 
@@ -744,6 +778,7 @@ function CierreModal({ open, onClose, onConfirm, jornadaId }) {
                         <th style={{textAlign:'right'}}>Pedido</th>
                         <th style={{textAlign:'right'}}>Producido</th>
                         <th style={{textAlign:'right'}}>Arrastra</th>
+                        <th style={{textAlign:'right'}}>Sobrante</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -757,6 +792,11 @@ function CierreModal({ open, onClose, onConfirm, jornadaId }) {
                             {r.faltante > 0
                               ? <span className="cell-faltante-red">{r.faltante}</span>
                               : <span className="cell-faltante-ok"><Icon n="check" s={12}/></span>}
+                          </td>
+                          <td style={{textAlign:'right'}}>
+                            {r.stock > 0
+                              ? <span className="cell-color-num" style={{color:'var(--green)'}}>{r.stock}</span>
+                              : <span style={{color:'var(--ink-muted)'}}>—</span>}
                           </td>
                         </tr>
                       ))}

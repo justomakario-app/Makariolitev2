@@ -309,9 +309,10 @@ function DashboardPage({ onNav }) {
         .toUpperCase()
     : '';
 
-  // Botón Cerrar: solo habilitado si seleccionada === activa Y la fecha es hoy.
+  // Botón Cerrar: solo habilitado si seleccionada === activa Y la fecha es hoy o anterior.
+  // (Hotfix migration 0041: permitir cerrar jornadas pasadas que quedaron abiertas.)
   const todayLocal = window.todayLocalStr();
-  const puedeCerrar = !!(seleccionada && activa && seleccionada.id === activa.id && seleccionada.fecha === todayLocal);
+  const puedeCerrar = !!(seleccionada && activa && seleccionada.id === activa.id && seleccionada.fecha <= todayLocal);
 
   /* Click "+ Producir": si la pestaña seleccionada NO es la activa, mostrar
      confirmación porque la producción siempre va a la jornada activa. */
@@ -426,6 +427,26 @@ function DashboardPage({ onNav }) {
         <EmptyStateNoJornada canOpen={puedeAdmin} onOpen={() => setShowOpen(true)}/>
       )}
 
+      {/* Banner: la jornada activa no es de hoy (probable olvido de cierre).
+          Hotfix migration 0041 — visibilidad del estado anómalo. */}
+      {abiertas.length > 0 && activa && activa.fecha < todayLocal && (
+        <div
+          style={{
+            padding: '10px 14px',
+            background: 'var(--amber-bg)',
+            border: '1px solid rgba(217, 119, 6, .32)',
+            borderRadius: 6,
+            marginBottom: 10,
+            fontSize: 12,
+            fontWeight: 600,
+            color: 'var(--amber)',
+            lineHeight: 1.5,
+          }}
+        >
+          ⚠️ La jornada activa es del <strong>{fmt.date(activa.fecha)}</strong> (no es hoy). Quizás te olvidaste de cerrar.
+        </div>
+      )}
+
       {/* Wrapper para slide+fade al cambiar de pestaña (técnica 5).
           Se manipula imperativamente vía wrapperRef desde handleSelectTab. */}
       <div ref={wrapperRef} style={{willChange:'opacity, transform'}}>
@@ -512,7 +533,7 @@ function DashboardPage({ onNav }) {
               disabled={!puedeCerrar}
               title={puedeCerrar
                 ? `Cerrar la jornada del ${fmt.date(seleccionada.fecha)} (todos los canales)`
-                : 'Solo se puede cerrar la jornada del día actual'}
+                : 'Solo se puede cerrar la jornada activa si es de hoy o anterior'}
               style={!puedeCerrar ? {opacity:.5, cursor:'not-allowed'} : undefined}
             >
               <Icon n="lock" s={13}/> Cerrar jornada del {fmt.date(seleccionada.fecha)}
