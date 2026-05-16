@@ -308,9 +308,13 @@ async function loadCarriers() {
 }
 
 async function loadOrders() {
+  // Incluye 'cancelado' para que getCancellationsForJornada las pueda
+  // mostrar en la seccion "Cancelaciones del dia" del dashboard.
+  // computeCarriersForJornada filtra las canceladas en su loop, asi que
+  // no afectan los cuadritos.
   const { data, error } = await supa
     .from('orders').select('*')
-    .in('status', ['pendiente','arrastrado'])
+    .in('status', ['pendiente','arrastrado','cancelado'])
     .order('sku', { ascending: true })
     .order('created_at', { ascending: false });
   if (error) { console.error('orders', error); return; }
@@ -343,6 +347,9 @@ async function loadOrders() {
       version:   o.version || 1,
       jornadaId: o.jornada_id || null,
       editsCount: editsMap[editsKey] || 0,
+      status:                o.status,
+      cancelledAt:           o.cancelled_at || null,
+      cancelledInJornadaId:  o.cancelled_in_jornada_id || null,
     });
   }
 
@@ -485,6 +492,7 @@ function computeCarriersForJornada(jornadaId) {
   for (const cid of Object.keys(window.MOCK.carriers)) {
     for (const o of window.MOCK.carriers[cid].orders || []) {
       if (o.jornadaId !== jornadaId) continue;
+      if (o.status === 'cancelado') continue;   // canceladas no cuentan como pedido
       const k = cid + '|' + o.sku;
       pedidoMap[k] = (pedidoMap[k] || 0) + (o.cantidad || 0);
     }
@@ -519,6 +527,42 @@ function computeCarriersForJornada(jornadaId) {
   }
   return out;
 }
+
+/* ─────────────────────────────────────────────────────────────────
+   getCancellationsForJornada(jornadaId) — devuelve las cancelaciones
+   REGISTRADAS en la jornada indicada (cancelled_in_jornada_id ===
+   jornadaId), agrupadas para la seccion "Cancelaciones del dia" del
+   dashboard y el listado en el modal de cierre.
+   Una cancelacion puede haberse REGISTRADO en una jornada distinta a
+   la jornada ORIGINAL del pedido (caso: pedido del 14-may que se
+   cancela en el Excel del 15-may → cancelled_in_jornada_id=15-may).
+   ─────────────────────────────────────────────────────────────────── */
+function getCancellationsForJornada(jornadaId) {
+  if (!jornadaId) return [];
+  const out = [];
+  for (const cid of Object.keys(window.MOCK.carriers)) {
+    for (const o of window.MOCK.carriers[cid].orders || []) {
+      if (o.status !== 'cancelado') continue;
+      if (o.cancelledInJornadaId !== jornadaId) continue;
+      out.push({
+        canal:       cid,
+        numero:      o.numero,
+        sku:         o.sku,
+        modelo:      window.skuName(o.sku),
+        cantidad:    o.cantidad,
+        fecha:       o.fecha,
+        cliente:     o.cliente,
+        cancelledAt: o.cancelledAt,
+      });
+    }
+  }
+  out.sort((a,b) => {
+    if (a.canal !== b.canal) return a.canal.localeCompare(b.canal);
+    return a.sku.localeCompare(b.sku);
+  });
+  return out;
+}
+window.getCancellationsForJornada = getCancellationsForJornada;
 
 /* ─────────────────────────────────────────────────────────────────
    applySelectedJornadaToCarriers — SIEMPRE recomputa table/kpis/allDone
@@ -911,30 +955,19 @@ window.MOCK_ACTIONS = {
   },
 
   async importarLote({ channelId, filename, items, fileHash, targetJornadaId }) {
-    // 0) Filtrar pedidos cancelados (defensa en profundidad).
-    //    Regla: estado.toLowerCase().startsWith('cancelada'). Cubre
-    //    "Cancelada. No despaches" y variantes con/sin punto.
-    //    Si un item viene sin campo `estado`, NO se cancela (default
-    //    seguro). Si la columna "Estado" no existe en el Excel
-    //    (planilla genérica), todos llegan con estado='' y nada
-    //    matchea — comportamiento pre-feature preservado.
-    const isCancelled = (it) => (it.estado || '').toString().trim().toLowerCase().startsWith('cancelada');
-    const cancelledCount = (items || []).filter(isCancelled).length;
-    const itemsActivos = (items || []).filter(it => !isCancelled(it));
-
-    // Caso extremo: si TODOS los items vienen cancelados, no llamar al
-    // RPC en absoluto — no se crea import_batch ni queda registro en BD.
-    // Aceptamos que un re-import del mismo Excel se procese dos veces
-    // (file_hash no se guarda) — caso teórico raro y aceptable.
-    if (itemsActivos.length === 0 && cancelledCount > 0) {
-      return { skipped_all: true, cancelled_count_local: cancelledCount };
-    }
-
-    // 1) Normalizar items antes del RPC: el campo `fecha_pedido` debe ser
-    //    ISO date (YYYY-MM-DD) o null. El parser de Excel lo deja como
-    //    string crudo (ej "20 de abril de 2026 21:24 hs.") que Postgres
-    //    rechaza con "invalid input syntax for type date".
-    const normalizedItems = itemsActivos.map(it => {
+    // 1) Normalizar items antes del RPC. El RPC v3 (migration 0043) ahora
+    //    PROCESA cancelaciones — ya no se filtran pre-RPC. Cada item se
+    //    manda con su `estado` intacto y el RPC decide la accion segun los
+    //    4 casos (cancelled_new / cancelled_existing /
+    //    cancelled_post_produced / cancelled_already). Tambien queda
+    //    resuelto el bug latente del v2: el filtro startsWith('cancelada')
+    //    no matcheaba "Venta cancelada..." porque empieza con "venta" —
+    //    el RPC v3 usa LIKE '%cancelada%' (includes).
+    //    `fecha_pedido` debe ser ISO YYYY-MM-DD o null. El parser de
+    //    Excel lo deja como string crudo (ej "20 de abril de 2026 21:24
+    //    hs.") que Postgres rechaza con "invalid input syntax for type
+    //    date".
+    const normalizedItems = (items || []).map(it => {
       const fecha = window.parseFechaAR ? window.parseFechaAR(it.fecha_pedido) : null;
       const cleaned = {
         sku: (it.sku || '').toString().trim().toUpperCase(),
@@ -942,7 +975,7 @@ window.MOCK_ACTIONS = {
       };
       if (it.order_number) cleaned.order_number = String(it.order_number).trim();
       if (it.cliente)      cleaned.cliente      = String(it.cliente).trim();
-      if (it.estado)       cleaned.estado       = String(it.estado).trim();  // pasa al RPC para filtro defensivo
+      if (it.estado)       cleaned.estado       = String(it.estado).trim();  // el RPC decide
       if (fecha)           cleaned.fecha_pedido = fecha;  // omit si null → RPC usa current_date
       return cleaned;
     }).filter(it => it.sku && it.cantidad > 0);
@@ -971,12 +1004,15 @@ window.MOCK_ACTIONS = {
     if (jornadaDestino) rpcParams.p_target_jornada_id = jornadaDestino;
     const { data, error } = await supa.rpc('rpc_import_batch', rpcParams);
     if (error) throw new Error(error.message);
-    await Promise.all([loadCarriers(), loadOrders(), loadBatches()]);
+    await Promise.all([loadCarriers(), loadOrders(), loadBatches(), loadFreeStock()]);
     window.MOCK_BUS.emit();
-    // Anexar el conteo local de cancelados al data devuelto. Si el RPC
-    // también lo retorna (cancelled_count), el frontend prioriza el
-    // local porque es la fuente del Excel real.
-    return { ...(data || {}), cancelled_count_local: cancelledCount };
+    // El RPC v3 devuelve 4 contadores de cancelacion. Los sumamos para
+    // exponer cancelled_count_local (mantiene compat con ImportModal,
+    // que ya leia ese campo para el toast post-import).
+    const d = data || {};
+    const cancelledTotal = (d.cancelled_new || 0) + (d.cancelled_existing || 0) +
+                           (d.cancelled_post_produced || 0) + (d.cancelled_already || 0);
+    return { ...d, cancelled_count_local: cancelledTotal };
   },
 
   /* Editar / Anular un log de producción.
