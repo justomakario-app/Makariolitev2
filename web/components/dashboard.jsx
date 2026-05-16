@@ -278,6 +278,35 @@ function DashboardPage({ onNav }) {
     toast.success(`Excel exportado · ${filas.length} línea${filas.length===1?'':'s'} de ${orden.filter(id => (M.carriers[id]?.table||[]).some(r => (r.faltante||0)>0)).length} canal(es)`);
   };
 
+  /* Exporta a Excel las cancelaciones registradas en la jornada vista.
+     Misma forma que la sección "Cancelaciones del día" — un row por
+     cancelación, archivo nombrado cancelaciones-DD-MM-YYYY.xlsx. */
+  const exportarCancelaciones = (cancelaciones, fechaJornada) => {
+    if (!cancelaciones || !cancelaciones.length) return;
+    if (typeof window.XLSX === 'undefined') {
+      toast.error('Librería de Excel todavía no cargó · reintentá en un segundo');
+      return;
+    }
+    const filas = cancelaciones.map(c => ({
+      Fecha: c.fecha || '',
+      '# venta': c.numero,
+      Canal: window.CARRIERS[c.canal]?.label || c.canal,
+      SKU: c.sku,
+      Modelo: c.modelo,
+      Cantidad: c.cantidad,
+    }));
+    const ws = window.XLSX.utils.json_to_sheet(filas);
+    ws['!cols'] = [{ wch: 12 }, { wch: 18 }, { wch: 14 }, { wch: 10 }, { wch: 42 }, { wch: 10 }];
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, 'Cancelaciones');
+    const d = window.parseLocalDate ? window.parseLocalDate(fechaJornada) : new Date(fechaJornada);
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yy = d.getFullYear();
+    window.XLSX.writeFile(wb, `cancelaciones-${dd}-${mm}-${yy}.xlsx`);
+    toast.success(`Excel exportado · ${filas.length} cancelación${filas.length===1?'':'es'}`);
+  };
+
   // Lista de canales visibles (filtra por rol). Centralizado acá para
   // que el orden y la lista sean consistentes con el dashboard mobile.
   const canalesIds = ['colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino'];
@@ -541,6 +570,69 @@ function DashboardPage({ onNav }) {
           )}
         </div>
       )}
+
+      {/* Sección "Cancelaciones del día" — feature cancelaciones ML.
+          Solo aparece si la jornada SELECCIONADA tiene cancelaciones
+          registradas (cancelled_in_jornada_id === seleccionada.id). */}
+      {(() => {
+        if (!seleccionada || !window.getCancellationsForJornada) return null;
+        const cancelaciones = window.getCancellationsForJornada(seleccionada.id);
+        if (!cancelaciones.length) return null;
+        return (
+          <div style={{
+            padding: '14px 16px',
+            background: 'var(--red-bg)',
+            border: '1px solid rgba(220,38,38,.32)',
+            borderRadius: 8,
+            marginBottom: 14,
+          }}>
+            <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: 10, gap: 10}}>
+              <div style={{display:'flex', alignItems:'center', gap:8}}>
+                <span style={{fontSize:13, fontWeight:700, color:'var(--red)', letterSpacing:'.06em', textTransform:'uppercase'}}>
+                  Cancelaciones del día
+                </span>
+                <span style={{fontFamily:'var(--mono)', fontSize:12, fontWeight:700, color:'var(--red)', background:'rgba(220,38,38,.12)', padding:'2px 8px', borderRadius:4}}>
+                  {cancelaciones.length}
+                </span>
+              </div>
+              <button
+                className="btn-ghost"
+                onClick={() => exportarCancelaciones(cancelaciones, seleccionada.fecha)}
+                title="Exportar Excel con las cancelaciones de esta jornada"
+                style={{fontSize:11}}
+              >
+                <Icon n="download" s={12}/> Export Excel
+              </button>
+            </div>
+            <div style={{maxHeight: 240, overflowY: 'auto'}}>
+              <table className="data-table" style={{borderRadius:6, overflow:'hidden', border:'1px solid rgba(220,38,38,.32)'}}>
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th># venta</th>
+                    <th>Canal</th>
+                    <th>SKU</th>
+                    <th>Modelo</th>
+                    <th style={{textAlign:'right'}}>Cantidad</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cancelaciones.map((c, i) => (
+                    <tr key={c.numero+'|'+c.sku+'|'+i}>
+                      <td style={{fontSize:11, color:'var(--ink-soft)'}}>{c.fecha ? fmt.date(c.fecha) : '—'}</td>
+                      <td><span className="order-num">{c.numero}</span></td>
+                      <td style={{fontSize:11}}>{window.CARRIERS[c.canal]?.label || c.canal}</td>
+                      <td><span className="order-num">{c.sku}</span></td>
+                      <td style={{fontSize:11, color:'var(--ink-soft)'}}>{c.modelo}</td>
+                      <td style={{textAlign:'right'}}><span className="cell-color-num">{c.cantidad}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Channels — 3 columnas (2 filas con 6 canales) — armónico en cualquier viewport.
           Stock se renderiza como un cuadrito mas solo para owner/admin/encargado. */}
