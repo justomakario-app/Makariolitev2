@@ -656,6 +656,10 @@ function CierreModal({ open, onClose, onConfirm, jornadaId }) {
     return d.toLocaleDateString('es-AR', { day:'2-digit', month:'short' });
   })();
 
+  // Feature cancelaciones ML: lista de cancelaciones registradas en esta jornada.
+  const cancelacionesList = window.getCancellationsForJornada ? window.getCancellationsForJornada(jornadaId) : [];
+  const totalCanceladas = cancelacionesList.length;
+
   // Filas por (canal, sku) — replica la fórmula del RPC v6.
   // pedido es transversal (suma orders pendientes/arrastradas del canal).
   // producido se filtra por jornada_id.
@@ -749,7 +753,7 @@ function CierreModal({ open, onClose, onConfirm, jornadaId }) {
             </div>
           )}
 
-          <div style={{display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, marginBottom:14}}>
+          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(90px, 1fr))', gap:8, marginBottom:14}}>
             <div className="stat-card" style={{padding:12}}>
               <div style={{fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--ink-muted)', marginBottom:4}}>Pedidos</div>
               <div style={{fontFamily:'var(--mono)', fontSize:22, fontWeight:700}}>{totalPedido}</div>
@@ -766,7 +770,40 @@ function CierreModal({ open, onClose, onConfirm, jornadaId }) {
               <div style={{fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--ink-muted)', marginBottom:4}}>Stock central</div>
               <div style={{fontFamily:'var(--mono)', fontSize:22, fontWeight:700, color: totalSobrante>0?'var(--green)':'var(--ink-muted)'}}>{totalSobrante}</div>
             </div>
+            <div className="stat-card" style={{padding:12, borderLeft: totalCanceladas>0?'3px solid var(--red)':'3px solid var(--border)'}}>
+              <div style={{fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--ink-muted)', marginBottom:4}}>Canceladas</div>
+              <div style={{fontFamily:'var(--mono)', fontSize:22, fontWeight:700, color: totalCanceladas>0?'var(--red)':'var(--ink-muted)'}}>{totalCanceladas}</div>
+            </div>
           </div>
+
+          {/* Listado de cancelaciones — feature cancelaciones ML. Solo si > 0. */}
+          {totalCanceladas > 0 && (
+            <div style={{marginBottom:14}}>
+              <div style={{fontSize:11, fontWeight:700, color:'var(--red)', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:8}}>
+                Cancelaciones registradas en esta jornada
+              </div>
+              <table className="data-table" style={{borderRadius:6, overflow:'hidden', border:'1px solid rgba(220,38,38,.32)'}}>
+                <thead>
+                  <tr>
+                    <th># venta</th>
+                    <th>SKU</th>
+                    <th>Modelo</th>
+                    <th style={{textAlign:'right'}}>Cantidad</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cancelacionesList.map((c, i) => (
+                    <tr key={c.numero+'|'+c.sku+'|'+i}>
+                      <td><span className="order-num">{c.numero}</span></td>
+                      <td><span className="order-num">{c.sku}</span></td>
+                      <td style={{fontSize:11, color:'var(--ink-soft)'}}>{c.modelo}</td>
+                      <td style={{textAlign:'right'}}><span className="cell-color-num">{c.cantidad}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           <div style={{fontSize:11, fontWeight:700, color:'var(--ink-muted)', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:8}}>
             Snapshot por canal
