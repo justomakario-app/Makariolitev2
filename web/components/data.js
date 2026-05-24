@@ -1320,7 +1320,7 @@ window.FEATURE_PEDIDOS_MANUALES = true;
    NOTA: el deploy de la Edge Function agent_admin y el seteo del
    secret ANTHROPIC_API_KEY estan diferidos a B.5+. Esta sub-fase B.1
    no consume IA. */
-window.FEATURE_ADMIN = false;
+window.FEATURE_ADMIN = true;
 
 /* ─────────────────────────────────────────────────────────────────
    BOOT
