@@ -1,8 +1,22 @@
-/* ══ EXPENSE MODAL (B.3)
+/* ══ EXPENSE MODAL (B.3 + B.3.1)
    Alta manual de egreso. Sin OCR ni upload de comprobante (diferido a
    sprint post-Edge-Function). Reusa window.Modal de modals.jsx.
+   Campos visibles según categoria (B.3.1):
+     sueldos/impuestos → ocultan Proveedor, IVA y checkbox cta cte.
+     resto → todos los campos.
    Props: { suppliers, onClose, onSuccess }
    ══ */
+
+const HIDE_SUPPLIER_CATEGORIES = ['sueldos', 'impuestos'];
+const HIDE_IVA_CATEGORIES = ['sueldos', 'impuestos'];
+
+const EXPENSE_CONCEPTO_PLACEHOLDERS = {
+  insumos:   'Ej: Melamina blanca 18mm x10',
+  servicios: 'Ej: Luz mes mayo',
+  sueldos:   'Ej: Sueldo Juan marzo',
+  impuestos: 'Ej: Pago IVA mayo',
+  otros:     'Descripción del gasto',
+};
 
 function ExpenseModal({ suppliers, onClose, onSuccess }) {
   const toast = useToast();
@@ -25,12 +39,31 @@ function ExpenseModal({ suppliers, onClose, onSuccess }) {
   const [supplierSearch, setSupplierSearch] = useState('');
   const [supplierDropdownOpen, setSupplierDropdownOpen] = useState(false);
 
+  /* Visibilidad condicional por categoria (B.3.1). */
+  const showSupplier = !HIDE_SUPPLIER_CATEGORIES.includes(form.categoria);
+  const showIva = !HIDE_IVA_CATEGORIES.includes(form.categoria);
+
   /* Reset override cuando cambia supplier o medio_pago. */
   useEffect(() => { setGenOverride(null); }, [form.supplier_id, form.medio_pago]);
 
+  /* Reset de campos ocultos al cambiar a categoria que los oculta (B.3.1). */
+  useEffect(() => {
+    if (!showSupplier) {
+      setForm(s => ({ ...s, supplier_id: '', iva_discriminado: showIva ? s.iva_discriminado : '' }));
+      setSupplierSearch('');
+      setSupplierDropdownOpen(false);
+      setGenOverride(null);
+      setErrors(e => { const { supplier_id, iva_discriminado, ...rest } = e; return rest; });
+    } else if (!showIva) {
+      setForm(s => ({ ...s, iva_discriminado: '' }));
+      setErrors(e => { const { iva_discriminado, ...rest } = e; return rest; });
+    }
+    /* eslint-disable-next-line */
+  }, [form.categoria]);
+
   const defaultGen = !(form.medio_pago === 'efectivo' || form.medio_pago === 'transferencia');
   const effectiveGen = (genOverride !== null) ? genOverride : defaultGen;
-  const showCheckbox = !!form.supplier_id;
+  const showCheckbox = showSupplier && !!form.supplier_id;
 
   const set = (k, v) => setForm(s => ({ ...s, [k]: v }));
 
@@ -54,8 +87,10 @@ function ExpenseModal({ suppliers, onClose, onSuccess }) {
     const f = A.validateFecha(form.fecha);       if (!f.ok) e.fecha = f.msg;
     const c = A.validateConcepto(form.concepto); if (!c.ok) e.concepto = c.msg;
     const m = A.validateMonto(form.monto_total); if (!m.ok) e.monto_total = m.msg;
-    const i = A.validateIva(form.iva_discriminado, form.monto_total);
-                                                  if (!i.ok) e.iva_discriminado = i.msg;
+    if (showIva) {
+      const i = A.validateIva(form.iva_discriminado, form.monto_total);
+      if (!i.ok) e.iva_discriminado = i.msg;
+    }
     const n = A.validateNotas(form.notas);       if (!n.ok) e.notas = n.msg;
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -68,16 +103,17 @@ function ExpenseModal({ suppliers, onClose, onSuccess }) {
     try {
       const payload = {
         fecha: form.fecha,
-        supplier_id: form.supplier_id || null,
+        supplier_id: showSupplier ? (form.supplier_id || null) : null,
         concepto: form.concepto.trim(),
         monto_total: String(Number(form.monto_total)),
         moneda: form.moneda,
-        iva_discriminado: form.iva_discriminado === '' ? null : String(Number(form.iva_discriminado)),
+        iva_discriminado: (showIva && form.iva_discriminado !== '')
+          ? String(Number(form.iva_discriminado)) : null,
         categoria: form.categoria,
         medio_pago: form.medio_pago,
         notas: form.notas.trim(),
         confirmed_by_human: true,
-        generate_supplier_movement: form.supplier_id ? effectiveGen : null,
+        generate_supplier_movement: showCheckbox ? effectiveGen : null,
       };
       await window.ADMIN_DATA.createExpense(payload);
       toast.success('Egreso registrado');
@@ -128,43 +164,46 @@ function ExpenseModal({ suppliers, onClose, onSuccess }) {
           </select>
         </div>
 
-        <div className="field-group expense-field-full">
-          <label className="field-label">Proveedor</label>
-          <div className="supplier-combo">
-            <input className="field-input"
-                   placeholder={selectedSupplier ? selectedSupplier.nombre : 'Sin proveedor del catalogo'}
-                   value={supplierSearch}
-                   onFocus={() => setSupplierDropdownOpen(true)}
-                   onChange={e => { setSupplierSearch(e.target.value); setSupplierDropdownOpen(true); }}/>
-            {supplierDropdownOpen && (
-              <div className="supplier-dropdown" onMouseLeave={() => setSupplierDropdownOpen(false)}>
-                <button type="button" className="supplier-option"
-                        onClick={() => pickSupplier('', '')}>
-                  <em>Sin proveedor del catalogo</em>
-                </button>
-                {filteredSuppliers.length === 0 ? (
-                  <div className="supplier-empty">
-                    {suppliers.length === 0
-                      ? 'No hay proveedores cargados. Cargá uno desde tab Proveedores.'
-                      : 'Sin resultados'}
-                  </div>
-                ) : (
-                  filteredSuppliers.map(s => (
-                    <button type="button" key={s.id} className="supplier-option"
-                            onClick={() => pickSupplier(s.id, s.nombre)}>
-                      <strong>{s.nombre}</strong>
-                      {s.cuit && <span style={{marginLeft:6, color:'var(--ink-muted)'}}>{s.cuit}</span>}
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
+        {showSupplier && (
+          <div className="field-group expense-field-full">
+            <label className="field-label">Proveedor</label>
+            <div className="supplier-combo">
+              <input className="field-input"
+                     placeholder={selectedSupplier ? selectedSupplier.nombre : 'Sin proveedor del catalogo'}
+                     value={supplierSearch}
+                     onFocus={() => setSupplierDropdownOpen(true)}
+                     onChange={e => { setSupplierSearch(e.target.value); setSupplierDropdownOpen(true); }}/>
+              {supplierDropdownOpen && (
+                <div className="supplier-dropdown" onMouseLeave={() => setSupplierDropdownOpen(false)}>
+                  <button type="button" className="supplier-option"
+                          onClick={() => pickSupplier('', '')}>
+                    <em>Sin proveedor del catalogo</em>
+                  </button>
+                  {filteredSuppliers.length === 0 ? (
+                    <div className="supplier-empty">
+                      {suppliers.length === 0
+                        ? 'No hay proveedores cargados. Cargá uno desde tab Proveedores.'
+                        : 'Sin resultados'}
+                    </div>
+                  ) : (
+                    filteredSuppliers.map(s => (
+                      <button type="button" key={s.id} className="supplier-option"
+                              onClick={() => pickSupplier(s.id, s.nombre)}>
+                        <strong>{s.nombre}</strong>
+                        {s.cuit && <span style={{marginLeft:6, color:'var(--ink-muted)'}}>{s.cuit}</span>}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="field-group expense-field-full">
           <label className="field-label">Concepto *</label>
           <input className={`field-input ${errors.concepto ? 'has-error' : ''}`}
+                 placeholder={EXPENSE_CONCEPTO_PLACEHOLDERS[form.categoria] || 'Descripción del gasto'}
                  value={form.concepto} maxLength={500}
                  onChange={e => set('concepto', e.target.value)} onBlur={validate}/>
           {errors.concepto && <div className="field-error">{errors.concepto}</div>}
@@ -188,18 +227,20 @@ function ExpenseModal({ suppliers, onClose, onSuccess }) {
           </select>
         </div>
 
-        <div className="field-group">
-          <label className="field-label">IVA discriminado</label>
-          <input type="number" step="0.01" min="0"
-                 className={`field-input ${errors.iva_discriminado ? 'has-error' : ''}`}
-                 value={form.iva_discriminado}
-                 onChange={e => set('iva_discriminado', e.target.value)} onBlur={validate}/>
-          {errors.iva_discriminado
-            ? <div className="field-error">{errors.iva_discriminado}</div>
-            : <div className="field-help">Opcional</div>}
-        </div>
+        {showIva && (
+          <div className="field-group">
+            <label className="field-label">IVA discriminado</label>
+            <input type="number" step="0.01" min="0"
+                   className={`field-input ${errors.iva_discriminado ? 'has-error' : ''}`}
+                   value={form.iva_discriminado}
+                   onChange={e => set('iva_discriminado', e.target.value)} onBlur={validate}/>
+            {errors.iva_discriminado
+              ? <div className="field-error">{errors.iva_discriminado}</div>
+              : <div className="field-help">Opcional</div>}
+          </div>
+        )}
 
-        <div className="field-group">
+        <div className={`field-group ${!showIva ? 'expense-field-full' : ''}`}>
           <label className="field-label">Medio de pago *</label>
           <select className="field-input" value={form.medio_pago}
                   onChange={e => set('medio_pago', e.target.value)}>
