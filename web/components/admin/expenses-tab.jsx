@@ -4,13 +4,13 @@
    client-side filter para search/categoría/medio. Fila expandible
    inline con notas, IVA, fecha de creación. Lazy mount. ══ */
 
-function ExpensesTab() {
+function ExpensesTab({ pendingExpenseId, clearPending }) {
   const toast = useToast();
   const [items, setItems] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [filters, setFilters] = useState({
     search: '',
-    dateRange: 'mes_actual',
+    dateRange: 'ultimos_90',  // si vino con pendingExpenseId, mas amplio = mas chance de encontrarlo
     customFrom: '',
     customTo: '',
     categoria: 'todas',
@@ -20,6 +20,23 @@ function ExpensesTab() {
   const [modalOpen, setModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  /* B.5: si llega pendingExpenseId del bus ADMIN_NAV (boton "Ver egreso"
+     en cta cte), abrir esa fila + scrollear. Cuando los items cargan y el
+     id matchea, expandir + clear pending. */
+  useEffect(() => {
+    if (!pendingExpenseId || items.length === 0) return;
+    if (items.some(it => it.id === pendingExpenseId)) {
+      setExpandedRowId(pendingExpenseId);
+      // Scroll suave si el row existe en el DOM
+      setTimeout(() => {
+        const el = document.querySelector(`[data-expense-id="${pendingExpenseId}"]`);
+        if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 50);
+      try { clearPending?.(); } catch (_) {}
+    }
+    /* eslint-disable-next-line */
+  }, [pendingExpenseId, items]);
 
   const reload = async () => {
     setLoading(true); setError(null);
@@ -156,6 +173,7 @@ function ExpensesTab() {
                   return (
                     <React.Fragment key={it.id}>
                       <tr className="expense-row"
+                          data-expense-id={it.id}
                           onClick={() => setExpandedRowId(isExpanded ? null : it.id)}>
                         <td>{window.ADMIN_DATA.formatDate(it.fecha)}</td>
                         <td>{it.suppliers?.nombre

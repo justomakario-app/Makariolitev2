@@ -12,7 +12,18 @@ function AdminPage() {
     { id:'cuentas',     label:'Cuentas Corrientes' },
   ];
   const [tab, setTab] = useState('egresos');
+  const [pendingExpenseId, setPendingExpenseId] = useState(null);
   const active = TABS.find(t => t.id === tab) || TABS[0];
+
+  /* B.5: bus de navegacion cross-tab. CtaCteRow dispara goToExpense(id)
+     cuando se clickea "Ver egreso" en un movement automatico. */
+  useEffect(() => {
+    if (!window.ADMIN_NAV) return;
+    return window.ADMIN_NAV.subscribe(({ tab: targetTab, expenseId }) => {
+      if (targetTab) setTab(targetTab);
+      if (expenseId) setPendingExpenseId(expenseId);
+    });
+  }, []);
 
   return (
     <div className="page">
@@ -38,7 +49,8 @@ function AdminPage() {
       </div>
 
       <div role="tabpanel">
-        {tab === 'egresos'     && window.ExpensesTab  ? <window.ExpensesTab/>  :
+        {tab === 'egresos'     && window.ExpensesTab  ? <window.ExpensesTab pendingExpenseId={pendingExpenseId} clearPending={() => setPendingExpenseId(null)}/>  :
+         tab === 'cuentas'     && window.CuentasCorrientesTab ? <window.CuentasCorrientesTab/> :
          tab === 'proveedores' && window.SuppliersTab ? <window.SuppliersTab/> :
          tab === 'clientes'    && window.CustomersTab ? <window.CustomersTab/> : (
           <div className="admin-empty-state">

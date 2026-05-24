@@ -161,6 +161,91 @@
     return { ok: true };
   }
 
+  /* ── Cuentas Corrientes (B.5) ─────────────────────────────────── */
+
+  async function loadSuppliersWithCredit() {
+    const { data, error } = await supa
+      .from('suppliers_credit')
+      .select('id, saldo, updated_at, suppliers(id, nombre, cuit, email)')
+      .order('nombre', { referencedTable: 'suppliers', ascending: true });
+    if (error) throw new Error(error.message || 'No se pudo cargar proveedores');
+    return data || [];
+  }
+
+  async function loadCustomersWithCredit() {
+    const { data, error } = await supa
+      .from('customers_credit')
+      .select('id, saldo, updated_at, customer_type, customers_b2b(id, nombre, cuit, email)')
+      .eq('customer_type', 'b2b')
+      .order('nombre', { referencedTable: 'customers_b2b', ascending: true });
+    if (error) throw new Error(error.message || 'No se pudo cargar clientes');
+    return data || [];
+  }
+
+  async function loadSupplierMovements(supplierCreditId) {
+    const { data, error } = await supa
+      .from('suppliers_credit_movements')
+      .select('id, fecha, tipo, monto, concepto, expense_id, check_id, created_at, expenses(id, concepto, fecha, categoria, medio_pago)')
+      .eq('supplier_credit_id', supplierCreditId)
+      .order('fecha', { ascending: false })
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(error.message || 'No se pudo cargar movimientos');
+    return data || [];
+  }
+
+  async function loadCustomerMovements(customerCreditId) {
+    const { data, error } = await supa
+      .from('customers_credit_movements')
+      .select('id, fecha, tipo, monto, concepto, referencia_externa, created_at')
+      .eq('customer_credit_id', customerCreditId)
+      .order('fecha', { ascending: false })
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(error.message || 'No se pudo cargar movimientos');
+    return data || [];
+  }
+
+  /* Wrappers RPC: create (Tanda A) + update/delete (0051). */
+  async function createSupplierMovement(payload) {
+    const { data, error } = await supa.rpc('rpc_admin_create_supplier_credit_movement', { p_payload: payload });
+    if (error) throw new Error(error.message || 'No se pudo crear movimiento');
+    return data;
+  }
+  async function updateSupplierMovement(payload) {
+    const { data, error } = await supa.rpc('rpc_admin_update_supplier_credit_movement', { p_payload: payload });
+    if (error) throw new Error(error.message || 'No se pudo actualizar movimiento');
+    return data;
+  }
+  async function deleteSupplierMovement(payload) {
+    const { data, error } = await supa.rpc('rpc_admin_delete_supplier_credit_movement', { p_payload: payload });
+    if (error) throw new Error(error.message || 'No se pudo eliminar movimiento');
+    return data;
+  }
+  async function createCustomerMovement(payload) {
+    const { data, error } = await supa.rpc('rpc_admin_create_customer_credit_movement', { p_payload: payload });
+    if (error) throw new Error(error.message || 'No se pudo crear movimiento');
+    return data;
+  }
+  async function updateCustomerMovement(payload) {
+    const { data, error } = await supa.rpc('rpc_admin_update_customer_credit_movement', { p_payload: payload });
+    if (error) throw new Error(error.message || 'No se pudo actualizar movimiento');
+    return data;
+  }
+  async function deleteCustomerMovement(payload) {
+    const { data, error } = await supa.rpc('rpc_admin_delete_customer_credit_movement', { p_payload: payload });
+    if (error) throw new Error(error.message || 'No se pudo eliminar movimiento');
+    return data;
+  }
+
+  /* Validador especifico de monto para movements: ajuste permite negativo. */
+  function validateMovementMonto(s, tipo) {
+    if (s === '' || s == null) return { ok: false, msg: 'Monto requerido' };
+    const v = Number(s);
+    if (!Number.isFinite(v)) return { ok: false, msg: 'Numero invalido' };
+    if (v === 0) return { ok: false, msg: 'Debe ser distinto de 0' };
+    if (tipo !== 'ajuste' && v <= 0) return { ok: false, msg: 'Debe ser mayor a 0 (usá ajuste para negativos)' };
+    return { ok: true };
+  }
+
   window.ADMIN_DATA = {
     // B.2
     loadSuppliers,
@@ -181,5 +266,31 @@
     validateMonto,
     validateIva,
     validateFecha,
+    // B.5
+    loadSuppliersWithCredit,
+    loadCustomersWithCredit,
+    loadSupplierMovements,
+    loadCustomerMovements,
+    createSupplierMovement,
+    updateSupplierMovement,
+    deleteSupplierMovement,
+    createCustomerMovement,
+    updateCustomerMovement,
+    deleteCustomerMovement,
+    validateMovementMonto,
+  };
+
+  /* ── Navegacion cross-tab (B.5) ───────────────────────────────────
+     Bus liviano para que el boton "Ver egreso" de un movement automatico
+     pida al admin.jsx que cambie de tab + pase el expenseId a ExpensesTab. */
+  window.ADMIN_NAV = window.ADMIN_NAV || {
+    _listeners: [],
+    subscribe(fn) {
+      this._listeners.push(fn);
+      return () => { this._listeners = this._listeners.filter(x => x !== fn); };
+    },
+    goToExpense(expenseId) {
+      this._listeners.forEach(fn => { try { fn({ tab: 'egresos', expenseId }); } catch (_) {} });
+    },
   };
 })();
