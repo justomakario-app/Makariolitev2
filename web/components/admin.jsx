@@ -38,7 +38,8 @@ function AdminPage() {
       </div>
 
       <div role="tabpanel">
-        {tab === 'proveedores' && window.SuppliersTab ? <window.SuppliersTab/> :
+        {tab === 'egresos'     && window.ExpensesTab  ? <window.ExpensesTab/>  :
+         tab === 'proveedores' && window.SuppliersTab ? <window.SuppliersTab/> :
          tab === 'clientes'    && window.CustomersTab ? <window.CustomersTab/> : (
           <div className="admin-empty-state">
             <Icon n="dollar" s={32} c="var(--ink-muted)"/>
