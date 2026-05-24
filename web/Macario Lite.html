@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="components/styles.css?v=5">
+  <link rel="stylesheet" href="components/styles.css?v=6">
 </head>
 <body>
   <!-- Auto-redirect a la PWA mobile (/m/) si el viewport es de celular.
@@ -53,7 +53,14 @@
   <script type="text/babel" src="components/modals.jsx?v=30"></script>
   <script type="text/babel" src="components/stock.jsx?v=1"></script>
   <script type="text/babel" src="components/pages.jsx?v=16"></script>
-  <script type="text/babel" src="components/admin.jsx?v=1"></script>
+
+  <!-- B.2: admin data layer + tabs + modal compartido -->
+  <script src="components/admin/admin-data.js?v=1"></script>
+  <script type="text/babel" src="components/admin/entity-modal.jsx?v=1"></script>
+  <script type="text/babel" src="components/admin/suppliers-tab.jsx?v=1"></script>
+  <script type="text/babel" src="components/admin/customers-tab.jsx?v=1"></script>
+
+  <script type="text/babel" src="components/admin.jsx?v=2"></script>
   <script type="text/babel" src="components/app.jsx?v=16"></script>
 
   <!-- Boot: espera a que los componentes y supabase-js estén listos -->

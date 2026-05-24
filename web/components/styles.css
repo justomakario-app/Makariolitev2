@@ -1094,7 +1094,7 @@ select.field-input { cursor: pointer; }
 ::-webkit-scrollbar-thumb { background: var(--border-md); border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--ink-faint); }
 
-/* ── Admin (B.1 esqueleto) ── */
+/* ── Admin (B.1 esqueleto + B.2 listados) ── */
 .admin-empty-state {
   display: flex;
   flex-direction: column;
@@ -1114,6 +1114,49 @@ select.field-input { cursor: pointer; }
 .admin-empty-state p {
   font-size: 13px;
   margin: 0;
+}
+
+.admin-tab-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.admin-search {
+  position: relative;
+  flex: 1;
+  min-width: 240px;
+  display: flex;
+  align-items: center;
+}
+.admin-search > svg {
+  position: absolute;
+  left: 10px;
+  pointer-events: none;
+}
+.admin-search-input { padding-left: 30px; width: 100%; }
+
+.admin-tab-footer {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--ink-muted);
+  text-align: right;
+}
+
+.field-input.has-error {
+  border-color: var(--red, #dc2626);
+}
+.field-error {
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--red, #dc2626);
+  font-weight: 600;
+}
+.field-help {
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--ink-muted);
 }
 
 /* ── Print ── */
