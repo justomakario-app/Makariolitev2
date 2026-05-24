@@ -1339,6 +1339,88 @@ select.field-input { cursor: pointer; }
 .btn-ghost-sm.danger { color: var(--red); }
 .btn-ghost-sm.danger:hover { background: #fef2f2; color: var(--red); }
 
+/* ── Cheques (B.4) ── */
+.check-row { /* hereda estilos basicos de data-table tr */ }
+
+.check-status-pill {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 10px;
+  border-radius: 12px;
+}
+.check-status-pill.estado-emitido {
+  background: #e0e7ff;
+  color: #3730a3;
+  border: 1px solid #818cf8;
+}
+.check-status-pill.estado-cobrado {
+  background: var(--green-bg, #effaf1);
+  color: var(--green, #15803d);
+  border: 1px solid #86efac;
+}
+.check-status-pill.estado-anulado {
+  background: var(--paper-dim);
+  color: var(--ink-muted);
+  border: 1px solid var(--border-md);
+}
+.check-status-pill.estado-devuelto {
+  background: #fef2f2;
+  color: var(--red, #dc2626);
+  border: 1px solid #fca5a5;
+}
+
+.badge-vencido {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: var(--red, #dc2626);
+  border: 1px solid #fca5a5;
+}
+.badge-por-vencer {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fbbf24;
+}
+
+.check-locked-hint {
+  display: inline-flex;
+  align-items: center;
+  color: var(--ink-muted);
+  padding: 4px 8px;
+}
+
+.check-status-radio-row {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.check-status-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.check-status-radio input { cursor: pointer; }
+
 /* ── Print ── */
 @media print {
   .sidebar, .btn-primary, .btn-ghost, .filter-bar { display: none !important; }

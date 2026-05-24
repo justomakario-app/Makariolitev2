@@ -196,7 +196,7 @@
   async function loadCustomerMovements(customerCreditId) {
     const { data, error } = await supa
       .from('customers_credit_movements')
-      .select('id, fecha, tipo, monto, concepto, referencia_externa, created_at')
+      .select('id, fecha, tipo, monto, concepto, referencia_externa, check_id, created_at')
       .eq('customer_credit_id', customerCreditId)
       .order('fecha', { ascending: false })
       .order('created_at', { ascending: false });
@@ -246,6 +246,113 @@
     return { ok: true };
   }
 
+  /* ── Cheques (B.4) ──────────────────────────────────────────────── */
+
+  const CHECK_COLS_ISSUED = [
+    'id','numero','banco','monto','fecha_emision','fecha_cobro_estimada',
+    'fecha_cobro','fecha_anulado','fecha_devuelto',
+    'beneficiario_supplier_id','beneficiario_texto','estado','notas',
+    'created_at','updated_at',
+    'suppliers(id, nombre, cuit)',
+  ].join(',');
+
+  const CHECK_COLS_RECEIVED = [
+    'id','numero','banco','monto','fecha_emision','fecha_cobro_estimada',
+    'fecha_cobro','fecha_anulado','fecha_devuelto',
+    'emisor_customer_b2b_id','emisor_texto','estado','notas',
+    'created_at','updated_at',
+    'customers_b2b(id, nombre, cuit)',
+  ].join(',');
+
+  async function loadChecksIssued() {
+    const { data, error } = await supa
+      .from('checks_issued')
+      .select(CHECK_COLS_ISSUED)
+      .order('fecha_emision', { ascending: false })
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(error.message || 'No se pudo cargar cheques emitidos');
+    return data || [];
+  }
+
+  async function loadChecksReceived() {
+    const { data, error } = await supa
+      .from('checks_received')
+      .select(CHECK_COLS_RECEIVED)
+      .order('fecha_emision', { ascending: false })
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(error.message || 'No se pudo cargar cheques recibidos');
+    return data || [];
+  }
+
+  async function createCheckIssued(payload) {
+    const p = { ...payload, generate_supplier_movement: false };
+    const { data, error } = await supa.rpc('rpc_admin_create_check', { p_payload: p });
+    if (error) throw new Error(error.message || 'No se pudo crear cheque');
+    return data;
+  }
+  async function createCheckReceived(payload) {
+    const p = { ...payload, generate_customer_movement: false };
+    const { data, error } = await supa.rpc('rpc_admin_create_check_received', { p_payload: p });
+    if (error) throw new Error(error.message || 'No se pudo crear cheque');
+    return data;
+  }
+  async function updateCheckIssued(payload) {
+    const { data, error } = await supa.rpc('rpc_admin_update_check', { p_payload: payload });
+    if (error) throw new Error(error.message || 'No se pudo actualizar cheque');
+    return data;
+  }
+  async function updateCheckReceived(payload) {
+    const { data, error } = await supa.rpc('rpc_admin_update_check_received', { p_payload: payload });
+    if (error) throw new Error(error.message || 'No se pudo actualizar cheque');
+    return data;
+  }
+  async function deleteCheckIssued(payload) {
+    const { data, error } = await supa.rpc('rpc_admin_delete_check', { p_payload: payload });
+    if (error) throw new Error(error.message || 'No se pudo eliminar cheque');
+    return data;
+  }
+  async function deleteCheckReceived(payload) {
+    const { data, error } = await supa.rpc('rpc_admin_delete_check_received', { p_payload: payload });
+    if (error) throw new Error(error.message || 'No se pudo eliminar cheque');
+    return data;
+  }
+  async function changeCheckStatus(payload) {
+    const { data, error } = await supa.rpc('rpc_admin_change_check_status', { p_payload: payload });
+    if (error) throw new Error(error.message || 'No se pudo cambiar estado del cheque');
+    return data;
+  }
+
+  /* Validadores cheques. */
+  function validateNumeroCheque(s) {
+    const v = (s || '').trim();
+    if (v.length < 1) return { ok: false, msg: 'Numero requerido' };
+    if (v.length > 50) return { ok: false, msg: 'Maximo 50 caracteres' };
+    return { ok: true };
+  }
+  function validateBanco(s) {
+    const v = (s || '').trim();
+    if (v.length < 1) return { ok: false, msg: 'Banco requerido' };
+    if (v.length > 120) return { ok: false, msg: 'Maximo 120 caracteres' };
+    return { ok: true };
+  }
+  function validateFechaVencimiento(s) {
+    if (!s) return { ok: true };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return { ok: false, msg: 'Formato invalido' };
+    return { ok: true };
+  }
+
+  /* Helper de vencimiento (solo aplica si estado='emitido'). */
+  function isVenceProximo(check) {
+    if (!check || check.estado !== 'emitido') return 'ok';
+    if (!check.fecha_cobro_estimada) return 'ok';
+    const today = window.todayLocalStr();
+    const venc = String(check.fecha_cobro_estimada).slice(0, 10);
+    if (venc < today) return 'vencido';
+    const limit = window.todayLocalStr(new Date(Date.now() + 7 * 24 * 3600 * 1000));
+    if (venc <= limit) return 'por_vencer';
+    return 'ok';
+  }
+
   window.ADMIN_DATA = {
     // B.2
     loadSuppliers,
@@ -278,6 +385,20 @@
     updateCustomerMovement,
     deleteCustomerMovement,
     validateMovementMonto,
+    // B.4
+    loadChecksIssued,
+    loadChecksReceived,
+    createCheckIssued,
+    createCheckReceived,
+    updateCheckIssued,
+    updateCheckReceived,
+    deleteCheckIssued,
+    deleteCheckReceived,
+    changeCheckStatus,
+    validateNumeroCheque,
+    validateBanco,
+    validateFechaVencimiento,
+    isVenceProximo,
   };
 
   /* ── Navegacion cross-tab (B.5) ───────────────────────────────────

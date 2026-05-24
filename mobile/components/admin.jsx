@@ -51,6 +51,7 @@ function AdminPage() {
       <div role="tabpanel">
         {tab === 'egresos'     && window.ExpensesTab  ? <window.ExpensesTab pendingExpenseId={pendingExpenseId} clearPending={() => setPendingExpenseId(null)}/>  :
          tab === 'cuentas'     && window.CuentasCorrientesTab ? <window.CuentasCorrientesTab/> :
+         tab === 'cheques'     && window.ChecksTab    ? <window.ChecksTab/> :
          tab === 'proveedores' && window.SuppliersTab ? <window.SuppliersTab/> :
          tab === 'clientes'    && window.CustomersTab ? <window.CustomersTab/> : (
           <div className="admin-empty-state">
