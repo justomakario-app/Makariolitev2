@@ -15,6 +15,7 @@ function Sidebar({ current, onNav, onLogout, unread }) {
     { id:'registrar',     label:'Registrar producción', icon:'plus' },
 
     { sec:'admin', label:'Admin' },
+    { id:'admin',         label:'Admin',              icon:'dollar' },
     { id:'historico',     label:'Histórico',          icon:'history' },
     { id:'catalogo',      label:'Catálogo',           icon:'tag' },
     { id:'equipo',        label:'Equipo',             icon:'users' },
@@ -24,8 +25,11 @@ function Sidebar({ current, onNav, onLogout, unread }) {
     { id:'perfil',        label:'Mi Perfil',          icon:'user' },
   ];
 
-  /* filtrar por rol — quitar items y secciones vacías */
-  const visible = all.filter(it => it.sec || allowed.includes(it.id));
+  /* filtrar por rol — quitar items y secciones vacías.
+     Admin tambien gated por window.FEATURE_ADMIN (B.1). */
+  const visible = all.filter(it =>
+    it.sec || (allowed.includes(it.id) && (it.id !== 'admin' || window.FEATURE_ADMIN === true))
+  );
   /* quitar headers de sección que quedaron sin items debajo */
   const cleaned = visible.filter((it, i) => {
     if (!it.sec) return true;

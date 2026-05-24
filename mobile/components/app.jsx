@@ -76,6 +76,13 @@ function App() {
         ? <window.StockPage onBack={() => setPage('dashboard')}/>
         : <DashboardPage onNav={setPage}/>;
     }
+    if (page === 'admin') {
+      // Guard: admin solo para owner/admin con flag ON. Operario o flag OFF
+      // → fallback silencioso al dashboard.
+      const role = (M.user.role || '').toLowerCase();
+      if (!window.FEATURE_ADMIN || !['owner','admin'].includes(role)) return <DashboardPage onNav={setPage}/>;
+      return window.AdminPage ? <window.AdminPage/> : <DashboardPage onNav={setPage}/>;
+    }
     return <DashboardPage onNav={setPage}/>;
   };
 

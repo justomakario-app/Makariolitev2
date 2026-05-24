@@ -73,6 +73,13 @@ function App() {
     if (page === 'historico')      return <HistoricoPage/>;
     if (page === 'catalogo')       return <CatalogoPage/>;
     if (page === 'equipo')         return <EquipoPage/>;
+    if (page === 'admin') {
+      // Guard: admin solo para owner/admin con flag ON. Operario o flag OFF
+      // → fallback silencioso al dashboard.
+      const role = (M.user.role || '').toLowerCase();
+      if (!window.FEATURE_ADMIN || !['owner','admin'].includes(role)) return <DashboardPage onNav={setPage}/>;
+      return window.AdminPage ? <window.AdminPage/> : <DashboardPage onNav={setPage}/>;
+    }
     if (page === 'notificaciones') return <NotificacionesPage/>;
     if (page === 'perfil' || page === 'config') return <ConfigPage/>;
     return <DashboardPage onNav={setPage}/>;

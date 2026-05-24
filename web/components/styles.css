@@ -1094,6 +1094,28 @@ select.field-input { cursor: pointer; }
 ::-webkit-scrollbar-thumb { background: var(--border-md); border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--ink-faint); }
 
+/* ── Admin (B.1 esqueleto) ── */
+.admin-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 64px 24px;
+  text-align: center;
+  color: var(--ink-muted);
+}
+.admin-empty-state h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 4px 0 0;
+}
+.admin-empty-state p {
+  font-size: 13px;
+  margin: 0;
+}
+
 /* ── Print ── */
 @media print {
   .sidebar, .btn-primary, .btn-ghost, .filter-bar { display: none !important; }

@@ -141,8 +141,8 @@ window.MOCK = {
   },
 
   ROLE_NAV: {
-    owner:     { landing:'dashboard',  items:['dashboard','colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino','stock','produccion','registrar','historico','catalogo','equipo','notificaciones','perfil'] },
-    admin:     { landing:'dashboard',  items:['dashboard','colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino','stock','produccion','registrar','historico','catalogo','equipo','notificaciones','perfil'] },
+    owner:     { landing:'dashboard',  items:['dashboard','colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino','stock','produccion','registrar','historico','catalogo','equipo','notificaciones','perfil','admin'] },
+    admin:     { landing:'dashboard',  items:['dashboard','colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino','stock','produccion','registrar','historico','catalogo','equipo','notificaciones','perfil','admin'] },
     encargado: { landing:'produccion', items:['produccion','registrar','stock','notificaciones','perfil'] },
     cnc:       { landing:'produccion', items:['produccion','registrar','perfil'] },
     melamina:  { landing:'produccion', items:['produccion','registrar','perfil'] },
@@ -1311,6 +1311,16 @@ function subscribeRealtime() {
    invoca con flag OFF.
    Activado 2026-05-06 tras validacion visual con flag OFF. */
 window.FEATURE_PEDIDOS_MANUALES = true;
+
+/* CARGA MANUAL DE EGRESOS, CHEQUES, CLIENTES, PROVEEDORES, CTAS CTES.
+   Cuando false: el nav-item "Admin" no aparece, el routing fallback
+   manda a dashboard, ningun componente admin se renderiza. Sistema
+   visualmente identico al pre-feature. Para activar: cambiar a true
+   + redeploy.
+   NOTA: el deploy de la Edge Function agent_admin y el seteo del
+   secret ANTHROPIC_API_KEY estan diferidos a B.5+. Esta sub-fase B.1
+   no consume IA. */
+window.FEATURE_ADMIN = false;
 
 /* ─────────────────────────────────────────────────────────────────
    BOOT
