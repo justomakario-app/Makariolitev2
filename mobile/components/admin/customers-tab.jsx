@@ -200,8 +200,7 @@ function CustomersTab() {
       )}
 
       {modalState && (
-        <window.EntityModal
-          entityType="customer_b2b"
+        <window.CustomerModal
           mode={modalState.mode}
           initial={modalState.initial}
           onClose={() => setModalState(null)}

@@ -11,13 +11,16 @@
     return;
   }
 
-  const COLS = 'id, nombre, cuit, email, telefono, notas, activo, created_at, created_by';
+  const COLS_CUSTOMER = 'id, nombre, cuit, email, telefono, notas, activo, created_at, created_by';
+  /* S2.2: suppliers usa '*' para traer los 11 campos nuevos de ficha
+     ampliada sin tener que enumerarlos uno a uno. */
+  const COLS_SUPPLIER = '*';
 
   /* S2.1: opts.includeInactive=true trae tambien filas con activo=false.
      Default: solo activas (filtro server-side). */
   async function loadSuppliers(opts) {
     const includeInactive = opts && opts.includeInactive === true;
-    let q = supa.from('suppliers').select(COLS).order('nombre', { ascending: true });
+    let q = supa.from('suppliers').select(COLS_SUPPLIER).order('nombre', { ascending: true });
     if (!includeInactive) q = q.eq('activo', true);
     const { data, error } = await q;
     if (error) throw new Error(error.message || 'No se pudo cargar proveedores');
@@ -26,12 +29,47 @@
 
   async function loadCustomersB2B(opts) {
     const includeInactive = opts && opts.includeInactive === true;
-    let q = supa.from('customers_b2b').select(COLS).order('nombre', { ascending: true });
+    let q = supa.from('customers_b2b').select(COLS_CUSTOMER).order('nombre', { ascending: true });
     if (!includeInactive) q = q.eq('activo', true);
     const { data, error } = await q;
     if (error) throw new Error(error.message || 'No se pudo cargar clientes');
     return data || [];
   }
+
+  /* S2.2: historial completo de un proveedor (egresos + cheques + cta cte). */
+  async function getSupplierHistorial(supplierId) {
+    const { data, error } = await supa.rpc('rpc_admin_get_supplier_historial', { p_supplier_id: supplierId });
+    if (error) throw new Error(error.message || 'No se pudo cargar historial');
+    return data;
+  }
+
+  /* S2.2: provincias argentinas hardcoded (23 provincias + CABA). */
+  const ARG_PROVINCIAS = [
+    'Buenos Aires',
+    'Catamarca',
+    'Chaco',
+    'Chubut',
+    'CABA',
+    'Cordoba',
+    'Corrientes',
+    'Entre Rios',
+    'Formosa',
+    'Jujuy',
+    'La Pampa',
+    'La Rioja',
+    'Mendoza',
+    'Misiones',
+    'Neuquen',
+    'Rio Negro',
+    'Salta',
+    'San Juan',
+    'San Luis',
+    'Santa Cruz',
+    'Santa Fe',
+    'Santiago del Estero',
+    'Tierra del Fuego',
+    'Tucuman',
+  ];
 
   async function createSupplier(payload) {
     const { data, error } = await supa.rpc('rpc_admin_create_supplier', { p_payload: payload });
@@ -451,6 +489,9 @@
     updateExpense,
     deleteExpense,
     parseHasRelationsMessage,
+    // S2.2
+    getSupplierHistorial,
+    ARG_PROVINCIAS,
   };
 
   /* ── Navegacion cross-tab (B.5) ───────────────────────────────────

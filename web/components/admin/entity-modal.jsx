@@ -1,3 +1,8 @@
+// DEPRECATED S2.2 — funcionalidad split en supplier-modal,
+// customer-modal, y desactivar-fallback-modal.
+// Mantenido en disco como defensa contra rollback.
+// NO se carga desde los HTMLs.
+
 /* ══ ENTITY MODAL (B.2 + S2.1)
    Modal compartido para alta/edicion de proveedor y cliente B2B.
    Props: { entityType: 'supplier' | 'customer_b2b',

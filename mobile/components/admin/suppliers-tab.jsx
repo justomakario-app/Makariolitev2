@@ -201,8 +201,7 @@ function SuppliersTab() {
       )}
 
       {modalState && (
-        <window.EntityModal
-          entityType="supplier"
+        <window.SupplierModal
           mode={modalState.mode}
           initial={modalState.initial}
           onClose={() => setModalState(null)}
