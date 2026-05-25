@@ -1421,6 +1421,32 @@ select.field-input { cursor: pointer; }
 }
 .check-status-radio input { cursor: pointer; }
 
+/* ── Edit/Delete universal + Activo flag (S2.1) ── */
+.admin-toggle-inactive {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  cursor: pointer;
+  user-select: none;
+}
+.admin-toggle-inactive input { cursor: pointer; }
+
+tr.row-inactive { opacity: 0.55; }
+tr.row-inactive td { font-style: italic; }
+tr.row-inactive:hover { opacity: 0.85; }
+
+.btn-reactivate {
+  color: var(--green, #15803d);
+  border-color: #86efac;
+}
+.btn-reactivate:hover {
+  background: var(--green-bg, #effaf1);
+  color: var(--green, #15803d);
+}
+
 /* ── Print ── */
 @media print {
   .sidebar, .btn-primary, .btn-ghost, .filter-bar { display: none !important; }

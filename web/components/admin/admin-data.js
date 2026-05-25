@@ -11,22 +11,24 @@
     return;
   }
 
-  const COLS = 'id, nombre, cuit, email, telefono, notas, created_at, created_by';
+  const COLS = 'id, nombre, cuit, email, telefono, notas, activo, created_at, created_by';
 
-  async function loadSuppliers() {
-    const { data, error } = await supa
-      .from('suppliers')
-      .select(COLS)
-      .order('nombre', { ascending: true });
+  /* S2.1: opts.includeInactive=true trae tambien filas con activo=false.
+     Default: solo activas (filtro server-side). */
+  async function loadSuppliers(opts) {
+    const includeInactive = opts && opts.includeInactive === true;
+    let q = supa.from('suppliers').select(COLS).order('nombre', { ascending: true });
+    if (!includeInactive) q = q.eq('activo', true);
+    const { data, error } = await q;
     if (error) throw new Error(error.message || 'No se pudo cargar proveedores');
     return data || [];
   }
 
-  async function loadCustomersB2B() {
-    const { data, error } = await supa
-      .from('customers_b2b')
-      .select(COLS)
-      .order('nombre', { ascending: true });
+  async function loadCustomersB2B(opts) {
+    const includeInactive = opts && opts.includeInactive === true;
+    let q = supa.from('customers_b2b').select(COLS).order('nombre', { ascending: true });
+    if (!includeInactive) q = q.eq('activo', true);
+    const { data, error } = await q;
     if (error) throw new Error(error.message || 'No se pudo cargar clientes');
     return data || [];
   }
@@ -72,16 +74,18 @@
   /* ── Egresos / Compras (B.3) ─────────────────────────────────────── */
   const EXPENSE_COLS = [
     'id','fecha','supplier_id','concepto','monto_total','moneda',
-    'iva_discriminado','categoria','medio_pago','notas',
+    'iva_discriminado','categoria','medio_pago','notas','activo',
     'created_at','created_by',
     'suppliers(nombre)',
   ].join(',');
 
+  /* S2.1: opts.includeInactive=true trae tambien egresos con activo=false. */
   async function loadExpenses(opts) {
-    const { dateFrom, dateTo } = opts || {};
+    const { dateFrom, dateTo, includeInactive } = opts || {};
     let q = supa.from('expenses').select(EXPENSE_COLS);
     if (dateFrom) q = q.gte('fecha', dateFrom);
     if (dateTo)   q = q.lte('fecha', dateTo);
+    if (!includeInactive) q = q.eq('activo', true);
     q = q.order('fecha', { ascending: false })
          .order('created_at', { ascending: false });
     const { data, error } = await q;
@@ -341,6 +345,46 @@
     return { ok: true };
   }
 
+  /* ── Edit/Delete universal (S2.1) ────────────────────────────────
+     Wrappers que preservan error.hint y error.code para que el
+     frontend pueda detectar 'has_relations' y 'duplicate_cuit'. */
+  async function _rpcWithHint(name, payload, defaultMsg) {
+    const { data, error } = await supa.rpc(name, { p_payload: payload });
+    if (error) {
+      const e = new Error(error.message || defaultMsg);
+      e.hint = error.hint || null;
+      e.code = error.code || null;
+      throw e;
+    }
+    return data;
+  }
+  async function updateSupplier(payload) {
+    return _rpcWithHint('rpc_admin_update_supplier', payload, 'No se pudo actualizar proveedor');
+  }
+  async function deleteSupplier(payload) {
+    return _rpcWithHint('rpc_admin_delete_supplier', payload, 'No se pudo eliminar proveedor');
+  }
+  async function updateCustomerB2B(payload) {
+    return _rpcWithHint('rpc_admin_update_customer_b2b', payload, 'No se pudo actualizar cliente');
+  }
+  async function deleteCustomerB2B(payload) {
+    return _rpcWithHint('rpc_admin_delete_customer_b2b', payload, 'No se pudo eliminar cliente');
+  }
+  async function updateExpense(payload) {
+    return _rpcWithHint('rpc_admin_update_expense', payload, 'No se pudo actualizar egreso');
+  }
+  async function deleteExpense(payload) {
+    return _rpcWithHint('rpc_admin_delete_expense', payload, 'No se pudo eliminar egreso');
+  }
+
+  /* Parser del mensaje de borrado bloqueado. Extrae los numeros que
+     vienen en el mensaje "No se puede eliminar: tiene N egresos, ..." */
+  function parseHasRelationsMessage(msg) {
+    if (!msg) return null;
+    const nums = (msg.match(/\d+/g) || []).map(Number);
+    return { raw: msg, counts: nums };
+  }
+
   /* Helper de vencimiento (solo aplica si estado='emitido'). */
   function isVenceProximo(check) {
     if (!check || check.estado !== 'emitido') return 'ok';
@@ -399,6 +443,14 @@
     validateBanco,
     validateFechaVencimiento,
     isVenceProximo,
+    // S2.1
+    updateSupplier,
+    deleteSupplier,
+    updateCustomerB2B,
+    deleteCustomerB2B,
+    updateExpense,
+    deleteExpense,
+    parseHasRelationsMessage,
   };
 
   /* ── Navegacion cross-tab (B.5) ───────────────────────────────────

@@ -1,10 +1,13 @@
-/* ══ EXPENSE MODAL (B.3 + B.3.1)
-   Alta manual de egreso. Sin OCR ni upload de comprobante (diferido a
-   sprint post-Edge-Function). Reusa window.Modal de modals.jsx.
+/* ══ EXPENSE MODAL (B.3 + B.3.1 + S2.1)
+   Alta o edicion manual de egreso. Sin OCR ni upload de comprobante.
+   Reusa window.Modal de modals.jsx.
    Campos visibles según categoria (B.3.1):
      sueldos/impuestos → ocultan Proveedor, IVA y checkbox cta cte.
      resto → todos los campos.
-   Props: { suppliers, onClose, onSuccess }
+   Props: { suppliers,
+            mode: 'create' | 'edit' (default 'create'),
+            initial?: {id, fecha, supplier_id, concepto, monto_total, ...},
+            onClose, onSuccess }
    ══ */
 
 const HIDE_SUPPLIER_CATEGORIES = ['sueldos', 'impuestos'];
@@ -18,25 +21,30 @@ const EXPENSE_CONCEPTO_PLACEHOLDERS = {
   otros:     'Descripción del gasto',
 };
 
-function ExpenseModal({ suppliers, onClose, onSuccess }) {
+function ExpenseModal({ suppliers, mode, initial, onClose, onSuccess }) {
   const toast = useToast();
   const today = window.todayLocalStr();
+  const isEdit = mode === 'edit';
 
   const [form, setForm] = useState({
-    fecha: today,
-    supplier_id: '',
-    concepto: '',
-    monto_total: '',
-    moneda: 'ARS',
-    iva_discriminado: '',
-    categoria: 'insumos',
-    medio_pago: 'efectivo',
-    notas: '',
+    fecha: (initial && initial.fecha) ? String(initial.fecha).slice(0,10) : today,
+    supplier_id: (initial && initial.supplier_id) || '',
+    concepto: (initial && initial.concepto) || '',
+    monto_total: (initial && initial.monto_total != null) ? String(initial.monto_total) : '',
+    moneda: (initial && initial.moneda) || 'ARS',
+    iva_discriminado: (initial && initial.iva_discriminado != null) ? String(initial.iva_discriminado) : '',
+    categoria: (initial && initial.categoria) || 'insumos',
+    medio_pago: (initial && initial.medio_pago) || 'efectivo',
+    notas: (initial && initial.notas) || '',
   });
   const [genOverride, setGenOverride] = useState(null);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
-  const [supplierSearch, setSupplierSearch] = useState('');
+  const [supplierSearch, setSupplierSearch] = useState(
+    initial && initial.supplier_id
+      ? ((initial.suppliers && initial.suppliers.nombre) || '')
+      : ''
+  );
   const [supplierDropdownOpen, setSupplierDropdownOpen] = useState(false);
 
   /* Visibilidad condicional por categoria (B.3.1). */
@@ -112,11 +120,17 @@ function ExpenseModal({ suppliers, onClose, onSuccess }) {
         categoria: form.categoria,
         medio_pago: form.medio_pago,
         notas: form.notas.trim(),
-        confirmed_by_human: true,
-        generate_supplier_movement: showCheckbox ? effectiveGen : null,
       };
-      await window.ADMIN_DATA.createExpense(payload);
-      toast.success('Egreso registrado');
+      if (isEdit) {
+        payload.id = initial.id;
+        await window.ADMIN_DATA.updateExpense(payload);
+        toast.success('Egreso actualizado');
+      } else {
+        payload.confirmed_by_human = true;
+        payload.generate_supplier_movement = showCheckbox ? effectiveGen : null;
+        await window.ADMIN_DATA.createExpense(payload);
+        toast.success('Egreso registrado');
+      }
       try { onSuccess?.(); } catch (_) {}
       onClose?.();
     } catch (err) {
@@ -135,7 +149,7 @@ function ExpenseModal({ suppliers, onClose, onSuccess }) {
   };
 
   return (
-    <Cmp open={true} title="Nuevo egreso" onClose={safeClose} size="lg" footer={
+    <Cmp open={true} title={isEdit ? 'Editar egreso' : 'Nuevo egreso'} onClose={safeClose} size="lg" footer={
       <>
         <button className="btn-ghost" onClick={safeClose} disabled={saving}>Cancelar</button>
         <button className="btn-primary" onClick={onSubmit} disabled={saving}>

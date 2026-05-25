@@ -17,7 +17,10 @@ function ExpensesTab({ pendingExpenseId, clearPending }) {
     medio_pago: 'todos',
   });
   const [expandedRowId, setExpandedRowId] = useState(null);
-  const [modalOpen, setModalOpen] = useState(false);
+  const [modalState, setModalState] = useState(null);  // S2.1: null | {mode, initial?}
+  const [deleteState, setDeleteState] = useState(null); // S2.1: null | {target, blocked?, msg?}
+  const [showInactive, setShowInactive] = useState(false);
+  const [actionRunning, setActionRunning] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -44,7 +47,7 @@ function ExpensesTab({ pendingExpenseId, clearPending }) {
       const { from, to } = window.ADMIN_DATA.dateRangeForPreset(
         filters.dateRange, filters.customFrom, filters.customTo);
       const [exp, sups] = await Promise.all([
-        window.ADMIN_DATA.loadExpenses({ dateFrom: from, dateTo: to }),
+        window.ADMIN_DATA.loadExpenses({ dateFrom: from, dateTo: to, includeInactive: showInactive }),
         window.ADMIN_DATA.loadSuppliers(),
       ]);
       setItems(exp);
@@ -58,10 +61,87 @@ function ExpensesTab({ pendingExpenseId, clearPending }) {
     }
   };
 
-  /* Re-fetch al cambiar rango de fecha (server-side). */
+  /* Re-fetch al cambiar rango de fecha (server-side) o toggle inactivos. */
   useEffect(() => { reload(); /* eslint-disable-next-line */ }, [
-    filters.dateRange, filters.customFrom, filters.customTo,
+    filters.dateRange, filters.customFrom, filters.customTo, showInactive,
   ]);
+
+  /* S2.1: handlers de edit/delete/desactivar/reactivar */
+  const onDeleteClick = (e) => setDeleteState({ target: e });
+
+  const doDelete = async () => {
+    if (actionRunning || !deleteState) return;
+    setActionRunning(true);
+    try {
+      await window.ADMIN_DATA.deleteExpense({ id: deleteState.target.id });
+      toast.success('Egreso eliminado');
+      setDeleteState(null);
+      await reload();
+    } catch (err) {
+      if (err && err.hint === 'has_relations') {
+        setDeleteState({
+          target: deleteState.target,
+          blocked: true,
+          msg: err.message,
+        });
+      } else {
+        toast.error(err.message || 'No se pudo eliminar');
+        setDeleteState(null);
+      }
+    } finally {
+      setActionRunning(false);
+    }
+  };
+
+  const doDesactivar = async () => {
+    if (actionRunning || !deleteState) return;
+    setActionRunning(true);
+    try {
+      const t = deleteState.target;
+      await window.ADMIN_DATA.updateExpense({
+        id: t.id,
+        fecha: String(t.fecha).slice(0,10),
+        supplier_id: t.supplier_id || null,
+        concepto: t.concepto,
+        monto_total: String(t.monto_total),
+        moneda: t.moneda,
+        iva_discriminado: t.iva_discriminado != null ? String(t.iva_discriminado) : null,
+        categoria: t.categoria,
+        medio_pago: t.medio_pago,
+        notas: t.notas,
+        activo: false,
+      });
+      toast.success('Egreso desactivado');
+      setDeleteState(null);
+      await reload();
+    } catch (err) {
+      toast.error(err.message || 'No se pudo desactivar');
+    } finally {
+      setActionRunning(false);
+    }
+  };
+
+  const doReactivar = async (e) => {
+    try {
+      await window.ADMIN_DATA.updateExpense({
+        id: e.id,
+        fecha: String(e.fecha).slice(0,10),
+        supplier_id: e.supplier_id || null,
+        concepto: e.concepto,
+        monto_total: String(e.monto_total),
+        moneda: e.moneda,
+        iva_discriminado: e.iva_discriminado != null ? String(e.iva_discriminado) : null,
+        categoria: e.categoria,
+        medio_pago: e.medio_pago,
+        notas: e.notas,
+        activo: true,
+      });
+      toast.success('Egreso reactivado');
+      await reload();
+    } catch (err) {
+      toast.error(err.message || 'No se pudo reactivar');
+    }
+  };
 
   /* Client-side filter sobre el subconjunto cargado. */
   const filtered = useMemo(() => {
@@ -129,7 +209,12 @@ function ExpensesTab({ pendingExpenseId, clearPending }) {
           <option value="tarjeta">Tarjeta</option>
           <option value="otro">Otro</option>
         </select>
-        <button className="btn-primary" onClick={() => setModalOpen(true)}>
+        <label className="admin-toggle-inactive">
+          <input type="checkbox" checked={showInactive}
+                 onChange={e => setShowInactive(e.target.checked)}/>
+          Mostrar inactivos
+        </label>
+        <button className="btn-primary" onClick={() => setModalState({ mode: 'create' })}>
           <Icon n="plus" s={13}/> Nuevo egreso
         </button>
       </div>
@@ -150,7 +235,7 @@ function ExpensesTab({ pendingExpenseId, clearPending }) {
           <Icon n="dollar" s={32} c="var(--ink-muted)"/>
           <h3>Todavia no cargaste egresos</h3>
           <p>Empezá agregando el primero.</p>
-          <button className="btn-primary" onClick={() => setModalOpen(true)}>
+          <button className="btn-primary" onClick={() => setModalState({ mode: 'create' })}>
             <Icon n="plus" s={13}/> Nuevo egreso
           </button>
         </div>
@@ -163,16 +248,18 @@ function ExpensesTab({ pendingExpenseId, clearPending }) {
                   <th>Fecha</th><th>Proveedor</th><th>Concepto</th>
                   <th>Categoría</th><th>Medio</th>
                   <th style={{textAlign:'right'}}>Monto</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map(it => {
                   const isExpanded = expandedRowId === it.id;
+                  const isInactive = it.activo === false;
                   const txt = it.concepto || '';
                   const truncated = txt.length > 40 ? txt.slice(0, 40) + '…' : txt;
                   return (
                     <React.Fragment key={it.id}>
-                      <tr className="expense-row"
+                      <tr className={`expense-row ${isInactive ? 'row-inactive' : ''}`}
                           data-expense-id={it.id}
                           onClick={() => setExpandedRowId(isExpanded ? null : it.id)}>
                         <td>{window.ADMIN_DATA.formatDate(it.fecha)}</td>
@@ -184,10 +271,29 @@ function ExpensesTab({ pendingExpenseId, clearPending }) {
                         <td style={{textAlign:'right', fontWeight:600}}>
                           {window.ADMIN_DATA.formatMoney(it.monto_total, it.moneda)}
                         </td>
+                        <td className="cta-cte-actions" onClick={(e) => e.stopPropagation()}>
+                          {isInactive ? (
+                            <button className="btn-ghost-sm btn-reactivate" title="Reactivar"
+                                    onClick={() => doReactivar(it)}>
+                              <Icon n="refresh" s={12}/> Reactivar
+                            </button>
+                          ) : (
+                            <React.Fragment>
+                              <button className="btn-ghost-sm" title="Editar"
+                                      onClick={() => setModalState({ mode: 'edit', initial: it })}>
+                                <Icon n="edit" s={12}/>
+                              </button>
+                              <button className="btn-ghost-sm danger" title="Eliminar"
+                                      onClick={() => onDeleteClick(it)}>
+                                <Icon n="trash" s={12}/>
+                              </button>
+                            </React.Fragment>
+                          )}
+                        </td>
                       </tr>
                       {isExpanded && (
                         <tr className="expense-row-expanded">
-                          <td colSpan={6}>
+                          <td colSpan={7}>
                             <div className="expense-detail">
                               <div><strong>Notas:</strong> {it.notas || '—'}</div>
                               <div><strong>IVA discriminado:</strong> {it.iva_discriminado != null
@@ -202,7 +308,7 @@ function ExpensesTab({ pendingExpenseId, clearPending }) {
                   );
                 })}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={6} style={{textAlign:'center', padding:'24px', color:'var(--ink-muted)'}}>
+                  <tr><td colSpan={7} style={{textAlign:'center', padding:'24px', color:'var(--ink-muted)'}}>
                     Sin resultados para los filtros aplicados
                   </td></tr>
                 )}
@@ -219,12 +325,33 @@ function ExpensesTab({ pendingExpenseId, clearPending }) {
         </React.Fragment>
       )}
 
-      {modalOpen && (
+      {modalState && (
         <window.ExpenseModal
           suppliers={suppliers}
-          onClose={() => setModalOpen(false)}
-          onSuccess={reload}
+          mode={modalState.mode}
+          initial={modalState.initial}
+          onClose={() => setModalState(null)}
+          onSuccess={async () => { setModalState(null); await reload(); }}
         />
+      )}
+
+      {deleteState && !deleteState.blocked && (
+        <window.ConfirmModal
+          open={true}
+          title="Eliminar egreso"
+          message={`¿Eliminar el egreso "${deleteState.target.concepto}"? Esta acción no se puede deshacer.`}
+          confirmText="Eliminar" danger
+          onClose={() => setDeleteState(null)}
+          onConfirm={doDelete}/>
+      )}
+      {deleteState && deleteState.blocked && (
+        <window.DesactivarFallbackModal
+          entityLabel="egreso"
+          target={deleteState.target}
+          msg={deleteState.msg}
+          onClose={() => setDeleteState(null)}
+          onDesactivar={doDesactivar}
+          running={actionRunning}/>
       )}
     </div>
   );
