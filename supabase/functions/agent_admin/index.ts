@@ -47,33 +47,80 @@ const MODEL_CHAT = 'claude-sonnet-4-6';
 
 const SYSTEM_OCR = `Sos un asistente de administracion de Macario (Justo Makario,
 empresa de muebles, Argentina). Te paso una foto o PDF de un comprobante
-argentino: factura A/B/C, ticket fiscal, recibo. Extrae los campos solicitados
-y devuelve UN UNICO objeto JSON valido (sin texto adicional, sin markdown).
-Si un campo no se ve claro o no esta presente en el comprobante, ponelo en null.
+argentino (factura A/B/C/M, nota de credito, nota de debito, recibo o ticket).
+Extrae los campos solicitados y devolve UN UNICO objeto JSON valido, sin
+texto adicional, sin markdown, sin code fences.
 
 Schema de respuesta (JSON estricto, sin claves adicionales):
 {
-  "proveedor": string | null,
-  "monto_total": number | null,
-  "fecha": string | null,
-  "iva": number | null,
-  "categoria_sugerida": "insumos" | "servicios" | "sueldos" | "impuestos" | "otros" | null,
-  "confidence": {
-    "proveedor": number,
-    "monto_total": number,
-    "fecha": number,
-    "iva": number,
-    "categoria_sugerida": number
-  },
-  "raw_text": string | null
+  "tipo_comprobante":         "factura" | "nota_credito" | "nota_debito" | "recibo" | "ticket" | null,
+  "clase_comprobante":        "A" | "B" | "C" | "M" | null,
+  "condicion_comprobante":    "original" | "duplicado" | null,
+  "punto_venta":              string | null,
+  "numero_comprobante":       string | null,
+  "fecha_emision":            string | null,
+  "fecha_vencimiento":        string | null,
+  "cae":                      string | null,
+
+  "proveedor_razon_social":   string | null,
+  "proveedor_cuit":           string | null,
+  "proveedor_condicion_iva":  "RI" | "Monotributo" | "Exento" | "Consumidor" | string | null,
+
+  "subtotal_neto":            number | null,
+  "iva_pct":                  21 | 10.5 | 27 | 0 | null,
+  "iva_monto":                number | null,
+  "otros_tributos_desc":      string | null,
+  "otros_tributos_pct":       number | null,
+  "otros_tributos_monto":     number | null,
+  "monto_total":              number | null,
+
+  "condicion_pago":           "contado" | "cuenta_corriente" | "financiado" | "otro" | null,
+  "categoria_sugerida":       "materiales_insumos" | "fletes" | "logistica_flex" | "correo_encomiendas" | "gastos_fijos" | "honorarios" | "servicios" | "intereses_financiacion" | "sueldos" | "impuestos" | "otros" | null,
+  "concepto_libre":           string | null,
+
+  "items": [
+    {
+      "cantidad":         number,
+      "codigo":           string | null,
+      "descripcion":      string,
+      "precio_unit":      number,
+      "bonificacion_pct": number | null,
+      "subtotal":         number,
+      "iva_pct":          number,
+      "importe":          number
+    }
+  ]
 }
 
 Reglas:
-- monto_total y iva: number en ARS, sin separador de miles, sin signo de pesos.
-- fecha: formato YYYY-MM-DD.
-- confidence: cada valor entre 0.0 y 1.0.
-- categoria_sugerida: elegir SOLO entre los 5 valores listados; si no aplica ninguno, usar "otros".
-- raw_text: texto completo extraido del comprobante (resumido si es muy largo).`;
+- Devolve ÚNICAMENTE el JSON, sin texto antes ni despues, sin markdown.
+- Si un campo no aparece claramente en el comprobante, devolve null. NO inventes datos.
+- Numericos en ARS, sin separador de miles, sin signo de pesos. Usa punto decimal.
+- Fechas en formato ISO YYYY-MM-DD.
+- CUIT en formato XX-XXXXXXXX-X (con guiones).
+- "tipo_comprobante": "factura" cubre Facturas A/B/C/M (la clase va en clase_comprobante).
+- "clase_comprobante": solo si tipo_comprobante='factura'; si no, null.
+- "condicion_pago" inferilo del contexto del comprobante:
+    · "Cuenta corriente", "Cta cte", "Cta. Cte." → "cuenta_corriente"
+    · "Contado", "Efectivo", "Al contado" → "contado"
+    · "Financiado en N cuotas", "Plan cuotas" → "financiado"
+    · Si no es claro, null.
+- "items": extrae TODOS los productos/servicios de la grilla del comprobante.
+   Si no hay grilla de items, devolve array vacio [].
+   subtotal = cantidad * precio_unit * (1 - bonificacion_pct/100).
+   importe = subtotal * (1 + iva_pct/100).
+- "categoria_sugerida": elegi SOLO entre los 11 valores listados. Guia:
+    · materiales_insumos: materias primas (madera, melamina, herrajes, tornillos, telgopor, pegamentos).
+    · fletes: transporte de mercaderia, camion, mudanza.
+    · logistica_flex: pagos a Mercado Libre Logistica Flex.
+    · correo_encomiendas: Correo Argentino, OCA, Andreani, Via Cargo.
+    · gastos_fijos: alquiler, luz, gas, internet, agua, ABL.
+    · honorarios: contador, abogado, asesor, consultor.
+    · servicios: limpieza, mantenimiento, reparaciones, software SaaS.
+    · intereses_financiacion: intereses bancarios, costo financiero, adelanto de dinero.
+    · sueldos: pagos a empleados, jornales, aguinaldo, vacaciones.
+    · impuestos: IIBB, IVA, Ganancias, Sellos, AFIP, ARCA, municipales.
+    · otros: cuando no encaja claramente en ninguna de las anteriores.`;
 
 const SYSTEM_CHAT = `Sos el asistente de administracion de Macario, empresa
 de muebles argentina (Justo Makario). Tu usuaria principal se llama Noe y
@@ -281,15 +328,37 @@ async function handleOCR(req: Request, admin: SupabaseClient, anthropicKey: stri
     );
   }
 
+  // Re-emit todos los campos del schema S2.3. Defaults a null si Claude
+  // los omitio. items default a [] (la columna en BD es NOT NULL DEFAULT '[]').
   return jsonRes(
     {
-      proveedor: extracted.proveedor ?? null,
-      monto_total: extracted.monto_total ?? null,
-      fecha: extracted.fecha ?? null,
-      iva: extracted.iva ?? null,
-      categoria_sugerida: extracted.categoria_sugerida ?? null,
-      confidence: extracted.confidence ?? null,
-      raw_text: extracted.raw_text ?? null,
+      tipo_comprobante:        extracted.tipo_comprobante        ?? null,
+      clase_comprobante:       extracted.clase_comprobante       ?? null,
+      condicion_comprobante:   extracted.condicion_comprobante   ?? null,
+      punto_venta:             extracted.punto_venta             ?? null,
+      numero_comprobante:      extracted.numero_comprobante      ?? null,
+      fecha_emision:           extracted.fecha_emision           ?? null,
+      fecha_vencimiento:       extracted.fecha_vencimiento       ?? null,
+      cae:                     extracted.cae                     ?? null,
+
+      proveedor_razon_social:  extracted.proveedor_razon_social  ?? null,
+      proveedor_cuit:          extracted.proveedor_cuit          ?? null,
+      proveedor_condicion_iva: extracted.proveedor_condicion_iva ?? null,
+
+      subtotal_neto:           extracted.subtotal_neto           ?? null,
+      iva_pct:                 extracted.iva_pct                 ?? null,
+      iva_monto:               extracted.iva_monto               ?? null,
+      otros_tributos_desc:     extracted.otros_tributos_desc     ?? null,
+      otros_tributos_pct:      extracted.otros_tributos_pct      ?? null,
+      otros_tributos_monto:    extracted.otros_tributos_monto    ?? null,
+      monto_total:             extracted.monto_total             ?? null,
+
+      condicion_pago:          extracted.condicion_pago          ?? null,
+      categoria_sugerida:      extracted.categoria_sugerida      ?? null,
+      concepto_libre:          extracted.concepto_libre          ?? null,
+
+      items:                   Array.isArray(extracted.items) ? extracted.items : [],
+
       ocr_raw_json: claudeData,
     },
     200,
