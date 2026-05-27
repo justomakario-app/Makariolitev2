@@ -38,6 +38,14 @@ function CashFlowPage() {
   const [modalState, setModalState]           = useState(null);  /* {mode, initial?} */
   const [confirmDelete, setConfirmDelete]     = useState(null);
 
+  /* S2.16 etapa 3: refs a los canvas para capturar como imagen
+     vía canvas.toDataURL en el export PDF. */
+  const canvasSaldoRef  = React.useRef(null);
+  const canvasBarrasRef = React.useRef(null);
+  const [companySettings, setCompanySettings] = useState(null);
+  const [exportingPdf,  setExportingPdf]  = useState(false);
+  const [exportingXlsx, setExportingXlsx] = useState(false);
+
   const reload = async () => {
     setLoading(true); setError(null);
     try {
@@ -69,6 +77,19 @@ function CashFlowPage() {
     if (showManualSection) reloadManual();
     /* eslint-disable-next-line */
   }, [showManualSection, showInactivos, fechaDesde, fechaHasta]);
+
+  /* Carga lazy de company_settings (1 sola vez por sesión de la página).
+     Best-effort: si falla, el export PDF usa fallbacks (razón social
+     'MACARIO', resto vacío). */
+  useEffect(() => {
+    if (companySettings) return;
+    let cancelled = false;
+    A.getCompanySettings()
+      .then(cs => { if (!cancelled && cs) setCompanySettings(cs); })
+      .catch(_ => { /* silencioso */ });
+    return () => { cancelled = true; };
+    /* eslint-disable-next-line */
+  }, []);
 
   /* Combinar real + proyectado y agrupar por modo */
   const filasMostrar = useMemo(() => {
@@ -107,6 +128,57 @@ function CashFlowPage() {
     }
   };
 
+  const captureCanvas = (canvas) => {
+    if (!canvas) return null;
+    try { return canvas.toDataURL('image/png'); }
+    catch (err) {
+      console.warn('[CashFlow] toDataURL failed:', err);
+      return null;
+    }
+  };
+
+  const onExportPdf = async () => {
+    if (exportingPdf || !payload) return;
+    if (!window.CashFlowPDF) { toast.error('PDF generator no está cargado'); return; }
+    setExportingPdf(true);
+    try {
+      const chartImages = {
+        saldo:  captureCanvas(canvasSaldoRef.current),
+        barras: captureCanvas(canvasBarrasRef.current),
+      };
+      window.CashFlowPDF.generate({
+        payload,
+        companySettings,
+        period: { desde: fechaDesde, hasta: fechaHasta, modo, incluirProy },
+        filas:  filasMostrar,
+        chartImages,
+      }, { open: true });
+      toast.success('PDF generado');
+    } catch (err) {
+      toast.error(err.message || 'No se pudo generar el PDF');
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
+  const onExportXlsx = async () => {
+    if (exportingXlsx || !payload) return;
+    setExportingXlsx(true);
+    try {
+      A.exportCashFlowXlsx({
+        payload,
+        companySettings,
+        period: { desde: fechaDesde, hasta: fechaHasta, modo, incluirProy },
+        filas:  filasMostrar,
+      });
+      toast.success('Excel descargado');
+    } catch (err) {
+      toast.error(err.message || 'No se pudo exportar Excel');
+    } finally {
+      setExportingXlsx(false);
+    }
+  };
+
   return (
     <div className="page">
       <div className="page-header">
@@ -136,14 +208,14 @@ function CashFlowPage() {
         </label>
         <div style={{flex:1}}/>
         <button className="btn-ghost"
-                title="Disponible en Etapa 3"
-                disabled>
-          <Icon n="download" s={13}/> PDF
+                onClick={onExportPdf}
+                disabled={exportingPdf || !payload}>
+          {exportingPdf ? 'Generando…' : (<><Icon n="download" s={13}/> PDF</>)}
         </button>
         <button className="btn-ghost"
-                title="Disponible en Etapa 3"
-                disabled>
-          <Icon n="download" s={13}/> Excel
+                onClick={onExportXlsx}
+                disabled={exportingXlsx || !payload}>
+          {exportingXlsx ? 'Exportando…' : (<><Icon n="download" s={13}/> Excel</>)}
         </button>
         <button className="btn-primary"
                 onClick={() => setModalState({ mode: 'create' })}>
@@ -197,6 +269,28 @@ function CashFlowPage() {
               </div>
             </div>
           </div>
+
+          {/* Gráficos chart.js — grid 2 cols desktop, stack mobile */}
+          {window.CashFlowChart && filasMostrar.length > 0 && (
+            <div className="cf-charts-grid">
+              <div className="cf-chart-wrap">
+                <window.CashFlowChart
+                  mode="line"
+                  data={filasMostrar}
+                  title="Saldo acumulado"
+                  height={240}
+                  onCanvasReady={(c) => { canvasSaldoRef.current = c; }}/>
+              </div>
+              <div className="cf-chart-wrap">
+                <window.CashFlowChart
+                  mode="bars"
+                  data={filasMostrar}
+                  title="Ingresos vs egresos"
+                  height={240}
+                  onCanvasReady={(c) => { canvasBarrasRef.current = c; }}/>
+              </div>
+            </div>
+          )}
 
           {/* Tabla principal */}
           <window.CashFlowTable filas={filasMostrar} modo={modo}/>

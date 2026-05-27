@@ -1720,6 +1720,68 @@
     return v < 0 ? 'var(--red, #dc2626)' : 'var(--green, #16a34a)';
   }
 
+  /* Export Excel del cash flow (1 worksheet con header + KPIs + tabla). */
+  function exportCashFlowXlsx(args) {
+    if (typeof window.XLSX === 'undefined') {
+      throw new Error('SheetJS (XLSX) no esta cargado.');
+    }
+    const { payload, companySettings, period, filas } = args || {};
+    if (!payload) throw new Error('payload requerido');
+
+    const kpis  = payload.kpis  || {};
+    const modo  = (period && period.modo)  || 'dia';
+    const desde = (period && period.desde) || '';
+    const hasta = (period && period.hasta) || '';
+    const incluirProy = !!(period && period.incluirProy);
+    const rs   = (companySettings && companySettings.razon_social) || 'MACARIO';
+    const cuit = (companySettings && companySettings.cuit) || '';
+
+    const filasArr = Array.isArray(filas) ? filas : [];
+
+    /* Header */
+    const aoa = [
+      [`Cash Flow - ${rs}${cuit ? ' (CUIT ' + cuit + ')' : ''}`],
+      [`Período: ${desde} al ${hasta}${incluirProy ? ' · incluye proyectado' : ''}`],
+      [],
+      [`Total ingresos:  $ ${Number(kpis.total_ingresos_real || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}`],
+      [`Total egresos:   $ ${Number(kpis.total_egresos_real  || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}`],
+      [`Saldo período:   $ ${Number(kpis.saldo_periodo_real  || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}`],
+    ];
+    if (incluirProy) {
+      aoa.push([`Saldo final proyectado:  $ ${Number(kpis.saldo_final_proyectado || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}`]);
+    }
+    aoa.push([]);
+    aoa.push([modo === 'mes' ? 'Mes' : 'Fecha', 'Compras', 'Sueldos', 'Cheques', 'Otros', 'Total', 'Saldo acum.', 'Clase']);
+    filasArr.forEach((r) => {
+      aoa.push([
+        modo === 'mes'
+          ? String(r.ym || String(r.fecha || '').slice(0, 7))
+          : String(r.fecha || '').slice(0, 10),
+        Number(r.compras  || 0),
+        Number(r.sueldos  || 0),
+        Number(r.cheques  || 0),
+        Number(r.otros    || 0),
+        Number(r.total_dia       || 0),
+        Number(r.saldo_acumulado || 0),
+        r.clase || 'real',
+      ]);
+    });
+
+    /* Total al pie */
+    if (filasArr.length > 0) {
+      const lastSaldo = Number(filasArr[filasArr.length - 1].saldo_acumulado || 0);
+      aoa.push([]);
+      aoa.push(['', '', '', '', '', 'SALDO FINAL:', lastSaldo, '']);
+    }
+
+    const ws = window.XLSX.utils.aoa_to_sheet(aoa);
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, `Cash Flow ${(desde || '').slice(0, 7) || ''}`.slice(0, 31));
+    const fechaHoy = new Date().toISOString().slice(0, 10);
+    const fname = `cash_flow_${desde}_${hasta}_${fechaHoy}.xlsx`.replace(/--+/g, '-');
+    window.XLSX.writeFile(wb, fname);
+  }
+
   /* Agrupa filas diarias por mes (YYYY-MM) para vista Mes en frontend. */
   function groupRowsByMonth(filas) {
     if (!Array.isArray(filas) || filas.length === 0) return [];
@@ -1909,6 +1971,7 @@
     formatMoneyES,
     getSaldoColor,
     groupRowsByMonth,
+    exportCashFlowXlsx,
   };
 
   /* ── Navegacion cross-tab (B.5) ───────────────────────────────────
