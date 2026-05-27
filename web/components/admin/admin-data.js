@@ -452,6 +452,257 @@
     otros:                  'Otros',
   };
 
+  /* ── Bulk import suppliers (S2.4) ──────────────────────────────── */
+
+  /* Diccionario de sinonimos para fuzzy matching de headers. Sin 'dni'
+     en cuit por decision Jefe #2: rechazar DNI, solo CUIT formal. */
+  const SUPPLIER_HEADER_SYNONYMS = {
+    nombre:               ['nombre','razon_social','razonsocial','rs','razon','denominacion','proveedor'],
+    cuit:                 ['cuit','cuil','cuit_cuil','cuitcuil','nro_cuit'],
+    email:                ['email','correo','mail','correo_electronico','e_mail'],
+    telefono:             ['telefono','tel','telef','telefono_contacto','celular','cel','phone'],
+    condicion_fiscal:     ['condicion_fiscal','cond_fiscal','condicionfiscal','condicion'],
+    condicion_iva:        ['condicion_iva','cond_iva','condicioniva','iva'],
+    provincia:            ['provincia','prov','estado','region'],
+    ciudad:               ['ciudad','localidad','city','partido'],
+    direccion:            ['direccion','domicilio','calle','address','adr'],
+    codigo_postal:        ['codigo_postal','cp','codigopostal','postal_code','zip'],
+    rubro:                ['rubro','categoria','sector','actividad'],
+    productos_habituales: ['productos_habituales','productos','products','articulos'],
+    notas:                ['notas','observaciones','comentarios','obs','notes','comments'],
+  };
+
+  /* Normaliza un header: lowercase + sin acentos + non-alfanum → _ */
+  function normalizeHeader(s) {
+    return String(s || '')
+      .toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+  }
+
+  /* Mapea headers del archivo a campos internos. Throws si faltan
+     mandatorios (nombre, cuit). */
+  function mapBulkHeaders(rawHeaders) {
+    const fieldMap = {};
+    for (let i = 0; i < rawHeaders.length; i++) {
+      const norm = normalizeHeader(rawHeaders[i]);
+      for (const [field, synonyms] of Object.entries(SUPPLIER_HEADER_SYNONYMS)) {
+        if (synonyms.includes(norm)) { fieldMap[i] = field; break; }
+      }
+    }
+    const fields = Object.values(fieldMap);
+    if (!fields.includes('nombre')) {
+      throw new Error('Falta columna obligatoria "nombre" (o sinónimos: razón social, RS, denominación).');
+    }
+    if (!fields.includes('cuit')) {
+      throw new Error('Falta columna obligatoria "cuit" (o sinónimo CUIT/CUIL). No se aceptan DNIs sueltos.');
+    }
+    return fieldMap;
+  }
+
+  /* Normaliza CUIT a XX-XXXXXXXX-X (extrae solo 11 digitos). Devuelve null
+     si no son exactamente 11. */
+  function normalizeCuit(raw) {
+    if (raw == null || raw === '') return null;
+    const digits = String(raw).replace(/\D/g, '');
+    if (digits.length !== 11) return null;
+    return `${digits.slice(0,2)}-${digits.slice(2,10)}-${digits.slice(10)}`;
+  }
+
+  /* Parsea un archivo .xlsx o .csv y devuelve rows como array of objects
+     usando los headers internos mapeados (post fuzzy). Throws si falla. */
+  async function parseSupplierSpreadsheet(file) {
+    if (typeof window.XLSX === 'undefined') {
+      throw new Error('SheetJS (XLSX) no esta cargado. Recargá la página.');
+    }
+    const buf = await file.arrayBuffer();
+    const wb = window.XLSX.read(buf, { type: 'array', cellDates: false });
+    const sheetName = wb.SheetNames[0];
+    const sheet = wb.Sheets[sheetName];
+    const arr = window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false });
+    if (!arr || arr.length < 2) {
+      throw new Error('Archivo vacío o sin filas de datos (esperado header + ≥1 fila).');
+    }
+    const rawHeaders = arr[0];
+    const fieldMap = mapBulkHeaders(rawHeaders);
+    const rows = [];
+    for (let i = 1; i < arr.length; i++) {
+      const raw = arr[i];
+      // Skip filas totalmente vacias
+      if (raw.every(c => c == null || String(c).trim() === '')) continue;
+      const obj = {};
+      for (const [idxStr, field] of Object.entries(fieldMap)) {
+        obj[field] = raw[Number(idxStr)] != null ? String(raw[Number(idxStr)]) : '';
+      }
+      obj._rowNum = i + 1;  // numero de fila en el archivo original (1-indexed con header en fila 1)
+      rows.push(obj);
+    }
+    return rows;
+  }
+
+  /* Valida una fila parseada. Devuelve { rowNum, isValid, errors, normalized }. */
+  function validateSupplierRow(row) {
+    const errors = [];
+    const nombre = (row.nombre || '').trim();
+    if (!nombre) errors.push('Falta nombre');
+    else if (nombre.length > 120) errors.push('Nombre supera 120 caracteres');
+
+    const cuitNorm = normalizeCuit(row.cuit);
+    if (!cuitNorm) errors.push(`CUIT inválido en formato XX-XXXXXXXX-X (no se aceptan DNIs sueltos).`);
+
+    const email = (row.email || '').trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      errors.push(`Email mal formado: "${email}"`);
+    }
+
+    const cf = (row.condicion_fiscal || '').trim();
+    if (cf && !['RI','Monotributo','Consumidor','Exento'].includes(cf)) {
+      errors.push('Condición fiscal inválida (RI/Monotributo/Consumidor/Exento)');
+    }
+
+    const prov = (row.provincia || '').trim();
+    if (prov && !ARG_PROVINCIAS.includes(prov)) {
+      errors.push(`Provincia desconocida: "${prov}"`);
+    }
+
+    const notas = (row.notas || '').trim();
+    if (notas.length > 500) errors.push('Notas supera 500 caracteres');
+
+    return {
+      rowNum: row._rowNum,
+      isValid: errors.length === 0,
+      errors,
+      normalized: {
+        nombre,
+        cuit: cuitNorm,
+        email: email,
+        telefono:             (row.telefono             || '').trim(),
+        condicion_fiscal:     cf,
+        condicion_iva:        (row.condicion_iva        || '').trim(),
+        provincia:            prov,
+        ciudad:               (row.ciudad               || '').trim(),
+        direccion:            (row.direccion            || '').trim(),
+        codigo_postal:        (row.codigo_postal        || '').trim(),
+        rubro:                (row.rubro                || '').trim(),
+        productos_habituales: (row.productos_habituales || '').trim(),
+        notas:                notas,
+      },
+    };
+  }
+
+  /* Llama check_cuits_exist. Devuelve { existing: [{cuit,id,nombre,activo}],
+     not_existing: [cuit] }. */
+  async function checkCuitsExist(cuits) {
+    const arr = Array.isArray(cuits) ? cuits.filter(Boolean) : [];
+    if (arr.length === 0) return { existing: [], not_existing: [] };
+    const { data, error } = await supa.rpc('rpc_admin_check_cuits_exist', { p_cuits: arr });
+    if (error) throw new Error(error.message || 'No se pudo verificar duplicados');
+    return data || { existing: [], not_existing: [] };
+  }
+
+  /* Bulk create con chunking automatico (decision Jefe #3). Chunks de 1000,
+     llamadas secuenciales, progress via onProgress(done, total). */
+  async function bulkCreateSuppliers(items, onProgress) {
+    const arr = Array.isArray(items) ? items : [];
+    if (arr.length === 0) return { created: 0, errors: [] };
+    const CHUNK = 1000;
+    let totalCreated = 0;
+    const totalErrors = [];
+    for (let i = 0; i < arr.length; i += CHUNK) {
+      const chunk = arr.slice(i, i + CHUNK);
+      const { data, error } = await supa.rpc('rpc_admin_bulk_create_suppliers', {
+        p_payload: { items: chunk },
+      });
+      if (error) throw new Error(error.message || 'No se pudo crear batch');
+      totalCreated += (data && data.created) || 0;
+      // Re-mapear indices del chunk a indices globales del array original
+      const errs = (data && data.errors) || [];
+      for (const e of errs) totalErrors.push({ ...e, index: e.index + i });
+      if (typeof onProgress === 'function') onProgress(Math.min(i + CHUNK, arr.length), arr.length);
+    }
+    return { created: totalCreated, errors: totalErrors };
+  }
+
+  /* Bulk update con chunking. Idem create pero sobre update_suppliers. */
+  async function bulkUpdateSuppliers(items, onProgress) {
+    const arr = Array.isArray(items) ? items : [];
+    if (arr.length === 0) return { updated: 0, errors: [] };
+    const CHUNK = 1000;
+    let totalUpdated = 0;
+    const totalErrors = [];
+    for (let i = 0; i < arr.length; i += CHUNK) {
+      const chunk = arr.slice(i, i + CHUNK);
+      const { data, error } = await supa.rpc('rpc_admin_bulk_update_suppliers', {
+        p_payload: { items: chunk },
+      });
+      if (error) throw new Error(error.message || 'No se pudo actualizar batch');
+      totalUpdated += (data && data.updated) || 0;
+      const errs = (data && data.errors) || [];
+      for (const e of errs) totalErrors.push({ ...e, index: e.index + i });
+      if (typeof onProgress === 'function') onProgress(Math.min(i + CHUNK, arr.length), arr.length);
+    }
+    return { updated: totalUpdated, errors: totalErrors };
+  }
+
+  /* Genera y dispara download de un .xlsx con headers + 1 fila de ejemplo
+     + nota explicativa al final. */
+  function downloadSuppliersTemplate() {
+    if (typeof window.XLSX === 'undefined') {
+      throw new Error('SheetJS (XLSX) no esta cargado.');
+    }
+    const headers = [
+      'nombre','cuit','email','telefono','condicion_fiscal','condicion_iva',
+      'provincia','ciudad','direccion','codigo_postal','rubro',
+      'productos_habituales','notas',
+    ];
+    const example = [
+      'MAGUEMA SRL','30-12345678-9','ventas@maguema.com.ar','011-4444-5555',
+      'RI','Responsable Inscripto','Buenos Aires','Florida',
+      'Av. Maipu 1234','1602','Maderas',
+      'Melamina 18mm, herrajes, tornillos',
+      'Proveedor principal de materia prima',
+    ];
+    const note = [
+      'NOTA: columnas obligatorias = nombre + cuit. CUIT en formato XX-XXXXXXXX-X (o 11 dígitos sin guiones).',
+    ];
+    const aoa = [headers, example, [], note];
+    const ws = window.XLSX.utils.aoa_to_sheet(aoa);
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, 'Proveedores');
+    window.XLSX.writeFile(wb, 'plantilla-proveedores.xlsx');
+  }
+
+  /* Genera y dispara download del reporte post-import. Cada fila tiene
+     {rowNum, status, reason, ...datos_originales}. */
+  function generateBulkReportXlsx(results) {
+    if (typeof window.XLSX === 'undefined') {
+      throw new Error('SheetJS (XLSX) no esta cargado.');
+    }
+    const rows = Array.isArray(results) ? results : [];
+    const out = rows.map(r => ({
+      '#': r.rowNum,
+      'Estado': r.status,
+      'Motivo': r.reason || '',
+      'Nombre': r.nombre || '',
+      'CUIT': r.cuit || '',
+      'Email': r.email || '',
+      'Telefono': r.telefono || '',
+      'Condicion fiscal': r.condicion_fiscal || '',
+      'Provincia': r.provincia || '',
+      'Ciudad': r.ciudad || '',
+      'Direccion': r.direccion || '',
+      'Codigo postal': r.codigo_postal || '',
+      'Rubro': r.rubro || '',
+      'Notas': r.notas || '',
+    }));
+    const ws = window.XLSX.utils.json_to_sheet(out);
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, 'Reporte import');
+    const fecha = new Date().toISOString().slice(0, 10);
+    window.XLSX.writeFile(wb, `reporte-import-proveedores-${fecha}.xlsx`);
+  }
+
   /* Parser del mensaje de borrado bloqueado. Extrae los numeros que
      vienen en el mensaje "No se puede eliminar: tiene N egresos, ..." */
   function parseHasRelationsMessage(msg) {
@@ -533,6 +784,17 @@
     getComprobanteSignedUrl,
     deleteComprobante,
     EXPENSE_CATEGORIA_LABELS,
+    // S2.4 bulk import
+    SUPPLIER_HEADER_SYNONYMS,
+    normalizeHeader,
+    normalizeCuit,
+    parseSupplierSpreadsheet,
+    validateSupplierRow,
+    checkCuitsExist,
+    bulkCreateSuppliers,
+    bulkUpdateSuppliers,
+    downloadSuppliersTemplate,
+    generateBulkReportXlsx,
   };
 
   /* ── Navegacion cross-tab (B.5) ───────────────────────────────────

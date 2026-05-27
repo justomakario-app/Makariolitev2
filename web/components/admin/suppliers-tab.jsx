@@ -10,6 +10,7 @@ function SuppliersTab() {
   const [showInactive, setShowInactive] = useState(false);
   const [modalState, setModalState] = useState(null);  // null | {mode, initial?}
   const [deleteState, setDeleteState] = useState(null); // null | {target, blocked?, msg?, counts?}
+  const [bulkImportOpen, setBulkImportOpen] = useState(false);  // S2.4
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionRunning, setActionRunning] = useState(false);
@@ -121,6 +122,9 @@ function SuppliersTab() {
                  onChange={e => setShowInactive(e.target.checked)}/>
           Mostrar inactivos
         </label>
+        <button className="btn-ghost" onClick={() => setBulkImportOpen(true)}>
+          <Icon n="upload" s={13}/> Importar masivo
+        </button>
         <button className="btn-primary" onClick={() => setModalState({ mode: 'create' })}>
           <Icon n="plus" s={13}/> Nuevo proveedor
         </button>
@@ -227,6 +231,12 @@ function SuppliersTab() {
           onClose={() => setDeleteState(null)}
           onDesactivar={doDesactivar}
           running={actionRunning}/>
+      )}
+
+      {bulkImportOpen && window.BulkImportSuppliersModal && (
+        <window.BulkImportSuppliersModal
+          onClose={() => setBulkImportOpen(false)}
+          onSuccess={async () => { await reload(); }}/>
       )}
     </div>
   );
