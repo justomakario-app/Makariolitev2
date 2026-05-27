@@ -2159,6 +2159,9 @@ tr.row-inactive:hover { opacity: 0.85; }
 .bulk-movement-label input { cursor: pointer; }
 .bulk-movement-label input:disabled { cursor: not-allowed; opacity: 0.4; }
 
+/* ── Empleados S2.11 ── (reusa clases de S2.4/S2.2; sólo overrides
+   chicos si más adelante hacen falta) */
+
 /* ── Print ── */
 @media print {
   .sidebar, .btn-primary, .btn-ghost, .filter-bar { display: none !important; }

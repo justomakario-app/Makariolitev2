@@ -1031,6 +1031,323 @@
     window.XLSX.writeFile(wb, `${prefix}-${fecha}.xlsx`);
   }
 
+  /* ── Employees (S2.11) ─────────────────────────────────────────── */
+
+  const EMPLOYEE_COLS = '*';  // 27 columnas, simple
+
+  /* Listado con filtro activos. SELECT directo (decision Jefe:
+     reutilizar RLS, igual que suppliers/customers). */
+  async function loadEmployees(opts) {
+    const includeInactive = opts && opts.includeInactive === true;
+    let q = supa.from('employees').select(EMPLOYEE_COLS).order('nombre', { ascending: true });
+    if (!includeInactive) q = q.eq('activo', true);
+    const { data, error } = await q;
+    if (error) throw new Error(error.message || 'No se pudo cargar empleados');
+    return data || [];
+  }
+
+  async function createEmployee(payload) {
+    return _rpcWithHint('rpc_admin_create_employee', payload, 'No se pudo crear empleado');
+  }
+  async function updateEmployee(payload) {
+    return _rpcWithHint('rpc_admin_update_employee', payload, 'No se pudo actualizar empleado');
+  }
+  async function deleteEmployee(payload) {
+    return _rpcWithHint('rpc_admin_delete_employee', payload, 'No se pudo eliminar empleado');
+  }
+
+  async function getEmployeeHistorial(employeeId) {
+    const { data, error } = await supa.rpc('rpc_admin_get_employee_historial', { p_employee_id: employeeId });
+    if (error) throw new Error(error.message || 'No se pudo cargar historial');
+    return data;
+  }
+
+  async function checkCuilsExist(cuils) {
+    const arr = Array.isArray(cuils) ? cuils.filter(Boolean) : [];
+    if (arr.length === 0) return { existing: [], not_existing: [] };
+    const { data, error } = await supa.rpc('rpc_admin_check_cuils_exist', { p_cuils: arr });
+    if (error) throw new Error(error.message || 'No se pudo verificar duplicados');
+    return data || { existing: [], not_existing: [] };
+  }
+
+  /* Bulk con chunking 1000 (patron S2.4). */
+  async function bulkCreateEmployees(items, onProgress) {
+    const arr = Array.isArray(items) ? items : [];
+    if (arr.length === 0) return { created: 0, errors: [] };
+    const CHUNK = 1000;
+    let totalCreated = 0;
+    const totalErrors = [];
+    for (let i = 0; i < arr.length; i += CHUNK) {
+      const chunk = arr.slice(i, i + CHUNK);
+      const { data, error } = await supa.rpc('rpc_admin_bulk_create_employees', {
+        p_payload: { items: chunk },
+      });
+      if (error) throw new Error(error.message || 'No se pudo crear batch');
+      totalCreated += (data && data.created) || 0;
+      const errs = (data && data.errors) || [];
+      for (const e of errs) totalErrors.push({ ...e, index: e.index + i });
+      if (typeof onProgress === 'function') onProgress(Math.min(i + CHUNK, arr.length), arr.length);
+    }
+    return { created: totalCreated, errors: totalErrors };
+  }
+  async function bulkUpdateEmployees(items, onProgress) {
+    const arr = Array.isArray(items) ? items : [];
+    if (arr.length === 0) return { updated: 0, errors: [] };
+    const CHUNK = 1000;
+    let totalUpdated = 0;
+    const totalErrors = [];
+    for (let i = 0; i < arr.length; i += CHUNK) {
+      const chunk = arr.slice(i, i + CHUNK);
+      const { data, error } = await supa.rpc('rpc_admin_bulk_update_employees', {
+        p_payload: { items: chunk },
+      });
+      if (error) throw new Error(error.message || 'No se pudo actualizar batch');
+      totalUpdated += (data && data.updated) || 0;
+      const errs = (data && data.errors) || [];
+      for (const e of errs) totalErrors.push({ ...e, index: e.index + i });
+      if (typeof onProgress === 'function') onProgress(Math.min(i + CHUNK, arr.length), arr.length);
+    }
+    return { updated: totalUpdated, errors: totalErrors };
+  }
+
+  /* Selects compartidos modal + bulk. */
+  const MODALIDAD_OPTIONS = [
+    { value: 'full_time', label: 'Full time' },
+    { value: 'part_time', label: 'Part time' },
+    { value: 'horas',     label: 'Por horas' },
+    { value: 'eventual',  label: 'Eventual' },
+  ];
+  const TIPO_CONTRATACION_OPTIONS = [
+    { value: 'relacion_dependencia', label: 'Relación de dependencia' },
+    { value: 'monotributo',          label: 'Monotributo' },
+    { value: 'autonomo',             label: 'Autónomo' },
+    { value: 'eventual',             label: 'Eventual' },
+  ];
+  const FORMA_COBRO_OPTIONS = [
+    { value: 'transferencia', label: 'Transferencia' },
+    { value: 'efectivo',      label: 'Efectivo' },
+    { value: 'cheque',        label: 'Cheque' },
+    { value: 'otro',          label: 'Otro' },
+  ];
+
+  /* Diccionario fuzzy headers para bulk import. 'cuit' aceptado como
+     sinonimo de 'cuil' (decision Jefe). */
+  const EMPLOYEE_HEADER_SYNONYMS = {
+    cuil:                    ['cuil','cuil_cuit','cuit','nro_cuil','dni_cuil'],
+    nombre:                  ['nombre','apellido_nombre','nombre_apellido','empleado','razon_social','rs'],
+    fecha_nacimiento:        ['fecha_nacimiento','nacimiento','fecha_nac','f_nacimiento','fec_nac'],
+    email:                   ['email','correo','mail','correo_electronico','e_mail'],
+    telefono:                ['telefono','tel','telef','celular','cel','phone'],
+    direccion:               ['direccion','domicilio','calle','address'],
+    ciudad:                  ['ciudad','localidad','partido','city'],
+    provincia:               ['provincia','prov','estado','region'],
+    codigo_postal:           ['codigo_postal','cp','codigopostal','postal_code','zip'],
+    fecha_ingreso:           ['fecha_ingreso','ingreso','fec_ingreso','alta','fecha_alta'],
+    categoria:               ['categoria','puesto','cargo','rol'],
+    modalidad:               ['modalidad','horario','tipo_horario','jornada'],
+    tipo_contratacion:       ['tipo_contratacion','contratacion','contrato','relacion'],
+    lugar_trabajo:           ['lugar_trabajo','lugar','sede','sucursal'],
+    convenio:                ['convenio','convenio_colectivo','cct'],
+    sueldo_bruto_base:       ['sueldo_bruto_base','sueldo_bruto','sueldo','salario','bruto','remuneracion','sueldo_base'],
+    dias_vacaciones_anuales: ['dias_vacaciones_anuales','vacaciones','dias_vacaciones','dias_vac'],
+    banco:                   ['banco','entidad_bancaria'],
+    cbu:                     ['cbu','cuenta_bancaria','nro_cbu','banco_cbu'],
+    alias_cbu:               ['alias_cbu','alias','alias_bancario'],
+    forma_cobro:             ['forma_cobro','metodo_pago','medio_pago','forma_pago'],
+    notas:                   ['notas','observaciones','comentarios','obs'],
+  };
+
+  /* normalizeCuil = alias de normalizeCuit (mismo regex XX-XXXXXXXX-X). */
+  const normalizeCuil = normalizeCuit;
+
+  function mapEmployeeHeaders(rawHeaders) {
+    const fieldMap = {};
+    for (let i = 0; i < rawHeaders.length; i++) {
+      const norm = normalizeHeader(rawHeaders[i]);
+      for (const [field, synonyms] of Object.entries(EMPLOYEE_HEADER_SYNONYMS)) {
+        if (synonyms.includes(norm)) { fieldMap[i] = field; break; }
+      }
+    }
+    const fields = Object.values(fieldMap);
+    if (!fields.includes('nombre')) {
+      throw new Error('Falta columna obligatoria "nombre" (o sinónimos: apellido_nombre, empleado, razón social).');
+    }
+    if (!fields.includes('cuil')) {
+      throw new Error('Falta columna obligatoria "cuil" (o sinónimo CUIT/CUIL).');
+    }
+    return fieldMap;
+  }
+
+  async function parseEmployeesSpreadsheet(file) {
+    if (typeof window.XLSX === 'undefined') {
+      throw new Error('SheetJS (XLSX) no esta cargado. Recargá la página.');
+    }
+    const buf = await file.arrayBuffer();
+    const wb = window.XLSX.read(buf, { type: 'array', cellDates: false });
+    const sheetName = wb.SheetNames[0];
+    const sheet = wb.Sheets[sheetName];
+    const arr = window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false });
+    if (!arr || arr.length < 2) {
+      throw new Error('Archivo vacío o sin filas de datos.');
+    }
+    const fieldMap = mapEmployeeHeaders(arr[0]);
+    const rows = [];
+    for (let i = 1; i < arr.length; i++) {
+      const raw = arr[i];
+      if (raw.every(c => c == null || String(c).trim() === '')) continue;
+      const obj = {};
+      for (const [idxStr, field] of Object.entries(fieldMap)) {
+        obj[field] = raw[Number(idxStr)] != null ? String(raw[Number(idxStr)]) : '';
+      }
+      obj._rowNum = i + 1;
+      rows.push(obj);
+    }
+    return rows;
+  }
+
+  function validateEmployeeRow(row) {
+    const errors = [];
+    const nombre = (row.nombre || '').trim();
+    if (!nombre) errors.push('Falta nombre');
+    else if (nombre.length > 120) errors.push('Nombre supera 120 caracteres');
+
+    const cuilNorm = normalizeCuil(row.cuil);
+    if (!cuilNorm) errors.push(`CUIL inválido (formato XX-XXXXXXXX-X o 11 dígitos)`);
+
+    const email = (row.email || '').trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      errors.push(`Email mal formado: "${email}"`);
+    }
+
+    const modalidad = (row.modalidad || '').trim();
+    if (modalidad && !MODALIDAD_OPTIONS.some(o => o.value === modalidad)) {
+      errors.push(`Modalidad inválida (full_time/part_time/horas/eventual)`);
+    }
+    const tipoCont = (row.tipo_contratacion || '').trim();
+    if (tipoCont && !TIPO_CONTRATACION_OPTIONS.some(o => o.value === tipoCont)) {
+      errors.push(`Tipo de contratación inválido`);
+    }
+    const formaCobro = (row.forma_cobro || '').trim();
+    if (formaCobro && !FORMA_COBRO_OPTIONS.some(o => o.value === formaCobro)) {
+      errors.push(`Forma de cobro inválida (transferencia/efectivo/cheque/otro)`);
+    }
+    const prov = (row.provincia || '').trim();
+    if (prov && !ARG_PROVINCIAS.includes(prov)) {
+      errors.push(`Provincia desconocida: "${prov}"`);
+    }
+
+    const sueldoStr = String(row.sueldo_bruto_base || '').trim().replace(/\./g, '').replace(',', '.');
+    const sueldo = sueldoStr === '' ? null : Number(sueldoStr);
+    if (sueldo !== null && (!Number.isFinite(sueldo) || sueldo < 0)) {
+      errors.push(`Sueldo bruto base inválido: "${row.sueldo_bruto_base}"`);
+    }
+
+    const cbuRaw = (row.cbu || '').trim().replace(/\s+/g, '');
+    if (cbuRaw && !/^\d{22}$/.test(cbuRaw)) {
+      errors.push(`CBU inválido: "${row.cbu}" (debe ser 22 dígitos)`);
+    }
+
+    const fNac = row.fecha_nacimiento ? (window.parseFechaAR ? window.parseFechaAR(row.fecha_nacimiento) : null) : null;
+    if (row.fecha_nacimiento && !fNac) errors.push(`fecha_nacimiento inválida: "${row.fecha_nacimiento}"`);
+    const fIng = row.fecha_ingreso ? (window.parseFechaAR ? window.parseFechaAR(row.fecha_ingreso) : null) : null;
+    if (row.fecha_ingreso && !fIng) errors.push(`fecha_ingreso inválida: "${row.fecha_ingreso}"`);
+
+    const notas = (row.notas || '').trim();
+    if (notas.length > 500) errors.push('Notas supera 500 caracteres');
+
+    return {
+      rowNum: row._rowNum,
+      isValid: errors.length === 0,
+      errors,
+      normalized: {
+        nombre,
+        cuil: cuilNorm,
+        fecha_nacimiento: fNac,
+        email,
+        telefono: (row.telefono || '').trim(),
+        direccion: (row.direccion || '').trim(),
+        ciudad: (row.ciudad || '').trim(),
+        provincia: prov,
+        codigo_postal: (row.codigo_postal || '').trim(),
+        fecha_ingreso: fIng,
+        categoria: (row.categoria || '').trim(),
+        modalidad: modalidad,
+        tipo_contratacion: tipoCont,
+        lugar_trabajo: (row.lugar_trabajo || '').trim(),
+        convenio: (row.convenio || '').trim(),
+        sueldo_bruto_base: sueldo,
+        dias_vacaciones_anuales: row.dias_vacaciones_anuales ? parseInt(row.dias_vacaciones_anuales, 10) || null : null,
+        banco: (row.banco || '').trim(),
+        cbu: cbuRaw,
+        alias_cbu: (row.alias_cbu || '').trim(),
+        forma_cobro: formaCobro,
+        notas,
+      },
+    };
+  }
+
+  function downloadEmployeesTemplate() {
+    if (typeof window.XLSX === 'undefined') {
+      throw new Error('SheetJS (XLSX) no esta cargado.');
+    }
+    const headers = [
+      'cuil','nombre','fecha_nacimiento','email','telefono','direccion',
+      'ciudad','provincia','codigo_postal','fecha_ingreso','categoria',
+      'modalidad','tipo_contratacion','lugar_trabajo','convenio',
+      'sueldo_bruto_base','dias_vacaciones_anuales','banco','cbu',
+      'alias_cbu','forma_cobro','notas',
+    ];
+    const example = [
+      '20-12345678-9','Juan Pérez','1985-03-15','juan@example.com','011-4444-5555',
+      'Av. Maipú 1234','Florida','Buenos Aires','1602','2024-03-01','Operario',
+      'full_time','relacion_dependencia','Taller principal','UOM',
+      '450000','14','Galicia','0001234567890123456789',
+      'juan.perez.gal','transferencia','Empleado de planta',
+    ];
+    const note = [
+      'NOTA: cuil y nombre son obligatorios.',
+      '       CUIL formato XX-XXXXXXXX-X o 11 dígitos sin guiones.',
+      '       Modalidad: full_time/part_time/horas/eventual.',
+      '       Tipo contratación: relacion_dependencia/monotributo/autonomo/eventual.',
+      '       Forma cobro: transferencia/efectivo/cheque/otro.',
+      '       CBU: 22 dígitos exactos si presente.',
+      '       Aceptamos "CUIT" como sinónimo de "CUIL".',
+    ];
+    const aoa = [headers, example, [], ...note.map(n => [n])];
+    const ws = window.XLSX.utils.aoa_to_sheet(aoa);
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, 'Empleados');
+    window.XLSX.writeFile(wb, 'plantilla-empleados.xlsx');
+  }
+
+  function generateEmployeesBulkReportXlsx(results) {
+    if (typeof window.XLSX === 'undefined') {
+      throw new Error('SheetJS (XLSX) no esta cargado.');
+    }
+    const rows = Array.isArray(results) ? results : [];
+    const out = rows.map(r => ({
+      '#': r.rowNum,
+      'Estado': r.status,
+      'Motivo': r.reason || '',
+      'CUIL': r.cuil || '',
+      'Nombre': r.nombre || '',
+      'Fecha ingreso': r.fecha_ingreso || '',
+      'Categoria': r.categoria || '',
+      'Modalidad': r.modalidad || '',
+      'Tipo contratacion': r.tipo_contratacion || '',
+      'Sueldo bruto base': r.sueldo_bruto_base || '',
+      'Banco': r.banco || '',
+      'CBU': r.cbu || '',
+      'Forma cobro': r.forma_cobro || '',
+      'Notas': r.notas || '',
+    }));
+    const ws = window.XLSX.utils.json_to_sheet(out);
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, 'Reporte empleados');
+    const fecha = new Date().toISOString().slice(0, 10);
+    window.XLSX.writeFile(wb, `reporte-import-empleados-${fecha}.xlsx`);
+  }
+
   /* Parser del mensaje de borrado bloqueado. Extrae los numeros que
      vienen en el mensaje "No se puede eliminar: tiene N egresos, ..." */
   function parseHasRelationsMessage(msg) {
@@ -1141,6 +1458,24 @@
     downloadChecksIssuedTemplate,
     downloadChecksReceivedTemplate,
     generateChecksBulkReportXlsx,
+    // S2.11 employees
+    loadEmployees,
+    createEmployee,
+    updateEmployee,
+    deleteEmployee,
+    getEmployeeHistorial,
+    checkCuilsExist,
+    bulkCreateEmployees,
+    bulkUpdateEmployees,
+    normalizeCuil,
+    parseEmployeesSpreadsheet,
+    validateEmployeeRow,
+    downloadEmployeesTemplate,
+    generateEmployeesBulkReportXlsx,
+    EMPLOYEE_HEADER_SYNONYMS,
+    MODALIDAD_OPTIONS,
+    TIPO_CONTRATACION_OPTIONS,
+    FORMA_COBRO_OPTIONS,
   };
 
   /* ── Navegacion cross-tab (B.5) ───────────────────────────────────
