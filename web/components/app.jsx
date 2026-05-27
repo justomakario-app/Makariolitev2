@@ -80,6 +80,13 @@ function App() {
       if (!window.FEATURE_ADMIN || !['owner','admin'].includes(role)) return <DashboardPage onNav={setPage}/>;
       return window.AdminPage ? <window.AdminPage/> : <DashboardPage onNav={setPage}/>;
     }
+    if (page === 'cash-flow') {
+      // Guard S2.16: cash-flow solo para owner/admin. Sebas o cualquier otro
+      // rol no llega aca via sidebar (ROLE_NAV ya filtra) — guard defensivo.
+      const role = (M.user.role || '').toLowerCase();
+      if (!['owner','admin'].includes(role)) return <DashboardPage onNav={setPage}/>;
+      return window.CashFlowPage ? <window.CashFlowPage/> : <DashboardPage onNav={setPage}/>;
+    }
     if (page === 'notificaciones') return <NotificacionesPage/>;
     if (page === 'perfil' || page === 'config') return <ConfigPage/>;
     return <DashboardPage onNav={setPage}/>;

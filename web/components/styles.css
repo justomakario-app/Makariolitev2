@@ -2428,6 +2428,81 @@ tr.row-inactive:hover { opacity: 0.85; }
   margin-bottom: 6px;
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   Cash Flow Dashboard (S2.16)
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Switcher Día/Mes */
+.cf-switcher {
+  display: inline-flex;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.cf-switch-btn {
+  background: #fff;
+  border: 0;
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.cf-switch-btn:hover { background: #f8fafc; }
+.cf-switch-btn.active {
+  background: var(--accent, #2563eb);
+  color: #fff;
+}
+
+/* Header del dashboard (filtros + acciones) */
+.cf-header { gap: 10px; }
+
+/* Tabla cash flow */
+.cf-table-wrap {
+  max-height: 520px;
+  overflow-y: auto;
+}
+.cf-table thead th {
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 1;
+}
+
+/* Filas proyectadas: fondo amarillo claro */
+.cf-row-proyectado {
+  background: #fffbeb;
+}
+.cf-row-proyectado:hover {
+  background: #fef3c7;
+}
+
+/* Badge proyectado inline en celda fecha */
+.cf-badge-proyectado {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fbbf24;
+}
+
+/* Sección expandible movimientos manuales */
+.cf-section-toggle {
+  display: flex;
+  align-items: center;
+  margin: 18px 0 8px;
+}
+
+.cf-manual-card {
+  margin-top: 4px;
+}
+
 /* Tabla ordenable (sortable headers) */
 .data-table.sortable .sortable-th {
   cursor: pointer;

@@ -16,6 +16,7 @@ function Sidebar({ current, onNav, onLogout, unread }) {
 
     { sec:'admin', label:'Admin' },
     { id:'admin',         label:'Admin',              icon:'dollar' },
+    { id:'cash-flow',     label:'Cash Flow',          icon:'chart' },
     { id:'historico',     label:'Histórico',          icon:'history' },
     { id:'catalogo',      label:'Catálogo',           icon:'tag' },
     { id:'equipo',        label:'Equipo',             icon:'users' },

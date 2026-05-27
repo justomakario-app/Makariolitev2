@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="components/styles.css?v=17">
+  <link rel="stylesheet" href="components/styles.css?v=18">
 </head>
 <body>
   <!-- Auto-redirect a la PWA mobile (/m/) si el viewport es de celular.
@@ -45,13 +45,13 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
   <!-- Data layer (Supabase real) — antes era mock.js -->
-  <script src="components/data.js?v=39"></script>
+  <script src="components/data.js?v=40"></script>
   <script src="components/xlsx.js?v=11"></script>
 
   <!-- Componentes (Babel JSX inline) -->
   <script type="text/babel" src="components/shared.jsx?v=15"></script>
   <script type="text/babel" src="components/login.jsx?v=11"></script>
-  <script type="text/babel" src="components/sidebar.jsx?v=13"></script>
+  <script type="text/babel" src="components/sidebar.jsx?v=14"></script>
   <script type="text/babel" src="components/dashboard.jsx?v=19"></script>
   <script type="text/babel" src="components/carrier.jsx?v=24"></script>
   <script type="text/babel" src="components/produccion.jsx?v=15"></script>
@@ -60,7 +60,7 @@
   <script type="text/babel" src="components/pages.jsx?v=16"></script>
 
   <!-- Admin data layer + modals + tabs -->
-  <script src="components/admin/admin-data.js?v=12"></script>
+  <script src="components/admin/admin-data.js?v=13"></script>
   <script type="text/babel" src="components/admin/customer-modal.jsx?v=1"></script>
   <script type="text/babel" src="components/admin/supplier-historial.jsx?v=1"></script>
   <script type="text/babel" src="components/admin/supplier-modal.jsx?v=1"></script>
@@ -97,9 +97,14 @@
   <script type="text/babel" src="components/admin/historial-empleado-row.jsx?v=1"></script>
   <script type="text/babel" src="components/admin/historial-empleado-modal.jsx?v=1"></script>
   <script type="text/babel" src="components/admin/reportes-tab.jsx?v=1"></script>
+  <!-- S2.16 cash flow -->
+  <script type="text/babel" src="components/admin/cash-flow-row.jsx?v=1"></script>
+  <script type="text/babel" src="components/admin/cash-flow-table.jsx?v=1"></script>
+  <script type="text/babel" src="components/admin/cash-flow-manual-modal.jsx?v=1"></script>
+  <script type="text/babel" src="components/cash-flow.jsx?v=1"></script>
 
   <script type="text/babel" src="components/admin.jsx?v=8"></script>
-  <script type="text/babel" src="components/app.jsx?v=16"></script>
+  <script type="text/babel" src="components/app.jsx?v=17"></script>
 
   <!-- Boot: espera a que los componentes y supabase-js estén listos -->
   <script>

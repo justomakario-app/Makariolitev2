@@ -1645,6 +1645,107 @@
     return { truncated, total_employees: detallables.length };
   }
 
+  /* ────────────────────────────────────────────────────────────────
+     S2.16 — Cash Flow Diario
+     ──────────────────────────────────────────────────────────────── */
+
+  const CASH_FLOW_TIPOS = ['ingreso', 'egreso'];
+
+  const CASH_FLOW_CATEGORIAS_SUGERIDAS = [
+    'otros',
+    'cobranza',
+    'venta directa',
+    'aporte capital',
+    'devolución impuesto',
+    'préstamo',
+    'inversión',
+    'ajuste caja',
+    'anticipo cliente',
+  ];
+
+  async function getCashFlow(desde, hasta, incluirProyectado) {
+    const { data, error } = await supa.rpc('rpc_admin_get_cash_flow', {
+      p_fecha_desde: desde,
+      p_fecha_hasta: hasta,
+      p_incluir_proyectado: incluirProyectado !== false,
+    });
+    if (error) throw new Error(error.message || 'No se pudo cargar cash flow');
+    return data;
+  }
+
+  async function listCashFlowManual(desde, hasta, tipo, includeInactivos) {
+    const { data, error } = await supa.rpc('rpc_admin_list_cash_flow_manual', {
+      p_fecha_desde: desde,
+      p_fecha_hasta: hasta,
+      p_tipo: tipo || null,
+      p_include_inactivos: includeInactivos === true,
+    });
+    if (error) throw new Error(error.message || 'No se pudo cargar movimientos manuales');
+    return data || [];
+  }
+
+  async function createCashFlowManual(payload) {
+    const { data, error } = await supa.rpc('rpc_admin_create_cash_flow_manual', { p_payload: payload });
+    if (error) throw new Error(error.message || 'No se pudo crear movimiento');
+    return data;
+  }
+
+  async function updateCashFlowManual(payload) {
+    const { data, error } = await supa.rpc('rpc_admin_update_cash_flow_manual', { p_payload: payload });
+    if (error) throw new Error(error.message || 'No se pudo actualizar movimiento');
+    return data;
+  }
+
+  async function deleteCashFlowManual(id) {
+    const { data, error } = await supa.rpc('rpc_admin_delete_cash_flow_manual', { p_payload: { id } });
+    if (error) throw new Error(error.message || 'No se pudo eliminar movimiento');
+    return data;
+  }
+
+  /* Helpers cosméticos */
+  function formatMoneyES(n) {
+    const v = Number(n);
+    if (!Number.isFinite(v)) return '$ 0,00';
+    return v.toLocaleString('es-AR', {
+      style: 'currency',
+      currency: 'ARS',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }
+
+  function getSaldoColor(n) {
+    const v = Number(n);
+    if (!Number.isFinite(v) || v === 0) return undefined;
+    return v < 0 ? 'var(--red, #dc2626)' : 'var(--green, #16a34a)';
+  }
+
+  /* Agrupa filas diarias por mes (YYYY-MM) para vista Mes en frontend. */
+  function groupRowsByMonth(filas) {
+    if (!Array.isArray(filas) || filas.length === 0) return [];
+    const map = new Map();
+    filas.forEach(r => {
+      const ym = String(r.fecha || '').slice(0, 7);
+      if (!ym) return;
+      const acc = map.get(ym) || {
+        fecha: `${ym}-01`,
+        ym,
+        compras: 0, sueldos: 0, cheques: 0, otros: 0,
+        total_dia: 0, saldo_acumulado: 0,
+        clase: r.clase,
+      };
+      acc.compras   += Number(r.compras   || 0);
+      acc.sueldos   += Number(r.sueldos   || 0);
+      acc.cheques   += Number(r.cheques   || 0);
+      acc.otros     += Number(r.otros     || 0);
+      acc.total_dia += Number(r.total_dia || 0);
+      /* saldo_acumulado en mes = último valor del mes (el último día) */
+      acc.saldo_acumulado = Number(r.saldo_acumulado || 0);
+      map.set(ym, acc);
+    });
+    return Array.from(map.values()).sort((a, b) => a.ym.localeCompare(b.ym));
+  }
+
   /* Parser del mensaje de borrado bloqueado. Extrae los numeros que
      vienen en el mensaje "No se puede eliminar: tiene N egresos, ..." */
   function parseHasRelationsMessage(msg) {
@@ -1797,6 +1898,17 @@
     getMonthName,
     MES_NAMES_ES,
     REPORTES_GLOBAL_DETAIL_CAP,
+    // S2.16 cash flow
+    CASH_FLOW_TIPOS,
+    CASH_FLOW_CATEGORIAS_SUGERIDAS,
+    getCashFlow,
+    listCashFlowManual,
+    createCashFlowManual,
+    updateCashFlowManual,
+    deleteCashFlowManual,
+    formatMoneyES,
+    getSaldoColor,
+    groupRowsByMonth,
   };
 
   /* ── Navegacion cross-tab (B.5) ───────────────────────────────────

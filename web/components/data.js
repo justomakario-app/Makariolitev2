@@ -141,8 +141,8 @@ window.MOCK = {
   },
 
   ROLE_NAV: {
-    owner:     { landing:'dashboard',  items:['dashboard','colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino','stock','produccion','registrar','historico','catalogo','equipo','notificaciones','perfil','admin'] },
-    admin:     { landing:'dashboard',  items:['dashboard','colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino','stock','produccion','registrar','historico','catalogo','equipo','notificaciones','perfil','admin'] },
+    owner:     { landing:'dashboard',  items:['dashboard','colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino','stock','produccion','registrar','historico','catalogo','equipo','notificaciones','perfil','admin','cash-flow'] },
+    admin:     { landing:'dashboard',  items:['dashboard','colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino','stock','produccion','registrar','historico','catalogo','equipo','notificaciones','perfil','admin','cash-flow'] },
     encargado: { landing:'produccion', items:['produccion','registrar','stock','notificaciones','perfil'] },
     cnc:       { landing:'produccion', items:['produccion','registrar','perfil'] },
     melamina:  { landing:'produccion', items:['produccion','registrar','perfil'] },
