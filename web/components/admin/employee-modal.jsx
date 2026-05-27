@@ -1,6 +1,6 @@
 /* ══ EMPLOYEE MODAL (S2.11)
    Modal de alta/edicion de empleado con ficha en 4 secciones colapsables
-   + bloque 5 (Historial — solo edit, lazy, placeholder S2.15).
+   + bloque 5 (Historial — solo edit, lazy, datos reales S2.15).
 
    1) Datos personales (default open): CUIL, nombre, fecha_nacimiento,
       email, telefono, direccion, ciudad, provincia, codigo_postal.
@@ -8,7 +8,8 @@
       tipo_contratacion, lugar_trabajo, convenio.
    3) Liquidacion base: sueldo_bruto_base, dias_vacaciones_anuales.
    4) Datos de pago: banco, cbu (22 digitos), alias_cbu, forma_cobro.
-   5) Historial (solo edit): lazy mount, placeholder S2.15.
+   5) Historial (solo edit): lazy mount con datos reales S2.15
+      (stat cards + botón "Ver histórico completo").
 
    CUIL readOnly en mode='edit' con tooltip (decision S2.11 paralelo a
    cuit_immutable de S2.2).
@@ -408,15 +409,19 @@ function EmpSection({ open, onToggle, title, children }) {
   );
 }
 
-/* Historial placeholder S2.15 — lazy load. */
+/* Historial — S2.15: datos reales del RPC actualizado + botón "Ver
+   histórico completo" que abre el HistorialEmpleadoModal. */
 function EmployeeHistorialView({ employeeId }) {
+  const A = window.ADMIN_DATA;
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showFullHistorial, setShowFullHistorial] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true); setError(null);
-    window.ADMIN_DATA.getEmployeeHistorial(employeeId)
+    A.getEmployeeHistorial(employeeId)
       .then(d => { if (!cancelled) { setData(d); setLoading(false); } })
       .catch(e => { if (!cancelled) { setError(e.message || 'Error'); setLoading(false); } });
     return () => { cancelled = true; };
@@ -425,23 +430,46 @@ function EmployeeHistorialView({ employeeId }) {
   if (loading) return <div className="supplier-historial-state"><span className="loader" style={{width:18,height:18}}/><span>Cargando…</span></div>;
   if (error) return <div className="supplier-historial-state error"><Icon n="alert" s={14} c="var(--red)"/><span>{error}</span></div>;
   if (!data) return null;
+
+  const ultimo = data.ultimo_recibo;
+  const ultimoTxt = ultimo
+    ? `${ultimo.tipo} · ${A.formatDate(ultimo.fecha_pago)} · ${A.formatMoney(ultimo.total || 0, 'ARS')}`
+    : '—';
+
   return (
     <div className="supplier-historial">
-      <div className="supplier-historial-empty">
-        {data.placeholder || 'Historial disponible en S2.15 (recibos de sueldo).'}
-      </div>
       <div className="supplier-historial-summary">
         <div className="supplier-historial-stat">
           <div className="supplier-historial-stat-label">Total recibos</div>
           <div className="supplier-historial-stat-value">{data.total_recibos || 0}</div>
         </div>
         <div className="supplier-historial-stat">
+          <div className="supplier-historial-stat-label">Suma año {data.anio}</div>
+          <div className="supplier-historial-stat-value">
+            {A.formatMoney(data.suma_anio || 0, 'ARS')}
+          </div>
+        </div>
+        <div className="supplier-historial-stat">
           <div className="supplier-historial-stat-label">Último recibo</div>
           <div className="supplier-historial-stat-value" style={{fontSize:12}}>
-            {data.ultimo_recibo || '—'}
+            {ultimoTxt}
           </div>
         </div>
       </div>
+
+      <div style={{marginTop:12, textAlign:'right'}}>
+        <button className="btn-ghost"
+                onClick={() => setShowFullHistorial(true)}
+                disabled={(data.total_recibos || 0) === 0}>
+          Ver histórico completo <Icon n="arrow-right" s={12}/>
+        </button>
+      </div>
+
+      {showFullHistorial && window.HistorialEmpleadoModal && (
+        <window.HistorialEmpleadoModal
+          employeeId={employeeId}
+          onClose={() => setShowFullHistorial(false)}/>
+      )}
     </div>
   );
 }

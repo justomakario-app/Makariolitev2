@@ -32,6 +32,8 @@
   <!-- pdfmake (S2.12 recibos de sueldo) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/pdfmake.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/vfs_fonts.min.js"></script>
+  <!-- chart.js (S2.15 histórico + reportes) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script type="module">
     /* qr-scanner usa import.meta — lo cargamos como módulo y lo exponemos en window */
     import QrScanner from 'https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/+esm';
@@ -56,14 +58,14 @@
   <script type="text/babel" src="components/pages.jsx?v=5"></script>
 
   <!-- Admin data layer + modals + tabs -->
-  <script src="components/admin/admin-data.js?v=11"></script>
+  <script src="components/admin/admin-data.js?v=12"></script>
   <script type="text/babel" src="components/admin/customer-modal.jsx?v=1"></script>
   <script type="text/babel" src="components/admin/supplier-historial.jsx?v=1"></script>
   <script type="text/babel" src="components/admin/supplier-modal.jsx?v=1"></script>
   <script type="text/babel" src="components/admin/expense-items-editor.jsx?v=1"></script>
   <script type="text/babel" src="components/admin/comprobante-uploader.jsx?v=1"></script>
   <script type="text/babel" src="components/admin/expense-modal.jsx?v=4"></script>
-  <script type="text/babel" src="components/admin/employee-modal.jsx?v=1"></script>
+  <script type="text/babel" src="components/admin/employee-modal.jsx?v=2"></script>
   <script type="text/babel" src="components/admin/cta-cte-movement-modal.jsx?v=1"></script>
   <script type="text/babel" src="components/admin/check-modal.jsx?v=1"></script>
   <script type="text/babel" src="components/admin/check-status-modal.jsx?v=1"></script>
@@ -88,8 +90,13 @@
   <script type="text/babel" src="components/admin/recibo-row.jsx?v=1"></script>
   <script type="text/babel" src="components/admin/recibo-modal.jsx?v=1"></script>
   <script type="text/babel" src="components/admin/recibos-tab.jsx?v=1"></script>
+  <!-- S2.15 histórico + reportes -->
+  <script type="text/babel" src="components/admin/historial-chart.jsx?v=1"></script>
+  <script type="text/babel" src="components/admin/historial-empleado-row.jsx?v=1"></script>
+  <script type="text/babel" src="components/admin/historial-empleado-modal.jsx?v=1"></script>
+  <script type="text/babel" src="components/admin/reportes-tab.jsx?v=1"></script>
 
-  <script type="text/babel" src="components/admin.jsx?v=7"></script>
+  <script type="text/babel" src="components/admin.jsx?v=8"></script>
   <script type="text/babel" src="components/app.jsx?v=6"></script>
 
   <!-- Boot -->

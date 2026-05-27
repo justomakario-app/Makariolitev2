@@ -1449,6 +1449,202 @@
      que company-settings-modal lo use con el mismo mensaje). */
   /* (se reusa validateCuit ya definido arriba). */
 
+  /* ────────────────────────────────────────────────────────────────
+     S2.15 — Histórico salarial + Reportes
+     ──────────────────────────────────────────────────────────────── */
+
+  async function getHistorialEmpleado(employeeId, year) {
+    const { data, error } = await supa.rpc('rpc_admin_historial_empleado', {
+      p_employee_id: employeeId,
+      p_year: year,
+    });
+    if (error) throw new Error(error.message || 'No se pudo cargar histórico del empleado');
+    return data;
+  }
+
+  async function getReportesGlobal(year, mes) {
+    const { data, error } = await supa.rpc('rpc_admin_reportes_global', {
+      p_year: year,
+      p_mes: mes || null,
+    });
+    if (error) throw new Error(error.message || 'No se pudo cargar reportes');
+    return data;
+  }
+
+  async function getRecibosDetalleEmpleado(employeeId, year, mes, tipo) {
+    const { data, error } = await supa.rpc('rpc_admin_recibos_detalle_empleado', {
+      p_employee_id: employeeId,
+      p_year: year,
+      p_mes: mes || null,
+      p_tipo: tipo || null,
+    });
+    if (error) throw new Error(error.message || 'No se pudo cargar recibos del empleado');
+    return data || [];
+  }
+
+  /* Helper para normalizar nombre de archivo (saca tildes/espacios). */
+  function normalizeFilename(s) {
+    return String(s || 'sin_nombre')
+      .toLowerCase()
+      .replace(/[áä]/g, 'a').replace(/[éë]/g, 'e').replace(/[íï]/g, 'i')
+      .replace(/[óö]/g, 'o').replace(/[úü]/g, 'u').replace(/ñ/g, 'n')
+      .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  }
+
+  const MES_NAMES_ES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+  function getMonthName(mes) {
+    const m = Number(mes);
+    if (!Number.isInteger(m) || m < 1 || m > 12) return '—';
+    return MES_NAMES_ES[m - 1];
+  }
+
+  /* Export Excel del histórico individual. 1 hoja con detalle del empleado. */
+  function exportHistorialEmpleadoXlsx(payload) {
+    if (typeof window.XLSX === 'undefined') {
+      throw new Error('SheetJS (XLSX) no esta cargado.');
+    }
+    const empleado = (payload && payload.empleado) || {};
+    const totales  = (payload && payload.totales)  || {};
+    const recibos  = Array.isArray(payload && payload.recibos) ? payload.recibos : [];
+    const year     = (payload && payload.year) || new Date().getFullYear();
+
+    /* Encabezado + KPIs */
+    const aoa = [
+      [`Histórico salarial - ${empleado.nombre || '—'}`],
+      [`CUIL: ${empleado.cuil || '—'}    Categoría: ${empleado.categoria || '—'}    F.Ingreso: ${empleado.fecha_ingreso || '—'}`],
+      [`Año: ${year}`],
+      [],
+      [`Total año:        $ ${Number(totales.year_total || 0).toLocaleString('es-AR', {minimumFractionDigits:2})}`],
+      [`Total mes actual: $ ${Number(totales.month_total || 0).toLocaleString('es-AR', {minimumFractionDigits:2})}`],
+      [`Promedio mensual: $ ${Number(totales.avg_monthly || 0).toLocaleString('es-AR', {minimumFractionDigits:2})}`],
+      [`Cantidad recibos: ${totales.count_recibos || 0}`],
+      [],
+      ['Tipo','Período desde','Período hasta','Fecha pago','Sueldo básico','Total','Notas'],
+    ];
+    let suma = 0;
+    recibos.forEach(r => {
+      const t = Number(r.total || 0);
+      suma += t;
+      aoa.push([
+        r.tipo || '',
+        String(r.periodo_desde || '').slice(0,10),
+        String(r.periodo_hasta || '').slice(0,10),
+        String(r.fecha_pago || '').slice(0,10),
+        Number(r.sueldo_basico || 0),
+        t,
+        r.notas || '',
+      ]);
+    });
+    aoa.push([]);
+    aoa.push(['', '', '', '', 'TOTAL:', suma, '']);
+
+    const ws = window.XLSX.utils.aoa_to_sheet(aoa);
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, `Recibos ${year}`);
+    const fname = `historial_${normalizeFilename(empleado.nombre)}_${year}.xlsx`;
+    window.XLSX.writeFile(wb, fname);
+  }
+
+  /* Export Excel global. Worksheet "Resumen" + N hojas detalle (cap 30). */
+  const REPORTES_GLOBAL_DETAIL_CAP = 30; /* S2.15: cap a 30 para evitar archivos >20MB. Si Noe necesita todos, dividir por categoría en sprint hardening. */
+
+  function exportReportesGlobalXlsx(payload) {
+    if (typeof window.XLSX === 'undefined') {
+      throw new Error('SheetJS (XLSX) no esta cargado.');
+    }
+    const tabla = Array.isArray(payload && payload.tabla) ? payload.tabla : [];
+    const kpis  = (payload && payload.kpis) || {};
+    const year  = (payload && payload.year) || new Date().getFullYear();
+    const mes   = payload && payload.mes;
+
+    const wb = window.XLSX.utils.book_new();
+
+    /* Hoja Resumen */
+    const resumenAoa = [
+      [`Reportes salariales - Año ${year}${mes ? ` · Mes ${mes}` : ''}`],
+      [],
+      [`Total año:        $ ${Number(kpis.total_year || 0).toLocaleString('es-AR', {minimumFractionDigits:2})}`],
+      mes ? [`Total mes:        $ ${Number(kpis.total_month || 0).toLocaleString('es-AR', {minimumFractionDigits:2})}`] : [],
+      [`Promedio/empleado:$ ${Number(kpis.avg_per_employee || 0).toLocaleString('es-AR', {minimumFractionDigits:2})}`],
+      [`Empleados activos: ${kpis.empleados_count || 0}`],
+      kpis.top_employee ? [`Top:  ${kpis.top_employee.nombre} → $ ${Number(kpis.top_employee.total_year || 0).toLocaleString('es-AR')}`] : [],
+      kpis.low_employee ? [`Low:  ${kpis.low_employee.nombre} → $ ${Number(kpis.low_employee.total_year || 0).toLocaleString('es-AR')}`] : [],
+      [],
+      ['Empleado','CUIL','Categoría','Total año','Total mes','Adelantos','Quincenas','Sueldos','# Recibos','Último recibo'],
+    ];
+    tabla.forEach(t => {
+      const ultimo = t.ultimo_recibo;
+      const ultimoTxt = ultimo
+        ? `${ultimo.tipo} · ${String(ultimo.fecha_pago).slice(0,10)} · $${Number(ultimo.total||0).toLocaleString('es-AR')}`
+        : '—';
+      resumenAoa.push([
+        t.nombre || '—',
+        t.cuil || '',
+        t.categoria || '',
+        Number(t.total_year || 0),
+        Number(t.total_month || 0),
+        Number(t.total_adelanto || 0),
+        Number(t.total_quincena || 0),
+        Number(t.total_sueldo || 0),
+        Number(t.count_recibos_year || 0),
+        ultimoTxt,
+      ]);
+    });
+    const wsResumen = window.XLSX.utils.aoa_to_sheet(resumenAoa.filter(r => r && r.length >= 0));
+    window.XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
+
+    /* N hojas detalle (cap REPORTES_GLOBAL_DETAIL_CAP) */
+    const detallables = tabla
+      .filter(t => Number(t.count_recibos_year || 0) > 0)
+      .slice(0, REPORTES_GLOBAL_DETAIL_CAP);
+    detallables.forEach((t, idx) => {
+      const detalleAoa = [
+        [`Detalle - ${t.nombre || '—'}`],
+        [`CUIL: ${t.cuil || '—'}    Categoría: ${t.categoria || '—'}    Año ${year}`],
+        [],
+        ['Tipo','Período desde','Período hasta','Fecha pago','Sueldo básico','Total','Notas'],
+      ];
+      /* Sin acceso a recibos por empleado en este payload — el componente
+         deberá fetchearlos via getRecibosDetalleEmpleado y mergear antes
+         de llamar a este export, o exportar solo el resumen. Para mantener
+         el flow simple, dejamos las hojas detalle vacías si payload no
+         trae recibos (ver reportes-tab.jsx fetch en bucle). */
+      if (Array.isArray(t._recibos)) {
+        let suma = 0;
+        t._recibos.forEach(r => {
+          const v = Number(r.total || 0);
+          suma += v;
+          detalleAoa.push([
+            r.tipo || '',
+            String(r.periodo_desde || '').slice(0,10),
+            String(r.periodo_hasta || '').slice(0,10),
+            String(r.fecha_pago || '').slice(0,10),
+            Number(r.sueldo_basico || 0),
+            v,
+            r.notas || '',
+          ]);
+        });
+        detalleAoa.push([]);
+        detalleAoa.push(['', '', '', '', 'TOTAL:', suma, '']);
+      } else {
+        detalleAoa.push(['(Recibos detallados no incluidos en el export rápido. Usar el modal individual.)']);
+      }
+      const ws = window.XLSX.utils.aoa_to_sheet(detalleAoa);
+      /* Nombre de hoja: máx 31 chars, sin caracteres prohibidos /\?*[] */
+      const safeName = `Detalle - ${(t.nombre || `Empl${idx+1}`)}`
+        .replace(/[\/\\?*\[\]:]/g, ' ')
+        .slice(0, 31);
+      window.XLSX.utils.book_append_sheet(wb, ws, safeName);
+    });
+
+    const truncated = tabla.filter(t => Number(t.count_recibos_year || 0) > 0).length > REPORTES_GLOBAL_DETAIL_CAP;
+    const fname = `reportes_salariales_${year}${mes ? `_${String(mes).padStart(2,'0')}` : ''}${truncated ? '_top30' : ''}.xlsx`;
+    window.XLSX.writeFile(wb, fname);
+
+    return { truncated, total_employees: detallables.length };
+  }
+
   /* Parser del mensaje de borrado bloqueado. Extrae los numeros que
      vienen en el mensaje "No se puede eliminar: tiene N egresos, ..." */
   function parseHasRelationsMessage(msg) {
@@ -1592,6 +1788,15 @@
     calcValorDia,
     calcSubtotal,
     calcTotal,
+    // S2.15 histórico + reportes
+    getHistorialEmpleado,
+    getReportesGlobal,
+    getRecibosDetalleEmpleado,
+    exportHistorialEmpleadoXlsx,
+    exportReportesGlobalXlsx,
+    getMonthName,
+    MES_NAMES_ES,
+    REPORTES_GLOBAL_DETAIL_CAP,
   };
 
   /* ── Navegacion cross-tab (B.5) ───────────────────────────────────

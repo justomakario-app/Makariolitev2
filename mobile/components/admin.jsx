@@ -11,6 +11,7 @@ function AdminPage() {
     { id:'clientes',    label:'Clientes' },
     { id:'empleados',   label:'Empleados' },     /* S2.11 */
     { id:'recibos',     label:'Recibos' },        /* S2.12 */
+    { id:'reportes',    label:'Reportes' },       /* S2.15 */
     { id:'cuentas',     label:'Cuentas Corrientes' },
   ];
   const [tab, setTab] = useState('egresos');
@@ -64,7 +65,8 @@ function AdminPage() {
          tab === 'proveedores' && window.SuppliersTab ? <window.SuppliersTab/> :
          tab === 'clientes'    && window.CustomersTab ? <window.CustomersTab/> :
          tab === 'empleados'   && window.EmployeesTab ? <window.EmployeesTab/> :
-         tab === 'recibos'     && window.RecibosTab   ? <window.RecibosTab/> : (
+         tab === 'recibos'     && window.RecibosTab   ? <window.RecibosTab/> :
+         tab === 'reportes'    && window.ReportesTab  ? <window.ReportesTab/> : (
           <div className="admin-empty-state">
             <Icon n="dollar" s={32} c="var(--ink-muted)"/>
             <h3>{active.label}</h3>

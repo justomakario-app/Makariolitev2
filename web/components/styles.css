@@ -2319,6 +2319,128 @@ tr.row-inactive:hover { opacity: 0.85; }
 }
 .btn-link:hover { color: #1d4ed8; }
 
+/* ══════════════════════════════════════════════════════════════════
+   Histórico salarial + Reportes (S2.15)
+   ══════════════════════════════════════════════════════════════════ */
+
+/* KPI grid (cards horizontales) */
+.kpi-grid {
+  display: grid;
+  gap: 12px;
+  margin: 14px 0 18px;
+}
+.kpi-grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.kpi-grid-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 900px) {
+  .kpi-grid-4, .kpi-grid-5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 480px) {
+  .kpi-grid-4, .kpi-grid-5 { grid-template-columns: 1fr; }
+}
+
+.kpi-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+.kpi-label {
+  font-size: 11px;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.kpi-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.kpi-value-sm { font-size: 14px; }
+.kpi-sub {
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin-top: 2px;
+}
+.kpi-badge-unico {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fbbf24;
+}
+
+/* Snapshot empleado en modal histórico */
+.historial-snapshot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  background: #f1f5f9;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 14px;
+  border: 1px solid #e2e8f0;
+}
+
+/* Filtros del modal histórico */
+.historial-filters {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+/* Wrap del gráfico (titulo + canvas) */
+.historial-chart-wrap {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 14px;
+  margin: 12px 0 18px;
+}
+.historial-chart-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 10px;
+}
+.historial-chart-container {
+  position: relative;
+  width: 100%;
+}
+
+/* Wrap de la tabla de recibos en el modal histórico */
+.historial-table-wrap {
+  margin-top: 14px;
+}
+.historial-table-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+/* Tabla ordenable (sortable headers) */
+.data-table.sortable .sortable-th {
+  cursor: pointer;
+  user-select: none;
+}
+.data-table.sortable .sortable-th:hover {
+  background: #f1f5f9;
+}
+.data-table.sortable .sortable-th svg {
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
 /* ── Print ── */
 @media print {
   .sidebar, .btn-primary, .btn-ghost, .filter-bar { display: none !important; }
