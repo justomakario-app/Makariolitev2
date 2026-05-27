@@ -703,6 +703,334 @@
     window.XLSX.writeFile(wb, `reporte-import-proveedores-${fecha}.xlsx`);
   }
 
+  /* ── Bulk import checks (S2.5) ─────────────────────────────────── */
+
+  /* Diccionarios de sinonimos para fuzzy matching. Incluye 'librador_*'
+     en received como sinonimo de 'emisor_*' (decision Jefe #1: tolerar
+     ambas nomenclaturas en el archivo, mapear todas a emisor_*). */
+  const CHECK_ISSUED_HEADER_SYNONYMS = {
+    numero:               ['numero','nro','n','num','cheque_nro','nro_cheque'],
+    banco:                ['banco','entidad','banco_emisor'],
+    monto:                ['monto','importe','valor','total','amount'],
+    fecha_emision:        ['fecha_emision','fecha','emision','fecha_cheque'],
+    fecha_cobro_estimada: ['fecha_cobro_estimada','fecha_vencimiento','vencimiento','vto','fecha_pago_estimada'],
+    beneficiario_cuit:    ['beneficiario_cuit','cuit_beneficiario','cuit','cuit_proveedor'],
+    beneficiario_nombre:  ['beneficiario_nombre','beneficiario','proveedor','nombre','razon_social','rs'],
+    estado:               ['estado','status','situacion'],
+    notas:                ['notas','observaciones','comentarios','obs','notes'],
+    // moneda: NO mapeada (decision bonus 1: ignorar columna).
+  };
+
+  const CHECK_RECEIVED_HEADER_SYNONYMS = {
+    numero:               ['numero','nro','n','num','cheque_nro','nro_cheque'],
+    banco:                ['banco','entidad','banco_emisor'],
+    monto:                ['monto','importe','valor','total','amount'],
+    fecha_emision:        ['fecha_emision','fecha','emision','fecha_cheque'],
+    fecha_cobro_estimada: ['fecha_cobro_estimada','fecha_vencimiento','vencimiento','vto','fecha_pago_estimada'],
+    emisor_cuit:          ['emisor_cuit','cuit_emisor','cuit','cuit_cliente','librador_cuit','cuit_librador','customer_cuit'],
+    emisor_nombre:        ['emisor_nombre','emisor','cliente','customer','nombre','razon_social','rs','librador','librador_nombre','customer_nombre'],
+    estado:               ['estado','status','situacion'],
+    notas:                ['notas','observaciones','comentarios','obs','notes'],
+  };
+
+  /* Mapeo de sinonimos de estado al enum BD (decision Jefe #2).
+     Devuelve null si el valor no es reconocido. */
+  const CHECK_STATE_MAP = {
+    'pendiente':  'emitido',
+    'emitido':    'emitido',
+    'cobrado':    'cobrado',
+    'pagado':     'cobrado',
+    'rechazado':  'devuelto',
+    'devuelto':   'devuelto',
+    'anulado':    'anulado',
+    'cancelado':  'anulado',
+  };
+
+  function normalizeCheckEstado(raw) {
+    if (raw == null || raw === '') return 'emitido';
+    const k = String(raw).trim().toLowerCase();
+    if (k === '') return 'emitido';
+    const mapped = CHECK_STATE_MAP[k];
+    return mapped || null;  // null = invalido
+  }
+
+  /* Decision bonus 2: SIN strip de leading zeros. Solo trim + collapse
+     internal whitespace. "00123" y "123" se tratan como distintos. */
+  function normalizeCheckNumber(raw) {
+    if (raw == null || raw === '') return null;
+    const n = String(raw).trim().replace(/\s+/g, '');
+    if (n.length === 0) return null;
+    return n;
+  }
+
+  function mapCheckHeaders(rawHeaders, kind) {
+    const dict = kind === 'received' ? CHECK_RECEIVED_HEADER_SYNONYMS : CHECK_ISSUED_HEADER_SYNONYMS;
+    const fieldMap = {};
+    for (let i = 0; i < rawHeaders.length; i++) {
+      const norm = normalizeHeader(rawHeaders[i]);
+      for (const [field, synonyms] of Object.entries(dict)) {
+        if (synonyms.includes(norm)) { fieldMap[i] = field; break; }
+      }
+    }
+    const fields = Object.values(fieldMap);
+    if (!fields.includes('numero')) {
+      throw new Error('Falta columna obligatoria "numero" (o sinónimos: nro, n, num).');
+    }
+    if (!fields.includes('banco')) {
+      throw new Error('Falta columna obligatoria "banco".');
+    }
+    if (!fields.includes('monto')) {
+      throw new Error('Falta columna obligatoria "monto" (o sinónimos: importe, valor, total).');
+    }
+    if (!fields.includes('fecha_emision')) {
+      throw new Error('Falta columna obligatoria "fecha_emision" (o sinónimos: fecha, emision).');
+    }
+    return fieldMap;
+  }
+
+  async function parseChecksSpreadsheet(file, kind) {
+    if (typeof window.XLSX === 'undefined') {
+      throw new Error('SheetJS (XLSX) no esta cargado. Recargá la página.');
+    }
+    if (kind !== 'issued' && kind !== 'received') {
+      throw new Error('kind debe ser issued o received');
+    }
+    const buf = await file.arrayBuffer();
+    const wb = window.XLSX.read(buf, { type: 'array', cellDates: false });
+    const sheetName = wb.SheetNames[0];
+    const sheet = wb.Sheets[sheetName];
+    const arr = window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false });
+    if (!arr || arr.length < 2) {
+      throw new Error('Archivo vacío o sin filas de datos.');
+    }
+    const fieldMap = mapCheckHeaders(arr[0], kind);
+    const rows = [];
+    for (let i = 1; i < arr.length; i++) {
+      const raw = arr[i];
+      if (raw.every(c => c == null || String(c).trim() === '')) continue;
+      const obj = {};
+      for (const [idxStr, field] of Object.entries(fieldMap)) {
+        obj[field] = raw[Number(idxStr)] != null ? String(raw[Number(idxStr)]) : '';
+      }
+      obj._rowNum = i + 1;
+      rows.push(obj);
+    }
+    return rows;
+  }
+
+  /* Validacion por fila. Devuelve estructura normalizada.
+     kind: 'issued' | 'received'. */
+  function validateCheckRow(row, kind) {
+    const errors = [];
+
+    const numero = normalizeCheckNumber(row.numero);
+    if (!numero) errors.push('Falta numero o invalido');
+    else if (numero.length > 50) errors.push('Numero supera 50 caracteres');
+
+    const banco = (row.banco || '').trim();
+    if (!banco) errors.push('Falta banco');
+    else if (banco.length > 120) errors.push('Banco supera 120 caracteres');
+
+    const montoRaw = String(row.monto || '').trim().replace(/\./g, '').replace(',', '.');
+    const monto = Number(montoRaw);
+    if (!Number.isFinite(monto) || monto <= 0) {
+      errors.push(`Monto inválido o no positivo: "${row.monto}"`);
+    }
+
+    const fechaEmision = window.parseFechaAR ? window.parseFechaAR(row.fecha_emision) : null;
+    if (!fechaEmision) errors.push(`fecha_emision inválida: "${row.fecha_emision}"`);
+
+    const fechaCobroEst = row.fecha_cobro_estimada
+      ? (window.parseFechaAR ? window.parseFechaAR(row.fecha_cobro_estimada) : null)
+      : null;
+    if (row.fecha_cobro_estimada && !fechaCobroEst) {
+      errors.push(`fecha_cobro_estimada inválida: "${row.fecha_cobro_estimada}"`);
+    }
+
+    const estado = normalizeCheckEstado(row.estado);
+    if (estado === null) {
+      errors.push(`Estado desconocido: "${row.estado}"`);
+    }
+
+    const notas = (row.notas || '').trim();
+    if (notas.length > 500) errors.push('Notas supera 500 caracteres');
+
+    // CUIT entidad (opcional)
+    const cuitField = kind === 'received' ? 'emisor_cuit' : 'beneficiario_cuit';
+    const nombreField = kind === 'received' ? 'emisor_nombre' : 'beneficiario_nombre';
+    const cuitNorm = normalizeCuit(row[cuitField]);
+    if (row[cuitField] && row[cuitField].trim() && !cuitNorm) {
+      errors.push(`CUIT entidad inválido: "${row[cuitField]}"`);
+    }
+    const nombreEntidad = (row[nombreField] || '').trim();
+
+    // Si no hay match de cuit ni nombre → falla CHECK constraint *_required
+    // El "match" se resuelve mas tarde con resolveEntitiesByCuit; aca solo
+    // confirmamos que al menos uno de los dos esta cargado.
+    if (!cuitNorm && !nombreEntidad) {
+      errors.push(`Falta entidad: cargá ${cuitField} o ${nombreField}`);
+    }
+
+    return {
+      rowNum: row._rowNum,
+      isValid: errors.length === 0,
+      errors,
+      normalized: {
+        numero,
+        banco,
+        monto,
+        fecha_emision: fechaEmision,
+        fecha_cobro_estimada: fechaCobroEst,
+        [cuitField]: cuitNorm,           // 'beneficiario_cuit' o 'emisor_cuit'
+        [nombreField]: nombreEntidad,    // texto libre, va a *_texto si no hay match
+        estado: estado || 'emitido',
+        notas: notas,
+      },
+    };
+  }
+
+  async function checkChecksIssuedExist(pairs) {
+    const arr = Array.isArray(pairs) ? pairs.filter(p => p && p.numero && p.banco) : [];
+    if (arr.length === 0) return { existing: [], not_existing: [] };
+    const { data, error } = await supa.rpc('rpc_admin_check_checks_issued_exist', {
+      p_payload: { pairs: arr },
+    });
+    if (error) throw new Error(error.message || 'No se pudo verificar duplicados');
+    return data || { existing: [], not_existing: [] };
+  }
+
+  async function checkChecksReceivedExist(pairs) {
+    const arr = Array.isArray(pairs) ? pairs.filter(p => p && p.numero && p.banco) : [];
+    if (arr.length === 0) return { existing: [], not_existing: [] };
+    const { data, error } = await supa.rpc('rpc_admin_check_checks_received_exist', {
+      p_payload: { pairs: arr },
+    });
+    if (error) throw new Error(error.message || 'No se pudo verificar duplicados');
+    return data || { existing: [], not_existing: [] };
+  }
+
+  async function resolveEntitiesByCuit(cuits, entityType) {
+    const arr = Array.isArray(cuits) ? cuits.filter(Boolean) : [];
+    if (arr.length === 0) return { matches: [], unmatched: [] };
+    const { data, error } = await supa.rpc('rpc_admin_resolve_entities_by_cuit', {
+      p_cuits: arr, p_entity_type: entityType,
+    });
+    if (error) throw new Error(error.message || 'No se pudo resolver entidades');
+    return data || { matches: [], unmatched: [] };
+  }
+
+  /* Helper interno: chunking 1000 + secuencial + acumulacion. */
+  async function _bulkChunked(rpcName, items, onProgress) {
+    const arr = Array.isArray(items) ? items : [];
+    if (arr.length === 0) return { count: 0, errors: [] };
+    const CHUNK = 1000;
+    let totalCount = 0;
+    const totalErrors = [];
+    const countKey = rpcName.includes('update') ? 'updated' : 'created';
+    for (let i = 0; i < arr.length; i += CHUNK) {
+      const chunk = arr.slice(i, i + CHUNK);
+      const { data, error } = await supa.rpc(rpcName, { p_payload: { items: chunk } });
+      if (error) throw new Error(error.message || `No se pudo ejecutar ${rpcName}`);
+      totalCount += (data && data[countKey]) || 0;
+      const errs = (data && data.errors) || [];
+      for (const e of errs) totalErrors.push({ ...e, index: e.index + i });
+      if (typeof onProgress === 'function') onProgress(Math.min(i + CHUNK, arr.length), arr.length);
+    }
+    return { count: totalCount, errors: totalErrors };
+  }
+
+  async function bulkCreateChecksIssued(items, onProgress) {
+    const r = await _bulkChunked('rpc_admin_bulk_create_checks_issued', items, onProgress);
+    return { created: r.count, errors: r.errors };
+  }
+  async function bulkUpdateChecksIssued(items, onProgress) {
+    const r = await _bulkChunked('rpc_admin_bulk_update_checks_issued', items, onProgress);
+    return { updated: r.count, errors: r.errors };
+  }
+  async function bulkCreateChecksReceived(items, onProgress) {
+    const r = await _bulkChunked('rpc_admin_bulk_create_checks_received', items, onProgress);
+    return { created: r.count, errors: r.errors };
+  }
+  async function bulkUpdateChecksReceived(items, onProgress) {
+    const r = await _bulkChunked('rpc_admin_bulk_update_checks_received', items, onProgress);
+    return { updated: r.count, errors: r.errors };
+  }
+
+  function _writeChecksTemplate(kind) {
+    if (typeof window.XLSX === 'undefined') {
+      throw new Error('SheetJS (XLSX) no esta cargado.');
+    }
+    let headers, example, fileName;
+    if (kind === 'received') {
+      headers = [
+        'numero','banco','monto','fecha_emision','fecha_cobro_estimada',
+        'emisor_cuit','emisor_nombre','estado','notas',
+      ];
+      example = [
+        '00125','Galicia','85000','2026-05-20','2026-06-20',
+        '30-12345678-9','CLIENTE B2B SA','emitido',
+        'Cheque a 30 dias',
+      ];
+      fileName = 'plantilla-cheques-recibidos.xlsx';
+    } else {
+      headers = [
+        'numero','banco','monto','fecha_emision','fecha_cobro_estimada',
+        'beneficiario_cuit','beneficiario_nombre','estado','notas',
+      ];
+      example = [
+        '00125','Galicia','85000','2026-05-20','2026-06-20',
+        '30-12345678-9','MAGUEMA SRL','emitido',
+        'Pago factura 0001-00125',
+      ];
+      fileName = 'plantilla-cheques-emitidos.xlsx';
+    }
+    const note = [
+      'NOTA: numero, banco, monto y fecha_emision son obligatorios.',
+      '       Estado acepta: emitido/pendiente, cobrado/pagado, devuelto/rechazado, anulado/cancelado.',
+      '       Moneda: ARS (no editable en S2.5).',
+      '       CUIT entidad: formato XX-XXXXXXXX-X o 11 dígitos sin guiones.',
+    ];
+    const aoa = [headers, example, [], ...note.map(n => [n])];
+    const ws = window.XLSX.utils.aoa_to_sheet(aoa);
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, 'Cheques');
+    window.XLSX.writeFile(wb, fileName);
+  }
+  function downloadChecksIssuedTemplate()   { _writeChecksTemplate('issued'); }
+  function downloadChecksReceivedTemplate() { _writeChecksTemplate('received'); }
+
+  /* Genera reporte post-import como .xlsx descargable. */
+  function generateChecksBulkReportXlsx(results, kind) {
+    if (typeof window.XLSX === 'undefined') {
+      throw new Error('SheetJS (XLSX) no esta cargado.');
+    }
+    const rows = Array.isArray(results) ? results : [];
+    const cuitField = kind === 'received' ? 'emisor_cuit' : 'beneficiario_cuit';
+    const nombreField = kind === 'received' ? 'emisor_nombre' : 'beneficiario_nombre';
+    const out = rows.map(r => ({
+      '#': r.rowNum,
+      'Estado': r.status,
+      'Motivo': r.reason || '',
+      'Numero': r.numero || '',
+      'Banco': r.banco || '',
+      'Monto': r.monto || '',
+      'Fecha emision': r.fecha_emision || '',
+      'Fecha cobro estimada': r.fecha_cobro_estimada || '',
+      'CUIT entidad': r[cuitField] || '',
+      'Nombre entidad': r[nombreField] || '',
+      'Estado cheque': r.estado || '',
+      'Movement generado': r.movement_generado ? 'sí' : 'no',
+      'Notas': r.notas || '',
+    }));
+    const ws = window.XLSX.utils.json_to_sheet(out);
+    const wb = window.XLSX.utils.book_new();
+    const sheet = kind === 'received' ? 'Reporte recibidos' : 'Reporte emitidos';
+    window.XLSX.utils.book_append_sheet(wb, ws, sheet);
+    const fecha = new Date().toISOString().slice(0, 10);
+    const prefix = kind === 'received' ? 'reporte-cheques-recibidos' : 'reporte-cheques-emitidos';
+    window.XLSX.writeFile(wb, `${prefix}-${fecha}.xlsx`);
+  }
+
   /* Parser del mensaje de borrado bloqueado. Extrae los numeros que
      vienen en el mensaje "No se puede eliminar: tiene N egresos, ..." */
   function parseHasRelationsMessage(msg) {
@@ -795,6 +1123,24 @@
     bulkUpdateSuppliers,
     downloadSuppliersTemplate,
     generateBulkReportXlsx,
+    // S2.5 bulk import checks
+    CHECK_ISSUED_HEADER_SYNONYMS,
+    CHECK_RECEIVED_HEADER_SYNONYMS,
+    CHECK_STATE_MAP,
+    normalizeCheckNumber,
+    normalizeCheckEstado,
+    parseChecksSpreadsheet,
+    validateCheckRow,
+    checkChecksIssuedExist,
+    checkChecksReceivedExist,
+    resolveEntitiesByCuit,
+    bulkCreateChecksIssued,
+    bulkUpdateChecksIssued,
+    bulkCreateChecksReceived,
+    bulkUpdateChecksReceived,
+    downloadChecksIssuedTemplate,
+    downloadChecksReceivedTemplate,
+    generateChecksBulkReportXlsx,
   };
 
   /* ── Navegacion cross-tab (B.5) ───────────────────────────────────

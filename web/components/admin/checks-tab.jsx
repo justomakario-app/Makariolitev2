@@ -13,6 +13,7 @@ function ChecksTab() {
   const [modalState, setModalState] = useState(null);          // null | {mode:'create'|'edit', initial?}
   const [statusModal, setStatusModal] = useState(null);        // null | check
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [bulkImportOpen, setBulkImportOpen] = useState(false);  // S2.5
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [deleting, setDeleting] = useState(false);
@@ -127,6 +128,9 @@ function ChecksTab() {
           <option value="anulado">Anulado</option>
           <option value="devuelto">Devuelto</option>
         </select>
+        <button className="btn-ghost" onClick={() => setBulkImportOpen(true)}>
+          <Icon n="upload" s={13}/> Importar masivo
+        </button>
         <button className="btn-primary" onClick={() => setModalState({ mode: 'create' })}>
           <Icon n="plus" s={13}/> Nuevo cheque
         </button>
@@ -217,6 +221,13 @@ function ChecksTab() {
         confirmText="Eliminar" danger
         onClose={() => setConfirmDeleteId(null)}
         onConfirm={onDelete}/>
+
+      {bulkImportOpen && window.BulkImportChecksModal && (
+        <window.BulkImportChecksModal
+          initialKind={isIssued ? 'issued' : 'received'}
+          onClose={() => setBulkImportOpen(false)}
+          onSuccess={async () => { await reload(); }}/>
+      )}
     </div>
   );
 }

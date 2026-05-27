@@ -2115,6 +2115,50 @@ tr.row-inactive:hover { opacity: 0.85; }
   justify-content: center;
 }
 
+/* ── Bulk Import Checks (S2.5) ── */
+.bulk-checks-toggle {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  background: var(--paper-dim);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+}
+.bulk-checks-toggle strong {
+  color: var(--ink);
+  margin-right: 4px;
+}
+.bulk-checks-toggle-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--ink-soft);
+}
+.bulk-checks-toggle-option input { cursor: pointer; }
+.bulk-checks-toggle-option input:checked + span { color: var(--ink); font-weight: 600; }
+
+.bulk-pill-info {
+  background: #dbeafe;
+  color: #1e3a8a;
+}
+
+.bulk-cell-movement {
+  text-align: center;
+}
+.bulk-movement-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.bulk-movement-label input { cursor: pointer; }
+.bulk-movement-label input:disabled { cursor: not-allowed; opacity: 0.4; }
+
 /* ── Print ── */
 @media print {
   .sidebar, .btn-primary, .btn-ghost, .filter-bar { display: none !important; }
