@@ -2162,6 +2162,163 @@ tr.row-inactive:hover { opacity: 0.85; }
 /* ── Empleados S2.11 ── (reusa clases de S2.4/S2.2; sólo overrides
    chicos si más adelante hacen falta) */
 
+/* ══════════════════════════════════════════════════════════════════
+   Recibos de sueldo (S2.12)
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Botón ⚙️ en page-header de Admin */
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.admin-config-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+@media (max-width: 640px) {
+  .admin-config-btn-label { display: none; }
+}
+
+/* Badges por tipo de recibo */
+.recibo-tipo-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  border-radius: 10px;
+  border: 1px solid;
+}
+.recibo-tipo-adelanto {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fbbf24;
+}
+.recibo-tipo-quincena {
+  background: #dbeafe;
+  color: #1e3a8a;
+  border-color: #93c5fd;
+}
+.recibo-tipo-sueldo {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #86efac;
+}
+
+/* Radios tipo recibo en modal */
+.recibo-tipo-radio-row {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.recibo-tipo-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.recibo-tipo-radio input { cursor: pointer; }
+
+/* Snapshot empleado en modal */
+.recibo-empleado-snapshot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  background: #f8fafc;
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin-top: 6px;
+  border: 1px solid #e2e8f0;
+}
+.recibo-empleado-snapshot.is-locked {
+  background: #f1f5f9;
+}
+
+/* Banner recibo anulado */
+.recibo-anulado-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fef2f2;
+  color: var(--red, #dc2626);
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  font-size: 13px;
+}
+
+/* Tabla de items dinámicos */
+.recibo-items-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 6px;
+}
+.recibo-items-table thead th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+  padding: 6px 8px;
+  border-bottom: 1px solid #e5e7eb;
+  text-align: left;
+}
+.recibo-items-table tbody td {
+  padding: 4px 8px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+.recibo-items-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Inputs compactos para celdas */
+.field-input-sm {
+  padding: 4px 6px !important;
+  font-size: 12px !important;
+  height: auto !important;
+  min-height: 0 !important;
+}
+
+/* Fila de total al pie del modal */
+.recibo-total-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border-radius: 6px;
+  font-size: 14px;
+  border: 1px solid #e2e8f0;
+}
+.recibo-total-row strong {
+  font-size: 16px;
+}
+
+/* Botón inline tipo link (insertar día como item) */
+.btn-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent, #2563eb);
+  cursor: pointer;
+  font-size: 12px;
+  text-decoration: underline;
+}
+.btn-link:hover { color: #1d4ed8; }
+
 /* ── Print ── */
 @media print {
   .sidebar, .btn-primary, .btn-ghost, .filter-bar { display: none !important; }

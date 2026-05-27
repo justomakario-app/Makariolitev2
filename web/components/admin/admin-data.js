@@ -1348,6 +1348,107 @@
     window.XLSX.writeFile(wb, `reporte-import-empleados-${fecha}.xlsx`);
   }
 
+  /* ────────────────────────────────────────────────────────────────
+     S2.12 — Recibos de sueldo + Company settings
+     ──────────────────────────────────────────────────────────────── */
+
+  const RECIBO_TIPO_OPTIONS = [
+    { value: 'adelanto', label: 'Adelanto' },
+    { value: 'quincena', label: 'Quincena' },
+    { value: 'sueldo',   label: 'Sueldo' },
+  ];
+
+  const RECIBO_ESTADO_OPTIONS = [
+    { value: 'emitido', label: 'Emitido' },
+    { value: 'anulado', label: 'Anulado' },
+  ];
+
+  async function getCompanySettings() {
+    const { data, error } = await supa.rpc('rpc_admin_get_company_settings');
+    if (error) throw new Error(error.message || 'No se pudo cargar configuración de empresa');
+    return data;
+  }
+
+  async function updateCompanySettings(payload) {
+    const { data, error } = await supa.rpc('rpc_admin_update_company_settings', { p_payload: payload });
+    if (error) throw new Error(error.message || 'No se pudo guardar configuración de empresa');
+    return data;
+  }
+
+  /* loadRecibos: SELECT directo (RLS owner/admin only). Incluye anulados
+     si opts.includeAnulados=true. */
+  async function loadRecibos(opts) {
+    const includeAnulados = opts && opts.includeAnulados === true;
+    let q = supa.from('recibos').select('*').order('fecha_pago', { ascending: false });
+    if (!includeAnulados) q = q.eq('estado', 'emitido');
+    const { data, error } = await q;
+    if (error) throw new Error(error.message || 'No se pudo cargar recibos');
+    return data || [];
+  }
+
+  async function getRecibo(id) {
+    const { data, error } = await supa.from('recibos').select('*').eq('id', id).single();
+    if (error) throw new Error(error.message || 'No se pudo obtener recibo');
+    return data;
+  }
+
+  async function createRecibo(payload) {
+    const { data, error } = await supa.rpc('rpc_admin_create_recibo', { p_payload: payload });
+    if (error) throw new Error(error.message || 'No se pudo crear recibo');
+    return data;
+  }
+
+  async function updateRecibo(payload) {
+    const { data, error } = await supa.rpc('rpc_admin_update_recibo', { p_payload: payload });
+    if (error) throw new Error(error.message || 'No se pudo actualizar recibo');
+    return data;
+  }
+
+  async function anularRecibo(payload) {
+    const { data, error } = await supa.rpc('rpc_admin_anular_recibo', { p_payload: payload });
+    if (error) throw new Error(error.message || 'No se pudo anular recibo');
+    return data;
+  }
+
+  async function deleteRecibo(payload) {
+    const { data, error } = await supa.rpc('rpc_admin_delete_recibo', { p_payload: payload });
+    if (error) throw new Error(error.message || 'No se pudo eliminar recibo');
+    return data;
+  }
+
+  async function listRecibosByPeriod(desde, hasta, tipo) {
+    const { data, error } = await supa.rpc('rpc_admin_list_recibos_by_period', {
+      p_desde: desde, p_hasta: hasta, p_tipo: tipo || null,
+    });
+    if (error) throw new Error(error.message || 'No se pudo listar recibos del período');
+    return data || [];
+  }
+
+  /* Helpers de cálculo (valor del día = sueldo / 30; subtotal y total
+     se recalculan en frontend en vivo y se mandan junto al payload). */
+  function calcValorDia(sueldoBasico) {
+    const n = Number(sueldoBasico);
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    return n / 30;
+  }
+  function calcSubtotal(cantidad, valorUnitario) {
+    const c = Number(cantidad);
+    const v = Number(valorUnitario);
+    if (!Number.isFinite(c) || !Number.isFinite(v)) return 0;
+    return c * v;
+  }
+  function calcTotal(items) {
+    if (!Array.isArray(items)) return 0;
+    return items.reduce((acc, it) => {
+      const s = Number(it && it.subtotal);
+      return acc + (Number.isFinite(s) ? s : 0);
+    }, 0);
+  }
+
+  /* Validador CUIT formato XX-XXXXXXXX-X (alias del existente para
+     que company-settings-modal lo use con el mismo mensaje). */
+  /* (se reusa validateCuit ya definido arriba). */
+
   /* Parser del mensaje de borrado bloqueado. Extrae los numeros que
      vienen en el mensaje "No se puede eliminar: tiene N egresos, ..." */
   function parseHasRelationsMessage(msg) {
@@ -1476,6 +1577,21 @@
     MODALIDAD_OPTIONS,
     TIPO_CONTRATACION_OPTIONS,
     FORMA_COBRO_OPTIONS,
+    // S2.12 recibos + company_settings
+    RECIBO_TIPO_OPTIONS,
+    RECIBO_ESTADO_OPTIONS,
+    getCompanySettings,
+    updateCompanySettings,
+    loadRecibos,
+    getRecibo,
+    createRecibo,
+    updateRecibo,
+    anularRecibo,
+    deleteRecibo,
+    listRecibosByPeriod,
+    calcValorDia,
+    calcSubtotal,
+    calcTotal,
   };
 
   /* ── Navegacion cross-tab (B.5) ───────────────────────────────────

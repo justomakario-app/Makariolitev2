@@ -29,6 +29,9 @@
   <!-- QR + PDF generation (para imprimir banner desde mobile si aplica) -->
   <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <!-- pdfmake (S2.12 recibos de sueldo) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/pdfmake.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/vfs_fonts.min.js"></script>
   <script type="module">
     /* qr-scanner usa import.meta — lo cargamos como módulo y lo exponemos en window */
     import QrScanner from 'https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/+esm';
@@ -53,7 +56,7 @@
   <script type="text/babel" src="components/pages.jsx?v=5"></script>
 
   <!-- Admin data layer + modals + tabs -->
-  <script src="components/admin/admin-data.js?v=10"></script>
+  <script src="components/admin/admin-data.js?v=11"></script>
   <script type="text/babel" src="components/admin/customer-modal.jsx?v=1"></script>
   <script type="text/babel" src="components/admin/supplier-historial.jsx?v=1"></script>
   <script type="text/babel" src="components/admin/supplier-modal.jsx?v=1"></script>
@@ -79,8 +82,14 @@
   <script type="text/babel" src="components/admin/cuentas-corrientes-tab.jsx?v=1"></script>
   <script type="text/babel" src="components/admin/check-row.jsx?v=1"></script>
   <script type="text/babel" src="components/admin/checks-tab.jsx?v=2"></script>
+  <!-- S2.12 recibos -->
+  <script src="components/admin/recibo-pdf-generator.js?v=1"></script>
+  <script type="text/babel" src="components/admin/company-settings-modal.jsx?v=1"></script>
+  <script type="text/babel" src="components/admin/recibo-row.jsx?v=1"></script>
+  <script type="text/babel" src="components/admin/recibo-modal.jsx?v=1"></script>
+  <script type="text/babel" src="components/admin/recibos-tab.jsx?v=1"></script>
 
-  <script type="text/babel" src="components/admin.jsx?v=6"></script>
+  <script type="text/babel" src="components/admin.jsx?v=7"></script>
   <script type="text/babel" src="components/app.jsx?v=6"></script>
 
   <!-- Boot -->

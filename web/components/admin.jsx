@@ -10,10 +10,12 @@ function AdminPage() {
     { id:'proveedores', label:'Proveedores' },
     { id:'clientes',    label:'Clientes' },
     { id:'empleados',   label:'Empleados' },     /* S2.11 */
+    { id:'recibos',     label:'Recibos' },        /* S2.12 */
     { id:'cuentas',     label:'Cuentas Corrientes' },
   ];
   const [tab, setTab] = useState('egresos');
   const [pendingExpenseId, setPendingExpenseId] = useState(null);
+  const [showCompanyModal, setShowCompanyModal] = useState(false);
   const active = TABS.find(t => t.id === tab) || TABS[0];
 
   /* B.5: bus de navegacion cross-tab. CtaCteRow dispara goToExpense(id)
@@ -31,8 +33,14 @@ function AdminPage() {
       <div className="page-header">
         <div>
           <div className="page-title">Admin</div>
-          <div className="page-sub">Egresos, compras, cheques, proveedores, clientes y cuentas corrientes.</div>
+          <div className="page-sub">Egresos, compras, cheques, proveedores, clientes, empleados, recibos y cuentas corrientes.</div>
         </div>
+        <button className="btn-ghost admin-config-btn"
+                title="Configuración de la empresa (datos para PDFs)"
+                onClick={() => setShowCompanyModal(true)}>
+          <Icon n="settings" s={14}/>
+          <span className="admin-config-btn-label">Empresa</span>
+        </button>
       </div>
 
       <div className="tabs" role="tablist">
@@ -55,7 +63,8 @@ function AdminPage() {
          tab === 'cheques'     && window.ChecksTab    ? <window.ChecksTab/> :
          tab === 'proveedores' && window.SuppliersTab ? <window.SuppliersTab/> :
          tab === 'clientes'    && window.CustomersTab ? <window.CustomersTab/> :
-         tab === 'empleados'   && window.EmployeesTab ? <window.EmployeesTab/> : (
+         tab === 'empleados'   && window.EmployeesTab ? <window.EmployeesTab/> :
+         tab === 'recibos'     && window.RecibosTab   ? <window.RecibosTab/> : (
           <div className="admin-empty-state">
             <Icon n="dollar" s={32} c="var(--ink-muted)"/>
             <h3>{active.label}</h3>
@@ -63,6 +72,12 @@ function AdminPage() {
           </div>
         )}
       </div>
+
+      {showCompanyModal && window.CompanySettingsModal && (
+        <window.CompanySettingsModal
+          onClose={() => setShowCompanyModal(false)}
+          onSuccess={() => { /* sin reload de tab actual */ }}/>
+      )}
     </div>
   );
 }
