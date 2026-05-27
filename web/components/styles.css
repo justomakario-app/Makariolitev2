@@ -1604,6 +1604,272 @@ tr.row-inactive:hover { opacity: 0.85; }
   color: #92400e;
 }
 
+/* ── Expense Modal — secciones colapsables + grid (S2.3) ── */
+.expense-modal-section {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 12px;
+  background: var(--paper);
+  overflow: hidden;
+}
+.expense-modal-section.is-open {
+  background: var(--paper-off);
+}
+.expense-modal-section-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: transparent;
+  border: 0;
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+.expense-modal-section-header:hover {
+  background: var(--paper-dim);
+}
+.expense-modal-section-body {
+  padding: 12px 14px 4px;
+  border-top: 1px solid var(--border);
+  background: var(--paper);
+}
+.expense-modal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 12px;
+}
+
+.expense-modal-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  margin-bottom: 12px;
+  border: 1px solid;
+}
+.expense-modal-banner-info {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1e3a8a;
+}
+.expense-modal-banner-warning {
+  background: #fef3c7;
+  border-color: #fbbf24;
+  color: #78350f;
+}
+
+.field-label-hint {
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink-muted);
+  font-size: 10px;
+  margin-left: 4px;
+}
+
+/* ── Expense Items Editor (S2.3) ── */
+.expense-items-editor { padding: 4px 0 8px; }
+.expense-items-empty {
+  padding: 16px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--ink-muted);
+  background: var(--paper-dim);
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+.expense-items-scroll {
+  overflow-x: auto;
+  margin-bottom: 8px;
+}
+.expense-items-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  min-width: 800px;
+}
+.expense-items-table th {
+  text-align: left;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--border);
+}
+.expense-items-table td {
+  padding: 4px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.expense-items-table tfoot td {
+  border-bottom: 0;
+  padding-top: 8px;
+}
+.expense-item-input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border-md);
+  background: var(--paper-off);
+  font-family: var(--font);
+  font-size: 12px;
+  color: var(--ink);
+  outline: none;
+  border-radius: 3px;
+}
+.expense-item-input:focus {
+  border-color: var(--ink);
+  background: var(--paper);
+}
+.expense-item-input-num { text-align: right; }
+.expense-item-remove {
+  background: transparent;
+  border: 0;
+  color: var(--red, #dc2626);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 3px;
+}
+.expense-item-remove:hover { background: #fee2e2; }
+.expense-item-remove:disabled { opacity: 0.4; cursor: not-allowed; }
+.expense-items-actions {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 4px;
+}
+
+/* ── Expense Totales Summary (S2.3) ── */
+.expense-totales-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin: 10px 0;
+  padding: 10px;
+  background: var(--paper-dim);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.expense-totales-summary > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.expense-totales-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  margin-bottom: 2px;
+}
+.expense-totales-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.expense-totales-total .expense-totales-label { color: var(--ink); }
+.expense-totales-total .expense-totales-value {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* ── Comprobante Uploader (S2.3) ── */
+.comprobante-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 24px 16px;
+  border: 2px dashed var(--border-md);
+  border-radius: 8px;
+  background: var(--paper-off);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  text-align: center;
+}
+.comprobante-dropzone:hover {
+  border-color: var(--ink-soft);
+  background: var(--paper-dim);
+}
+.comprobante-dropzone.is-dragover {
+  border-color: var(--ink);
+  background: var(--paper-dim);
+}
+.comprobante-dropzone.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.comprobante-dropzone-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.comprobante-dropzone-help {
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.comprobante-preview {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--paper-off);
+}
+.comprobante-preview-thumb {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.comprobante-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.comprobante-preview-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.comprobante-preview-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.comprobante-preview-meta {
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+.comprobante-preview-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: auto;
+}
+
 /* ── Print ── */
 @media print {
   .sidebar, .btn-primary, .btn-ghost, .filter-bar { display: none !important; }

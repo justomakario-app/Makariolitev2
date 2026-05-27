@@ -415,6 +415,43 @@
     return _rpcWithHint('rpc_admin_delete_expense', payload, 'No se pudo eliminar egreso');
   }
 
+  /* ── Comprobante (Storage admin_receipts) (S2.3) ──────────────── */
+
+  /* Genera signed URL para mostrar/descargar el archivo. TTL 1h. */
+  async function getComprobanteSignedUrl(path, ttlSec) {
+    const ttl = Number(ttlSec) > 0 ? Number(ttlSec) : 3600;
+    const { data, error } = await supa.storage
+      .from('admin_receipts')
+      .createSignedUrl(path, ttl);
+    if (error) throw new Error(error.message || 'No se pudo generar URL');
+    return data && data.signedUrl;
+  }
+
+  /* Borra el archivo del bucket. No toca expenses (eso lo hace el form
+     marcando comprobante_url=null en el payload). */
+  async function deleteComprobante(path) {
+    const { error } = await supa.storage
+      .from('admin_receipts')
+      .remove([path]);
+    if (error) throw new Error(error.message || 'No se pudo eliminar');
+    return true;
+  }
+
+  /* Labels de categorias S2.3 (11 valores). Para uso en tablas/listados. */
+  const EXPENSE_CATEGORIA_LABELS = {
+    materiales_insumos:     'Materiales / Insumos',
+    fletes:                 'Fletes',
+    logistica_flex:         'Logistica Flex',
+    correo_encomiendas:     'Correo / Encomiendas',
+    gastos_fijos:           'Gastos fijos',
+    honorarios:             'Honorarios',
+    servicios:              'Servicios',
+    intereses_financiacion: 'Intereses / Financiacion',
+    sueldos:                'Sueldos',
+    impuestos:              'Impuestos',
+    otros:                  'Otros',
+  };
+
   /* Parser del mensaje de borrado bloqueado. Extrae los numeros que
      vienen en el mensaje "No se puede eliminar: tiene N egresos, ..." */
   function parseHasRelationsMessage(msg) {
@@ -492,6 +529,10 @@
     // S2.2
     getSupplierHistorial,
     ARG_PROVINCIAS,
+    // S2.3
+    getComprobanteSignedUrl,
+    deleteComprobante,
+    EXPENSE_CATEGORIA_LABELS,
   };
 
   /* ── Navegacion cross-tab (B.5) ───────────────────────────────────
