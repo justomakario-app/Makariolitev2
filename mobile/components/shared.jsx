@@ -51,6 +51,7 @@ const Icon = ({ n, s = 16, c = 'currentColor' }) => {
     case 'dollar':     return <svg {...props}><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>;
     case 'package-check': return <svg {...props}><path d="M16 16l2 2 4-4"/><path d="M21 10V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l2-1.13"/><path d="M3.27 6.96L12 12.01l8.73-5.05"/><path d="M12 22V12"/></svg>;
     case 'flame':      return <svg {...props}><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 002.5 2.5z"/></svg>;
+    case 'briefcase':  return <svg {...props}><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>;
     default: return null;
   }
 };

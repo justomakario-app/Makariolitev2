@@ -12,7 +12,7 @@
    Las ventas se manejan como movimientos manuales o via cheques cobrados.
    ══ */
 
-function CashFlowPage() {
+function CashFlowBody() {
   const toast = useToast();
   const A = window.ADMIN_DATA;
 
@@ -232,14 +232,13 @@ function CashFlowPage() {
   };
 
   return (
-    <div className="page">
-      <div className="page-header">
-        <div>
-          <div className="page-title">Cash Flow</div>
-          <div className="page-sub">
-            Flujo de caja {incluirProy ? 'real + proyectado' : 'real'} · {fechaDesde} → {fechaHasta}
-          </div>
-        </div>
+    <div className="cash-flow-body">
+      {/* S2.21: page-header eliminado. El contenedor padre
+          (ContabilidadPage) provee header unificado.
+          Sub-line con período se muestra como mini-info arriba del
+          header de filtros, para no perder el contexto temporal. */}
+      <div className="cf-body-period">
+        Flujo {incluirProy ? 'real + proyectado' : 'real'} · {fechaDesde} → {fechaHasta}
       </div>
 
       {/* HEADER + filtros */}
@@ -537,4 +536,8 @@ function CashFlowPage() {
   );
 }
 
-window.CashFlowPage = CashFlowPage;
+window.CashFlowBody = CashFlowBody;
+/* Alias retro-compat S2.21: window.CashFlowPage existía hasta S2.16.
+   ContabilidadPage usa CashFlowBody, pero mantenemos el alias por si
+   algún referer externo lo busca. */
+window.CashFlowPage = CashFlowBody;

@@ -2457,6 +2457,18 @@ tr.row-inactive:hover { opacity: 0.85; }
 /* Header del dashboard (filtros + acciones) */
 .cf-header { gap: 10px; }
 
+/* S2.21: Cash Flow vive como tab dentro de Contabilidad (sin page-header propio).
+   .cash-flow-body es el wrapper externo (replace de .page que tenía la versión
+   anterior). .cf-body-period es la mini-info de período arriba del header de filtros. */
+.cash-flow-body { /* sin padding extra, hereda del .page del contenedor */ }
+.cf-body-period {
+  font-size: 11px;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+}
+
 /* Tabla cash flow */
 .cf-table-wrap {
   max-height: 520px;

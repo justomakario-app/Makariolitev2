@@ -14,9 +14,12 @@ function Sidebar({ current, onNav, onLogout, unread }) {
     { id:'produccion',    label:'Producción',         icon:'tools' },
     { id:'registrar',     label:'Registrar producción', icon:'plus' },
 
-    { sec:'admin', label:'Admin' },
-    { id:'admin',         label:'Admin',              icon:'dollar' },
-    { id:'cash-flow',     label:'Cash Flow',          icon:'chart' },
+    { sec:'gestion', label:'Gestión' },
+    { id:'administracion', label:'Administración',     icon:'briefcase' },
+    { id:'contabilidad',   label:'Contabilidad',       icon:'dollar' },
+    { id:'rrhh',           label:'Recursos Humanos',   icon:'users' },
+
+    { sec:'otros', label:'Otros' },
     { id:'historico',     label:'Histórico',          icon:'history' },
     { id:'catalogo',      label:'Catálogo',           icon:'tag' },
     { id:'equipo',        label:'Equipo',             icon:'users' },
@@ -27,9 +30,10 @@ function Sidebar({ current, onNav, onLogout, unread }) {
   ];
 
   /* filtrar por rol — quitar items y secciones vacías.
-     Admin tambien gated por window.FEATURE_ADMIN (B.1). */
+     Administración tambien gated por window.FEATURE_ADMIN (heredado
+     de B.1, ahora aplica al renombrado 'administracion'). */
   const visible = all.filter(it =>
-    it.sec || (allowed.includes(it.id) && (it.id !== 'admin' || window.FEATURE_ADMIN === true))
+    it.sec || (allowed.includes(it.id) && (it.id !== 'administracion' || window.FEATURE_ADMIN === true))
   );
   /* quitar headers de sección que quedaron sin items debajo */
   const cleaned = visible.filter((it, i) => {

@@ -73,20 +73,30 @@ function App() {
     if (page === 'historico')      return <HistoricoPage/>;
     if (page === 'catalogo')       return <CatalogoPage/>;
     if (page === 'equipo')         return <EquipoPage/>;
-    if (page === 'admin') {
-      // Guard: admin solo para owner/admin con flag ON. Operario o flag OFF
-      // → fallback silencioso al dashboard.
+    if (page === 'administracion') {
+      // S2.21: Administración (proveedores + clientes + cuentas corrientes).
+      // Owner + admin acceden, gated por FEATURE_ADMIN. Otros → fallback.
       const role = (M.user.role || '').toLowerCase();
       if (!window.FEATURE_ADMIN || !['owner','admin'].includes(role)) return <DashboardPage onNav={setPage}/>;
-      return window.AdminPage ? <window.AdminPage/> : <DashboardPage onNav={setPage}/>;
+      return window.AdministracionPage ? <window.AdministracionPage/> : <DashboardPage onNav={setPage}/>;
     }
-    if (page === 'cash-flow') {
-      // Guard S2.16: cash-flow solo para owner/admin. Sebas o cualquier otro
-      // rol no llega aca via sidebar (ROLE_NAV ya filtra) — guard defensivo.
+    if (page === 'contabilidad') {
+      // S2.21: Contabilidad (cash flow + egresos + cheques). SOLO owner.
+      // Admin (Romina) y otros roles → fallback silencioso a Dashboard.
       const role = (M.user.role || '').toLowerCase();
-      if (!['owner','admin'].includes(role)) return <DashboardPage onNav={setPage}/>;
-      return window.CashFlowPage ? <window.CashFlowPage/> : <DashboardPage onNav={setPage}/>;
+      if (!['owner'].includes(role)) return <DashboardPage onNav={setPage}/>;
+      return window.ContabilidadPage ? <window.ContabilidadPage/> : <DashboardPage onNav={setPage}/>;
     }
+    if (page === 'rrhh') {
+      // S2.21: Recursos Humanos (empleados + recibos + reportes). SOLO owner.
+      const role = (M.user.role || '').toLowerCase();
+      if (!['owner'].includes(role)) return <DashboardPage onNav={setPage}/>;
+      return window.RrhhPage ? <window.RrhhPage/> : <DashboardPage onNav={setPage}/>;
+    }
+    /* Compat: rutas legacy 'admin' y 'cash-flow' redirigen a los nuevos
+       contenedores (algún user con bookmark viejo). */
+    if (page === 'admin')     return window.AdministracionPage ? <window.AdministracionPage/> : <DashboardPage onNav={setPage}/>;
+    if (page === 'cash-flow') return window.ContabilidadPage   ? <window.ContabilidadPage/>   : <DashboardPage onNav={setPage}/>;
     if (page === 'notificaciones') return <NotificacionesPage/>;
     if (page === 'perfil' || page === 'config') return <ConfigPage/>;
     return <DashboardPage onNav={setPage}/>;
