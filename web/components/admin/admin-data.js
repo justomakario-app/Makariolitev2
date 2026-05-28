@@ -1808,6 +1808,90 @@
     return Array.from(map.values()).sort((a, b) => a.ym.localeCompare(b.ym));
   }
 
+  /* ────────────────────────────────────────────────────────────────
+     Fase 8 — Cierres contables (S2.19 + S2.20)
+     ──────────────────────────────────────────────────────────────── */
+
+  async function listCierres(year, tipo) {
+    const { data, error } = await supa.rpc('rpc_admin_get_cierres', {
+      p_year: year || null,
+      p_tipo: tipo || null,
+    });
+    if (error) throw new Error(error.message || 'No se pudo cargar cierres');
+    return data || [];
+  }
+
+  async function previewCierre(tipo, desde, hasta) {
+    const { data, error } = await supa.rpc('rpc_admin_preview_cierre', {
+      p_tipo:  tipo,
+      p_desde: desde,
+      p_hasta: hasta,
+    });
+    if (error) throw new Error(error.message || 'No se pudo calcular preview');
+    return data;
+  }
+
+  async function crearCierre(payload) {
+    const { data, error } = await supa.rpc('rpc_admin_crear_cierre', { p_payload: payload });
+    if (error) throw new Error(error.message || 'No se pudo crear el cierre');
+    return data;
+  }
+
+  async function reabrirCierre(payload) {
+    const { data, error } = await supa.rpc('rpc_admin_reabrir_cierre', { p_payload: payload });
+    if (error) throw new Error(error.message || 'No se pudo reabrir el cierre');
+    return data;
+  }
+
+  async function validarPeriodoApertura(fecha) {
+    const { data, error } = await supa.rpc('rpc_admin_validar_periodo_apertura', { p_fecha: fecha });
+    if (error) throw new Error(error.message || 'No se pudo validar período');
+    return data;
+  }
+
+  async function getSaldoHistorico() {
+    const { data, error } = await supa.rpc('rpc_admin_get_saldo_historico');
+    if (error) throw new Error(error.message || 'No se pudo cargar saldo histórico');
+    return data || [];
+  }
+
+  /* Detecta si un rango de fechas corresponde a un mes completo,
+     año completo, o personalizado. Útil para habilitar el botón
+     "Cerrar período" en cash-flow.jsx. */
+  function detectarTipoPeriodo(desde, hasta) {
+    if (!desde || !hasta) return 'personalizado';
+    const d = String(desde).slice(0, 10);
+    const h = String(hasta).slice(0, 10);
+    /* Mes completo: desde = YYYY-MM-01, hasta = último día del mismo mes */
+    const md = d.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const mh = h.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!md || !mh) return 'personalizado';
+    if (md[1] === mh[1] && md[2] === mh[2] && md[3] === '01') {
+      const lastDay = new Date(Number(md[1]), Number(md[2]), 0).getDate();
+      if (Number(mh[3]) === lastDay) return 'mensual';
+    }
+    /* Año completo: 01/01 al 31/12 del mismo año */
+    if (md[1] === mh[1] && md[2] === '01' && md[3] === '01' && mh[2] === '12' && mh[3] === '31') {
+      return 'anual';
+    }
+    return 'personalizado';
+  }
+
+  /* Dado un array de cierres y un rango de fechas, encuentra si hay
+     algún cierre con estado='cerrado' que solape con el rango. */
+  function cierreActivoEnRango(cierres, desde, hasta) {
+    if (!Array.isArray(cierres) || !desde || !hasta) return null;
+    const dStart = String(desde).slice(0, 10);
+    const dEnd   = String(hasta).slice(0, 10);
+    for (const c of cierres) {
+      if (c.estado !== 'cerrado') continue;
+      const cs = String(c.periodo_desde).slice(0, 10);
+      const ce = String(c.periodo_hasta).slice(0, 10);
+      if (cs <= dEnd && ce >= dStart) return c;
+    }
+    return null;
+  }
+
   /* Parser del mensaje de borrado bloqueado. Extrae los numeros que
      vienen en el mensaje "No se puede eliminar: tiene N egresos, ..." */
   function parseHasRelationsMessage(msg) {
@@ -1972,6 +2056,15 @@
     getSaldoColor,
     groupRowsByMonth,
     exportCashFlowXlsx,
+    // Fase 8 cierres
+    listCierres,
+    previewCierre,
+    crearCierre,
+    reabrirCierre,
+    validarPeriodoApertura,
+    getSaldoHistorico,
+    detectarTipoPeriodo,
+    cierreActivoEnRango,
   };
 
   /* ── Navegacion cross-tab (B.5) ───────────────────────────────────

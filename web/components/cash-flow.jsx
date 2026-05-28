@@ -46,6 +46,15 @@ function CashFlowPage() {
   const [exportingPdf,  setExportingPdf]  = useState(false);
   const [exportingXlsx, setExportingXlsx] = useState(false);
 
+  /* Fase 8: cierres contables */
+  const [cierres, setCierres]                   = useState([]);
+  const [loadingCierres, setLoadingCierres]     = useState(false);
+  const [showHistorialCierres, setShowHistorialCierres] = useState(false);
+  const [cierreModalState, setCierreModalState] = useState(null); /* { mode, initial?, prefilledRange? } */
+  const userRole = (() => {
+    try { return (window.useMockData().user?.role || '').toLowerCase(); } catch (_) { return ''; }
+  })();
+
   const reload = async () => {
     setLoading(true); setError(null);
     try {
@@ -90,6 +99,48 @@ function CashFlowPage() {
     return () => { cancelled = true; };
     /* eslint-disable-next-line */
   }, []);
+
+  /* Fase 8: lazy load lista de cierres al mount + refresh cuando se crea/reabre. */
+  const reloadCierres = async () => {
+    setLoadingCierres(true);
+    try {
+      const list = await A.listCierres(null, null);
+      setCierres(list);
+    } catch (err) {
+      /* silencioso: el fallo no debe bloquear render del dashboard */
+      console.warn('[CashFlow] no se pudieron cargar cierres:', err.message);
+    } finally {
+      setLoadingCierres(false);
+    }
+  };
+  useEffect(() => { reloadCierres(); /* eslint-disable-next-line */ }, []);
+
+  /* Detección: ¿el rango actual cae dentro de algún cierre activo? */
+  const cierreEnRango = useMemo(() => A.cierreActivoEnRango(cierres, fechaDesde, fechaHasta),
+    [cierres, fechaDesde, fechaHasta]);
+
+  /* Detección: ¿el rango actual es un mes/año completo (puede cerrarse)? */
+  const tipoPeriodoRango = useMemo(() => A.detectarTipoPeriodo(fechaDesde, fechaHasta),
+    [fechaDesde, fechaHasta]);
+
+  const puedeCerrar = !cierreEnRango && (tipoPeriodoRango === 'mensual' || tipoPeriodoRango === 'anual');
+
+  const onAbrirCierreModal = () => {
+    if (!puedeCerrar) return;
+    setCierreModalState({
+      mode: 'cerrar',
+      prefilledRange: { desde: fechaDesde, hasta: fechaHasta, tipo: tipoPeriodoRango },
+    });
+  };
+
+  const onAbrirReaperturaModal = (cierre) => {
+    setCierreModalState({ mode: 'reabrir', initial: cierre });
+  };
+
+  const onCierreSuccess = async () => {
+    setCierreModalState(null);
+    await Promise.all([reload(), reloadCierres()]);
+  };
 
   /* Combinar real + proyectado y agrupar por modo */
   const filasMostrar = useMemo(() => {
@@ -217,6 +268,22 @@ function CashFlowPage() {
                 disabled={exportingXlsx || !payload}>
           {exportingXlsx ? 'Exportando…' : (<><Icon n="download" s={13}/> Excel</>)}
         </button>
+        {/* Fase 8: botón Cerrar período o badge según estado */}
+        {cierreEnRango ? (
+          <span className="cf-cierre-badge"
+                title={`${cierreEnRango.tipo === 'mensual' ? 'Cierre mensual' : 'Cierre anual'} · ${cierreEnRango.periodo_desde} → ${cierreEnRango.periodo_hasta}`}>
+            🔒 PERÍODO CERRADO
+          </span>
+        ) : (
+          <button className="btn-ghost cf-cierre-button"
+                  onClick={onAbrirCierreModal}
+                  disabled={!puedeCerrar}
+                  title={puedeCerrar
+                    ? 'Cerrar el período mostrado'
+                    : 'Solo se pueden cerrar meses o años completos. Ajustá el rango.'}>
+            🔒 Cerrar período
+          </button>
+        )}
         <button className="btn-primary"
                 onClick={() => setModalState({ mode: 'create' })}>
           <Icon n="plus" s={13}/> Movimiento manual
@@ -373,6 +440,64 @@ function CashFlowPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* Fase 8: historial de cierres */}
+      <div className="cf-section-toggle">
+        <button className="btn-ghost" onClick={() => setShowHistorialCierres(s => !s)}>
+          <Icon n={showHistorialCierres ? 'chev-down' : 'chev-right'} s={13}/>
+          Historial de cierres ({cierres.length})
+        </button>
+      </div>
+      {showHistorialCierres && (
+        <div className="card cf-manual-card">
+          {loadingCierres ? (
+            <div className="admin-empty-state"><span className="loader" style={{width:18, height:18}}/></div>
+          ) : cierres.length === 0 ? (
+            <div className="admin-empty-state">
+              <p style={{color:'var(--ink-muted)'}}>Sin cierres registrados todavía.</p>
+            </div>
+          ) : (
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Tipo</th>
+                  <th>Período</th>
+                  <th style={{textAlign:'right'}}>Saldo cierre</th>
+                  <th style={{textAlign:'right'}}>Acum. histórico</th>
+                  <th>Estado</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {cierres.slice(0, 12).map(c => {
+                  /* hasPosterior: ¿hay cierres cerrados con periodo_desde > c.periodo_hasta? */
+                  const hasPost = cierres.some(x =>
+                    x.estado === 'cerrado' &&
+                    String(x.periodo_desde) > String(c.periodo_hasta)
+                  );
+                  return (
+                    <window.CierresHistorialRow
+                      key={c.id}
+                      cierre={c}
+                      userRole={userRole}
+                      hasPosterior={hasPost}
+                      onReabrir={onAbrirReaperturaModal}/>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {cierreModalState && window.CierrePeriodoModal && (
+        <window.CierrePeriodoModal
+          mode={cierreModalState.mode}
+          initial={cierreModalState.initial}
+          prefilledRange={cierreModalState.prefilledRange}
+          onClose={() => setCierreModalState(null)}
+          onSuccess={onCierreSuccess}/>
       )}
 
       {modalState && window.CashFlowManualModal && (
