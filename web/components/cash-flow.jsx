@@ -51,6 +51,7 @@ function CashFlowPage() {
   const [loadingCierres, setLoadingCierres]     = useState(false);
   const [showHistorialCierres, setShowHistorialCierres] = useState(false);
   const [cierreModalState, setCierreModalState] = useState(null); /* { mode, initial?, prefilledRange? } */
+  const [reporteCierreId, setReporteCierreId]   = useState(null); /* Etapa 3: id del cierre a ver en CierreReporteModal */
   const userRole = (() => {
     try { return (window.useMockData().user?.role || '').toLowerCase(); } catch (_) { return ''; }
   })();
@@ -482,7 +483,8 @@ function CashFlowPage() {
                       cierre={c}
                       userRole={userRole}
                       hasPosterior={hasPost}
-                      onReabrir={onAbrirReaperturaModal}/>
+                      onReabrir={onAbrirReaperturaModal}
+                      onVerReporte={(rc) => setReporteCierreId(rc.id)}/>
                   );
                 })}
               </tbody>
@@ -497,7 +499,18 @@ function CashFlowPage() {
           initial={cierreModalState.initial}
           prefilledRange={cierreModalState.prefilledRange}
           onClose={() => setCierreModalState(null)}
-          onSuccess={onCierreSuccess}/>
+          onSuccess={onCierreSuccess}
+          onVerReporte={(id) => {
+            setCierreModalState(null);
+            setReporteCierreId(id);
+            reloadCierres();
+          }}/>
+      )}
+
+      {reporteCierreId && window.CierreReporteModal && (
+        <window.CierreReporteModal
+          cierreId={reporteCierreId}
+          onClose={() => setReporteCierreId(null)}/>
       )}
 
       {modalState && window.CashFlowManualModal && (

@@ -1877,6 +1877,129 @@
     return 'personalizado';
   }
 
+  /* Fase 8 etapa 3 — Reportes de cierre */
+  async function getReporteCierre(cierreId) {
+    const { data, error } = await supa.rpc('rpc_admin_get_reporte_cierre', { p_cierre_id: cierreId });
+    if (error) throw new Error(error.message || 'No se pudo cargar el reporte');
+    return data;
+  }
+
+  /* Calcula variación % con 4 edge cases. */
+  function calcularVariacion(actual, anterior) {
+    const a = Number(actual)   || 0;
+    const p = Number(anterior) || 0;
+    if (p === 0 && a === 0) return { texto: '0%',     clase: 'neutro' };
+    if (p === 0 && a !== 0) return { texto: 'Nuevo',  clase: 'nuevo'  };
+    if (p !== 0 && a === 0) return { texto: '-100%',  clase: 'baja'   };
+    const pct = ((a - p) / Math.abs(p)) * 100;
+    return {
+      texto: `${pct > 0 ? '+' : ''}${pct.toFixed(1)}%`,
+      clase: pct > 0 ? 'suba' : (pct < 0 ? 'baja' : 'neutro'),
+    };
+  }
+
+  /* Helper: extrae el monto de una categoría del snapshot_jsonb del cierre. */
+  function getCategoriaBreakdown(cierre, categoria) {
+    if (!cierre || !cierre.snapshot_jsonb) return 0;
+    const bd = cierre.snapshot_jsonb.breakdown_categorias || {};
+    if (categoria === 'cheques') {
+      const inn  = Number(bd.cheques_cobrados_in)  || 0;
+      const outt = Number(bd.cheques_cobrados_out) || 0;
+      return inn - outt;
+    }
+    if (categoria === 'otros') {
+      const ing  = Number(bd.otros_ingreso) || 0;
+      const egr  = Number(bd.otros_egreso)  || 0;
+      return ing - egr;
+    }
+    return Number(bd[categoria]) || 0;
+  }
+
+  /* Export Excel del reporte de cierre. */
+  function exportCierreXlsx(args) {
+    if (typeof window.XLSX === 'undefined') {
+      throw new Error('SheetJS (XLSX) no esta cargado.');
+    }
+    const { reporte, companySettings } = args || {};
+    if (!reporte || !reporte.cierre) throw new Error('Reporte requerido');
+
+    const c  = reporte.cierre;
+    const ant = reporte.periodo_anterior || null;
+    const snap = c.snapshot_jsonb || {};
+    const topProv  = Array.isArray(snap.top_proveedores) ? snap.top_proveedores : [];
+    const topEmpl  = Array.isArray(snap.top_empleados)   ? snap.top_empleados   : [];
+
+    const rs   = (companySettings && companySettings.razon_social) || 'MACARIO';
+    const cuit = (companySettings && companySettings.cuit) || '';
+    const dom  = (companySettings && companySettings.domicilio) || '';
+
+    const aoa = [
+      [`${rs}${cuit ? ' · CUIT ' + cuit : ''}`],
+      [dom],
+      [],
+      [`Reporte de cierre ${c.tipo === 'mensual' ? 'mensual' : 'anual'}`],
+      [`Período: ${String(c.periodo_desde).slice(0,10)} al ${String(c.periodo_hasta).slice(0,10)}`],
+      [`Estado: ${c.estado}`],
+      [],
+      ['KPI', 'Monto'],
+      ['Saldo apertura', Number(c.saldo_apertura) || 0],
+      ['Total ingresos', Number(c.total_ingresos) || 0],
+      ['Total egresos',  Number(c.total_egresos)  || 0],
+      ['Saldo cierre',   Number(c.saldo_cierre)   || 0],
+      ['Saldo acumulado histórico', Number(c.saldo_acumulado_historico) || 0],
+      ['# Movimientos',  Number(c.count_movimientos) || 0],
+      [],
+    ];
+
+    /* Comparativa */
+    if (ant) {
+      aoa.push(['Comparativa con período anterior']);
+      aoa.push(['Categoría', 'Actual', 'Anterior', 'Variación']);
+      ['compras','sueldos','cheques','otros'].forEach(cat => {
+        const act = getCategoriaBreakdown(c,   cat);
+        const ant_ = getCategoriaBreakdown(ant, cat);
+        const v = calcularVariacion(act, ant_);
+        aoa.push([cat[0].toUpperCase()+cat.slice(1), act, ant_, v.texto]);
+      });
+      aoa.push([]);
+    } else {
+      aoa.push(['Sin período anterior para comparar']);
+      aoa.push([]);
+    }
+
+    /* Top proveedores */
+    aoa.push(['Top proveedores']);
+    if (topProv.length === 0) {
+      aoa.push(['(sin movimientos de compras en el período)']);
+    } else {
+      aoa.push(['Proveedor', 'Monto']);
+      topProv.forEach(p => {
+        aoa.push([p.nombre || 'Sin proveedor', Number(p.total) || 0]);
+      });
+    }
+    aoa.push([]);
+
+    /* Top empleados */
+    aoa.push(['Top empleados']);
+    if (topEmpl.length === 0) {
+      aoa.push(['(sin recibos en el período)']);
+    } else {
+      aoa.push(['Empleado', 'Monto']);
+      topEmpl.forEach(e => {
+        aoa.push([e.nombre || '—', Number(e.total) || 0]);
+      });
+    }
+    aoa.push([]);
+    aoa.push([`Generado: ${new Date().toLocaleString('es-AR')}`]);
+
+    const ws = window.XLSX.utils.aoa_to_sheet(aoa);
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, `Cierre ${String(c.periodo_desde).slice(0,7)}`.slice(0,31));
+    const fechaHoy = new Date().toISOString().slice(0,10);
+    const fname = `cierre_${c.tipo}_${String(c.periodo_desde).slice(0,10)}_${String(c.periodo_hasta).slice(0,10)}_${fechaHoy}.xlsx`;
+    window.XLSX.writeFile(wb, fname);
+  }
+
   /* Dado un array de cierres y un rango de fechas, encuentra si hay
      algún cierre con estado='cerrado' que solape con el rango. */
   function cierreActivoEnRango(cierres, desde, hasta) {
@@ -2065,6 +2188,11 @@
     getSaldoHistorico,
     detectarTipoPeriodo,
     cierreActivoEnRango,
+    // Fase 8 etapa 3 — reportes
+    getReporteCierre,
+    calcularVariacion,
+    getCategoriaBreakdown,
+    exportCierreXlsx,
   };
 
   /* ── Navegacion cross-tab (B.5) ───────────────────────────────────

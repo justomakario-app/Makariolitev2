@@ -50,8 +50,7 @@ function CierresHistorialRow({ cierre, userRole, hasPosterior, onVerReporte, onR
       </td>
       <td className="cta-cte-actions">
         <button className="btn-ghost-sm"
-                title="Ver reporte (disponible en Etapa 3)"
-                disabled
+                title="Ver reporte"
                 onClick={() => onVerReporte?.(cierre)}>
           <Icon n="download" s={12}/>
         </button>

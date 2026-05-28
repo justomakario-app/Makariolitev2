@@ -10,7 +10,7 @@
      - onClose, onSuccess
    ══ */
 
-function CierrePeriodoModal({ mode, initial, prefilledRange, onClose, onSuccess }) {
+function CierrePeriodoModal({ mode, initial, prefilledRange, onClose, onSuccess, onVerReporte }) {
   const toast = useToast();
   const A = window.ADMIN_DATA;
   const Cmp = window.Modal;
@@ -18,10 +18,10 @@ function CierrePeriodoModal({ mode, initial, prefilledRange, onClose, onSuccess 
   if (mode === 'reabrir') {
     return <CierreReabrirView initial={initial} onClose={onClose} onSuccess={onSuccess}/>;
   }
-  return <CierreCrearFlow prefilledRange={prefilledRange} onClose={onClose} onSuccess={onSuccess}/>;
+  return <CierreCrearFlow prefilledRange={prefilledRange} onClose={onClose} onSuccess={onSuccess} onVerReporte={onVerReporte}/>;
 }
 
-function CierreCrearFlow({ prefilledRange, onClose, onSuccess }) {
+function CierreCrearFlow({ prefilledRange, onClose, onSuccess, onVerReporte }) {
   const toast = useToast();
   const A = window.ADMIN_DATA;
   const Cmp = window.Modal;
@@ -126,12 +126,19 @@ function CierreCrearFlow({ prefilledRange, onClose, onSuccess }) {
 
   /* Render según pantalla */
   if (screen === 'exito') {
+    const cierreIdNuevo = resultData && resultData.cierre_id;
+    const handleVerReporte = () => {
+      if (!cierreIdNuevo) return;
+      onClose?.();
+      try { onVerReporte?.(cierreIdNuevo); } catch (_) {}
+    };
     return (
       <Cmp open={true} title="Período cerrado" onClose={onClose} footer={
         <>
           <button className="btn-ghost"
-                  title="Reportes disponibles en Etapa 3"
-                  disabled>
+                  title="Ver reporte detallado"
+                  onClick={handleVerReporte}
+                  disabled={!cierreIdNuevo || !onVerReporte}>
             <Icon n="download" s={14}/> Ver reporte
           </button>
           <button className="btn-primary" onClick={onClose}>Cerrar</button>
