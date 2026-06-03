@@ -1,36 +1,36 @@
-/* ══ CONTABILIDAD PAGE (S2.21)
-   Página standalone con 3 tabs:
-   - Cash Flow (DEFAULT) — usa CashFlowBody (refactor de CashFlowPage
-     sin page-header propio).
+/* ══ FINANZAS PAGE (S2.21b — rename de Contabilidad)
+   Página standalone con 4 tabs:
+   - Cash Flow (DEFAULT) — usa CashFlowBody.
+   - Plan de cuentas — Próximamente.
    - Egresos / Compras — usa ExpensesTab.
    - Cheques — usa ChecksTab.
 
-   SOLO owner (admin Romina NO ve esta sección). Guard runtime en
-   app.jsx + filtro ROLE_NAV.
-
-   Header con título dinámico según tab activo.
+   SOLO owner. Guard runtime en app.jsx + filtro ROLE_NAV.
+   Alias retro-compat: window.ContabilidadPage = FinanzasPage.
    ══ */
 
-function ContabilidadPage() {
+function FinanzasPage() {
   const TABS = [
-    { id:'cash-flow', label:'Cash Flow' },
-    { id:'egresos',   label:'Egresos / Compras' },
-    { id:'cheques',   label:'Cheques' },
+    { id:'cash-flow',      label:'Cash Flow' },
+    { id:'plan-cuentas',   label:'Plan de cuentas' },
+    { id:'egresos',        label:'Egresos / Compras' },
+    { id:'cheques',        label:'Cheques' },
   ];
   const [tab, setTab] = useState('cash-flow');
   const active = TABS.find(t => t.id === tab) || TABS[0];
 
   const subtituloMap = {
-    'cash-flow': 'Flujo de caja real y proyectado, cierres contables.',
-    'egresos':   'Listado, alta y bulk import de egresos / compras.',
-    'cheques':   'Cheques emitidos y recibidos.',
+    'cash-flow':    'Flujo de caja real y proyectado, cierres contables.',
+    'plan-cuentas': 'Estructura de cuentas contables.',
+    'egresos':      'Listado, alta y bulk import de egresos / compras.',
+    'cheques':      'Cheques emitidos y recibidos.',
   };
 
   return (
     <div className="page">
       <div className="page-header">
         <div>
-          <div className="page-title">Contabilidad · {active.label}</div>
+          <div className="page-title">Finanzas · {active.label}</div>
           <div className="page-sub">{subtituloMap[tab] || ''}</div>
         </div>
       </div>
@@ -50,9 +50,14 @@ function ContabilidadPage() {
       </div>
 
       <div role="tabpanel">
-        {tab === 'cash-flow' && window.CashFlowBody ? <window.CashFlowBody/> :
-         tab === 'egresos'   && window.ExpensesTab  ? <window.ExpensesTab/> :
-         tab === 'cheques'   && window.ChecksTab    ? <window.ChecksTab/> : (
+        {tab === 'cash-flow'    && window.CashFlowBody ? <window.CashFlowBody/> :
+         tab === 'egresos'      && window.ExpensesTab  ? <window.ExpensesTab/> :
+         tab === 'cheques'      && window.ChecksTab    ? <window.ChecksTab/> :
+         tab === 'plan-cuentas' ? (
+          window.ProximamentePlaceholder
+            ? <window.ProximamentePlaceholder nombre="Plan de cuentas"/>
+            : <div className="admin-empty-state"><Icon n="dollar" s={32} c="var(--ink-muted)"/><h3>Plan de cuentas</h3><p>Próximamente</p></div>
+         ) : (
           <div className="admin-empty-state">
             <Icon n="dollar" s={32} c="var(--ink-muted)"/>
             <h3>{active.label}</h3>
@@ -64,4 +69,5 @@ function ContabilidadPage() {
   );
 }
 
-window.ContabilidadPage = ContabilidadPage;
+window.FinanzasPage = FinanzasPage;
+window.ContabilidadPage = FinanzasPage;

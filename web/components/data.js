@@ -141,7 +141,7 @@ window.MOCK = {
   },
 
   ROLE_NAV: {
-    owner:     { landing:'dashboard',  items:['dashboard','colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino','stock','produccion','registrar','historico','catalogo','equipo','notificaciones','perfil','administracion','contabilidad','rrhh'] },
+    owner:     { landing:'dashboard',  items:['dashboard','colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino','stock','produccion','registrar','historico','catalogo','equipo','notificaciones','perfil','administracion','ventas','finanzas','rrhh','marketing'] },
     admin:     { landing:'dashboard',  items:['dashboard','colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino','stock','produccion','registrar','historico','catalogo','equipo','notificaciones','perfil','administracion'] },
     encargado: { landing:'produccion', items:['produccion','registrar','stock','notificaciones','perfil'] },
     cnc:       { landing:'produccion', items:['produccion','registrar','perfil'] },

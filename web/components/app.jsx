@@ -80,23 +80,34 @@ function App() {
       if (!window.FEATURE_ADMIN || !['owner','admin'].includes(role)) return <DashboardPage onNav={setPage}/>;
       return window.AdministracionPage ? <window.AdministracionPage/> : <DashboardPage onNav={setPage}/>;
     }
-    if (page === 'contabilidad') {
-      // S2.21: Contabilidad (cash flow + egresos + cheques). SOLO owner.
-      // Admin (Romina) y otros roles → fallback silencioso a Dashboard.
+    if (page === 'finanzas') {
+      // S2.21b: Finanzas (cash flow + plan cuentas + egresos + cheques). SOLO owner.
       const role = (M.user.role || '').toLowerCase();
       if (!['owner'].includes(role)) return <DashboardPage onNav={setPage}/>;
-      return window.ContabilidadPage ? <window.ContabilidadPage/> : <DashboardPage onNav={setPage}/>;
+      return window.FinanzasPage ? <window.FinanzasPage/> : <DashboardPage onNav={setPage}/>;
     }
     if (page === 'rrhh') {
-      // S2.21: Recursos Humanos (empleados + recibos + reportes). SOLO owner.
+      // S2.21: Recursos Humanos. SOLO owner.
       const role = (M.user.role || '').toLowerCase();
       if (!['owner'].includes(role)) return <DashboardPage onNav={setPage}/>;
       return window.RrhhPage ? <window.RrhhPage/> : <DashboardPage onNav={setPage}/>;
     }
-    /* Compat: rutas legacy 'admin' y 'cash-flow' redirigen a los nuevos
-       contenedores (algún user con bookmark viejo). */
-    if (page === 'admin')     return window.AdministracionPage ? <window.AdministracionPage/> : <DashboardPage onNav={setPage}/>;
-    if (page === 'cash-flow') return window.ContabilidadPage   ? <window.ContabilidadPage/>   : <DashboardPage onNav={setPage}/>;
+    if (page === 'ventas') {
+      // S2.21b: Ventas. SOLO owner.
+      const role = (M.user.role || '').toLowerCase();
+      if (!['owner'].includes(role)) return <DashboardPage onNav={setPage}/>;
+      return window.VentasPage ? <window.VentasPage/> : <DashboardPage onNav={setPage}/>;
+    }
+    if (page === 'marketing') {
+      // S2.21b: Marketing. SOLO owner.
+      const role = (M.user.role || '').toLowerCase();
+      if (!['owner'].includes(role)) return <DashboardPage onNav={setPage}/>;
+      return window.MarketingPage ? <window.MarketingPage/> : <DashboardPage onNav={setPage}/>;
+    }
+    /* Compat: rutas legacy 'admin', 'cash-flow' y 'contabilidad' redirigen a nuevos contenedores. */
+    if (page === 'admin')        return window.AdministracionPage ? <window.AdministracionPage/> : <DashboardPage onNav={setPage}/>;
+    if (page === 'cash-flow')    return window.FinanzasPage ? <window.FinanzasPage/> : <DashboardPage onNav={setPage}/>;
+    if (page === 'contabilidad') return window.FinanzasPage ? <window.FinanzasPage/> : <DashboardPage onNav={setPage}/>;
     if (page === 'notificaciones') return <NotificacionesPage/>;
     if (page === 'perfil' || page === 'config') return <ConfigPage/>;
     return <DashboardPage onNav={setPage}/>;

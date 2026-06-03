@@ -1,0 +1,122 @@
+# HANDOFF — Macario Lite (Justo Makario)
+
+> Documento vivo. Se actualiza después de CADA tarea completada, sin excepción.
+> Propósito: cualquier developer que tome este proyecto tiene todo el contexto técnico, metodológico y decisional para continuar sin fricción.
+
+---
+
+## Stack & Proyecto
+
+| Item | Detalle |
+|---|---|
+| **App** | Macario Lite — sistema operativo interno de Justo Makario |
+| **Frontend** | HTML + JSX (mock como source of truth visual) — React+TS+Vite en proceso |
+| **Backend** | Supabase (Postgres + RLS + RPCs SECURITY DEFINER + Storage) |
+| **Supabase project ref** | `ditmbqkvzreekqnkimqv` |
+| **Repo** | `justomakario-app` en GitHub |
+| **Branch activa** | `master` |
+| **Migrations** | `supabase/migrations/` — 64 migrations al inicio de este handoff |
+
+---
+
+## Metodología de trabajo
+
+- **Backend-first con RLS + RPCs:** toda la lógica de negocio vive en Supabase (RPCs `SECURITY DEFINER`). El frontend nunca escribe directo a tablas — siempre vía RPC.
+- **Mock HTML como source of truth visual:** el mock `Macario Lite.html` define el diseño aprobado. No se re-porta a React desde cero — se reemplaza solo la data layer.
+- **Migrations idempotentes:** cada `.sql` usa `IF NOT EXISTS`, `CREATE OR REPLACE`, `DO $$ BEGIN ... EXCEPTION WHEN duplicate_object THEN NULL; END $$` para poder re-ejecutar sin romper.
+- **Nombres cosméticos en frontend:** los labels de UI (nombres de canales, botones, etc.) van en el frontend. La BD guarda IDs y datos, no strings de presentación.
+- **Frontend ↔ backend en pareja:** cualquier cambio de schema requiere verificar/migrar el frontend correspondiente, y viceversa.
+
+---
+
+## Estructura de la base de datos
+
+### Tablas de configuración (nunca se borran)
+| Tabla | Descripción |
+|---|---|
+| `sku_catalog` | Catálogo maestro de productos (SKU = PK natural, ej. MAD050) |
+| `sku_categories` | Categorías: Mesas, Ratonas, Recibidoras, Luz |
+| `channels` | Canales de venta: colecta, flex, tiendanube, distribuidor |
+| `role_permissions` | Mapping rol → landing + items visibles en sidebar |
+| `profiles` | Usuarios del sistema (extiende auth.users) |
+| `company_settings` | Configuración de la empresa |
+
+### Tablas operativas (flujo de producción/ventas)
+| Tabla | Descripción |
+|---|---|
+| `orders` | Pedidos individuales por canal + SKU |
+| `import_batches` | Lotes de importación de Excel (idempotencia por file_hash SHA-256) |
+| `jornadas` | Cierres de jornada (snapshot inmutable) |
+| `jornada_audit` | Auditoría de cambios en jornadas |
+| `production_logs` | Ledger inmutable de producción (negativo = corrección) |
+| `carrier_state` | Estado denormalizado (pedido/producido/faltante/stock) por canal+SKU |
+| `free_stock` | Stock central desvinculado de canal |
+| `order_edit_log` | Log de ediciones sobre pedidos |
+| `qr_scans` | Eventos de escaneo QR en embalaje |
+| `notifications` | Notificaciones por usuario |
+| `agent_conversations` | Conversaciones del agente IA |
+
+### Módulo Admin / Finanzas (Noe — jefa admin)
+| Tabla | Descripción |
+|---|---|
+| `suppliers` | Proveedores (CUIT, email, teléfono) |
+| `expenses` | Egresos/compras con OCR opcional |
+| `checks_issued` | Cheques emitidos |
+| `checks_received` | Cheques recibidos |
+| `cash_flow_manual` | Flujo de caja manual |
+| `recibos` | Recibos generados |
+| `cierres_periodo` | Cierres contables de período |
+| `employees` | Legajo de empleados (CUIL, sueldo, CBU, etc.) |
+| `customers_b2b` | Clientes mayoristas/B2B |
+| `customers_credit` | Cuenta corriente de clientes |
+| `customers_credit_movements` | Movimientos de cuenta corriente |
+| `suppliers_credit` | Cuenta corriente de proveedores |
+| `suppliers_credit_movements` | Movimientos de cuenta corriente proveedores |
+| `admin_audit_log` | Log de auditoría del módulo admin |
+
+---
+
+## Registro de tareas
+
+---
+
+### [2026-06-03] Reset operativo completo — "app como nueva"
+
+**Qué se hizo:**
+Se borró toda la data operativa de la base de datos de producción (`ditmbqkvzreekqnkimqv`), dejando la app en estado "día 0" como si acabara de lanzarse.
+
+**Por qué se hizo:**
+Sebastián (dueño de Justo Makario) lo solicitó explícitamente para hacer un estreno limpio de la aplicación.
+
+**Cómo se hizo:**
+SQL ejecutado directamente vía MCP de Supabase en una sola transacción (`BEGIN ... COMMIT`). El orden de DELETE respetó las FK constraints:
+
+```sql
+BEGIN;
+-- Leafs primero (referencian orders/jornadas)
+DELETE FROM public.agent_conversations;
+DELETE FROM public.notifications;
+DELETE FROM public.qr_scans;
+DELETE FROM public.order_edit_log;
+DELETE FROM public.jornada_audit;
+-- Operación independiente
+DELETE FROM public.production_logs;
+DELETE FROM public.carrier_state;
+DELETE FROM public.free_stock;
+-- Después de limpiar dependencias
+DELETE FROM public.orders;
+DELETE FROM public.import_batches;
+DELETE FROM public.jornadas;
+COMMIT;
+```
+
+**Para qué sirve / resultado:**
+- Todas las tablas operativas quedaron en 0 filas (verificado con COUNT post-ejecución).
+- SKUs, channels, profiles, role_permissions y todo el módulo Admin (Noe) quedaron **intactos**.
+- La app está lista para que Seba importe el primer lote del día y empiece desde cero.
+
+**Decisiones tomadas:**
+- Se mantuvo el módulo Admin completo (suppliers, employees, expenses, etc.) porque Seba aclaró que el reset era solo de la parte operativa (producción/ventas), no de finanzas/RRHH.
+- No se tocó Storage (archivos Excel de importaciones anteriores permanecen en bucket — no afectan la operación nueva).
+
+---
