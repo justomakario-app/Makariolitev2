@@ -120,3 +120,44 @@ COMMIT;
 - No se tocó Storage (archivos Excel de importaciones anteriores permanecen en bucket — no afectan la operación nueva).
 
 ---
+
+### [2026-06-03] Sprint S2.21b — Sidebar completo según diagrama Sebas
+
+**Qué se hizo:**
+1. **Contabilidad → Finanzas**: renombrado `ContabilidadPage` a `FinanzasPage`, alias retro-compat `window.ContabilidadPage = FinanzasPage`. Tab "Plan de cuentas" (Próximamente) agregado. Orden: [Cash Flow] [Plan de cuentas] [Egresos/Compras] [Cheques].
+2. **RRHH**: tab "Gestión hs extras" (Próximamente) en posición 3. Orden: [Empleados] [Recibos] [Gestión hs extras] [Reportes salariales].
+3. **Ventas**: módulo nuevo (`ventas.jsx`) con 9 tabs todos Próximamente. Ícono: `store` (SVG nuevo).
+4. **Marketing**: módulo nuevo (`marketing.jsx`) con 2 tabs Próximamente. Ícono: `megaphone` (SVG nuevo).
+5. **ProximamentePlaceholder**: componente reutilizable en `shared.jsx` (`window.ProximamentePlaceholder`).
+6. **Sidebar** sección Gestión reordenada: Administración → Ventas → Finanzas → RRHH → Marketing.
+7. **FEATURE_ADMIN gate** extendido a todos los ítems de Gestión (antes solo `administracion`).
+8. **ROLE_NAV owner** actualizado: `contabilidad` → `finanzas`, + `ventas` + `marketing`.
+9. **app.jsx**: routing `finanzas`/`ventas`/`marketing` + compat legacy `contabilidad` y `cash-flow`.
+
+**Por qué se hizo:**
+Sebastián mandó diagrama de la estructura completa del sistema. El sprint anterior S2.21 había creado Administración + Contabilidad + RRHH. Este sprint completa la visión.
+
+**Cómo se hizo:**
+Cambios puramente frontend. Cero BD, cero RPCs. Archivos tocados:
+- `web/components/shared.jsx` → íconos `store`/`megaphone` + `ProximamentePlaceholder`
+- `web/components/styles.css` → `.proximamente-placeholder` CSS
+- `web/components/contabilidad.jsx` → rename FinanzasPage + tab nuevo
+- `web/components/rrhh.jsx` → tab hs extras
+- `web/components/ventas.jsx` → NUEVO (9 tabs)
+- `web/components/marketing.jsx` → NUEVO (2 tabs)
+- `web/components/sidebar.jsx` → nuevo orden + íconos
+- `web/components/app.jsx` → routing + compat legacy
+- `web/components/data.js` → ROLE_NAV owner
+- `web/Macario Lite.html` → cache busters + nuevos script tags
+- Paridad bit-perfect en todos los equivalentes `mobile/`
+
+**Para qué sirve / resultado:**
+La sección Gestión del sidebar tiene los 5 módulos del diagrama de Seba. Ventas y Marketing son placeholders visuales listos para rellenar en sprints futuros. El alias retro-compat garantiza que ningún bookmark viejo rompa.
+
+**Decisiones tomadas:**
+- `store` y `megaphone` no existían como íconos → SVGs nuevos mínimos en shared.jsx.
+- `FEATURE_ADMIN` gate extendido a todos los ítems de Gestión para consistencia.
+- Mobile `app.jsx` NO se tocó: no tiene routing a páginas admin (estructura BottomBar diferente). Los `.jsx` de los módulos son idénticos en web y mobile.
+- Commit: `dc9243c`
+
+---
