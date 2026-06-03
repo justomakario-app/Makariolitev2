@@ -68,7 +68,16 @@ function App() {
         ? <window.StockPage onBack={() => setPage('dashboard')}/>
         : <DashboardPage onNav={setPage}/>;
     }
-    if (page === 'produccion' || page === 'registrar') return <ProduccionPage/>;
+    if (page === 'produccion-hub')
+      return window.ProduccionHubPage ? <window.ProduccionHubPage/> : <ProduccionPage/>;
+    if (page === 'registrar') return <ProduccionPage/>;
+    /* Compat: 'produccion' y 'stock' redirigen al hub (bookmarks viejos). */
+    if (page === 'produccion') return window.ProduccionHubPage ? <window.ProduccionHubPage/> : <ProduccionPage/>;
+    if (page === 'stock') {
+      const role = (M.user.role || '').toLowerCase();
+      if (!['owner','admin','encargado'].includes(role)) return <DashboardPage onNav={setPage}/>;
+      return window.ProduccionHubPage ? <window.ProduccionHubPage/> : <DashboardPage onNav={setPage}/>;
+    }
     if (page === 'qr')             return <QRPage/>;
     if (page === 'historico')      return <HistoricoPage/>;
     if (page === 'catalogo')       return <CatalogoPage/>;

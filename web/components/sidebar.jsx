@@ -11,8 +11,8 @@ function Sidebar({ current, onNav, onLogout, unread }) {
     { id:'stock',         label:'Stock',              icon:'package' },
 
     { sec:'produccion', label:'Producción' },
-    { id:'produccion',    label:'Producción',         icon:'tools' },
-    { id:'registrar',     label:'Registrar producción', icon:'plus' },
+    { id:'produccion-hub', label:'Producción',          icon:'tools' },
+    { id:'registrar',      label:'Registrar producción', icon:'plus' },
 
     { sec:'gestion', label:'Gestión' },
     { id:'administracion', label:'Administración',     icon:'briefcase' },

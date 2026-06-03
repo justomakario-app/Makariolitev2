@@ -141,17 +141,17 @@ window.MOCK = {
   },
 
   ROLE_NAV: {
-    owner:     { landing:'dashboard',  items:['dashboard','colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino','stock','produccion','registrar','historico','catalogo','equipo','notificaciones','perfil','administracion','ventas','finanzas','rrhh','marketing'] },
-    admin:     { landing:'dashboard',  items:['dashboard','colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino','stock','produccion','registrar','historico','catalogo','equipo','notificaciones','perfil','administracion'] },
-    encargado: { landing:'produccion', items:['produccion','registrar','stock','notificaciones','perfil'] },
-    cnc:       { landing:'produccion', items:['produccion','registrar','perfil'] },
-    melamina:  { landing:'produccion', items:['produccion','registrar','perfil'] },
-    pino:      { landing:'produccion', items:['produccion','registrar','perfil'] },
-    embalaje:  { landing:'produccion', items:['produccion','registrar','perfil'] },
-    logistica: { landing:'produccion', items:['produccion','registrar','perfil'] },
-    ventas:    { landing:'dashboard',  items:['dashboard','colecta','flex','tiendanube','distribuidor','catalogo','notificaciones','perfil'] },
-    carpinteria:{landing:'produccion', items:['produccion','registrar','perfil'] },
-    marketing: { landing:'dashboard',  items:['dashboard','catalogo','notificaciones','perfil'] },
+    owner:     { landing:'dashboard',        items:['dashboard','colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino','produccion-hub','registrar','historico','catalogo','equipo','notificaciones','perfil','administracion','ventas','finanzas','rrhh','marketing'] },
+    admin:     { landing:'dashboard',        items:['dashboard','colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino','produccion-hub','registrar','historico','catalogo','equipo','notificaciones','perfil','administracion'] },
+    encargado: { landing:'produccion-hub',   items:['produccion-hub','registrar','notificaciones','perfil'] },
+    cnc:       { landing:'produccion-hub',   items:['produccion-hub','registrar','perfil'] },
+    melamina:  { landing:'produccion-hub',   items:['produccion-hub','registrar','perfil'] },
+    pino:      { landing:'produccion-hub',   items:['produccion-hub','registrar','perfil'] },
+    embalaje:  { landing:'produccion-hub',   items:['produccion-hub','registrar','perfil'] },
+    logistica: { landing:'produccion-hub',   items:['produccion-hub','registrar','perfil'] },
+    ventas:    { landing:'dashboard',        items:['dashboard','colecta','flex','tiendanube','distribuidor','catalogo','notificaciones','perfil'] },
+    carpinteria:{ landing:'produccion-hub',  items:['produccion-hub','registrar','perfil'] },
+    marketing: { landing:'dashboard',        items:['dashboard','catalogo','notificaciones','perfil'] },
   },
 };
 
