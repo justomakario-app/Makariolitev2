@@ -161,3 +161,29 @@ La sección Gestión del sidebar tiene los 5 módulos del diagrama de Seba. Vent
 - Commit: `dc9243c`
 
 ---
+
+### [2026-06-03] Sprint S2.21b addendum — ProduccionHub
+
+**Qué se hizo:**
+- Módulo `ProduccionHubPage` (`produccion-hub.jsx`): wrapper con 4 tabs que agrupa la sección Producción del diagrama de Seba.
+  - Tab 1: **Producción** → renderiza `window.ProduccionPage` sin tocarlo
+  - Tab 2: **Stock** → renderiza `window.StockPage` sin tocarlo. **Solo visible para owner/admin/encargado** (guard de rol en cliente). Operarios ven 3 tabs.
+  - Tab 3: **Fe fábrica** → Próximamente
+  - Tab 4: **Línea productiva** → Próximamente
+- Sidebar: reemplaza `produccion` y elimina `stock` standalone → 1 ítem `produccion-hub`. `Registrar producción` se mantiene como shortcut separado.
+- ROLE_NAV: todos los roles con `produccion` → `produccion-hub`. Landing de encargado/operarios: `produccion` → `produccion-hub`. `stock` eliminado de todos los items.
+- app.jsx: case `produccion-hub` + compat legacy `produccion` y `stock` → hub.
+
+**Por qué se hizo:**
+Jefe aclaró que Producción del diagrama de Sebas tiene 4 sub-items. Se agregó después del commit S2.21b inicial.
+
+**Cómo se hizo:**
+El hub NO tiene su propio `<div className="page">` header — renderiza los componentes existentes directamente sin wrapper de página, para evitar header duplicado. El guard de rol se implementa filtrando el array TABS antes de renderizar.
+
+**Decisiones clave (validadas con Jefe antes de implementar):**
+- Tab Stock oculto para operarios (cnc, melamina, pino, embalaje, logistica, carpinteria) por diferencia de permisos en ROLE_NAV.
+- `Registrar producción` se mantiene como ítem separado en sidebar (shortcut directo a ProduccionPage).
+- `StockPage` tiene prop `onBack` opcional — dentro del hub se omite (no se pasa), por lo que el botón "← Volver" no aparece (React conditional `{onBack && ...}`).
+- Commit: `11aab2a`
+
+---
