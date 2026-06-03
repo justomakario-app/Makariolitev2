@@ -18,7 +18,7 @@ function ProduccionHubPage() {
   const ALL_TABS = [
     { id:'produccion', label:'Producción',      stockOnly: false },
     { id:'stock',      label:'Stock',           stockOnly: true  },
-    { id:'fe-fabrica', label:'Fe fábrica',      stockOnly: false },
+    { id:'fe-fabrica', label:'De fábrica',      stockOnly: false },
     { id:'linea-prod', label:'Línea productiva', stockOnly: false },
   ];
 
