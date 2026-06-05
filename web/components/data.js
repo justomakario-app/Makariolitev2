@@ -123,6 +123,9 @@ window.MOCK = {
   prodLogs: [],
   notifications: [],
   users: [],
+  // S2.22: módulos permitidos del usuario admin actual (['administracion',...]).
+  // Vacío salvo para admins con filas en user_module_permissions.
+  userPermissions: [],
   freeStock: {}, // {sku: cantidad_total}
   categories: [], // listado completo desde sku_categories (incluye categorías sin SKUs)
 
@@ -260,6 +263,110 @@ async function loadProfile() {
     id:        profile.id,
   };
   return true;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   S2.22 — PERMISOS POR MÓDULO (admins)
+   ─────────────────────────────────────────────────────────────────
+   Modelo "reemplazo total": un admin CON filas en user_module_permissions
+   ve EXCLUSIVAMENTE los módulos con can_access=true + un set fijo siempre
+   visible (Perfil/Notificaciones). Un admin SIN filas conserva el
+   comportamiento actual (fail-open → ve todo su ROLE_NAV).
+   owner y operarios NO usan este sistema.
+   ─────────────────────────────────────────────────────────────────── */
+
+/* Mapeo módulo (permiso) → ids de navegación que desbloquea.
+   'produccion' incluye produccion-hub (web), registrar (web) y produccion
+   (id legacy + mobile). 'finanzas' y 'finanzas_egresos' ambos desbloquean
+   el item 'finanzas'; la diferencia (solo tab Egresos) la resuelve
+   finanzasEgresosOnly() dentro de FinanzasPage. */
+window.MODULE_TO_NAV = {
+  administracion:   ['administracion'],
+  ventas:           ['ventas'],
+  produccion:       ['produccion-hub', 'registrar', 'produccion'],
+  finanzas:         ['finanzas'],
+  finanzas_egresos: ['finanzas'],
+  marketing:        ['marketing'],
+};
+
+/* Items que un admin permisionado SIEMPRE ve (además de sus módulos). */
+window.PERM_ALWAYS_VISIBLE = ['notificaciones', 'perfil'];
+
+/* ¿El usuario actual es un admin con permisos por módulo activos? */
+function isPermissionedAdmin() {
+  const u = window.MOCK.user || {};
+  const p = window.MOCK.userPermissions;
+  return (u.role === 'admin') && Array.isArray(p) && p.length > 0;
+}
+window.isPermissionedAdmin = isPermissionedAdmin;
+
+/* Set de navIds permitidos para un admin permisionado. */
+function allowedNavSet() {
+  const set = new Set(window.PERM_ALWAYS_VISIBLE);
+  for (const mod of (window.MOCK.userPermissions || [])) {
+    for (const nav of (window.MODULE_TO_NAV[mod] || [])) set.add(nav);
+  }
+  return set;
+}
+window.allowedNavSet = allowedNavSet;
+
+/* Set efectivo de navegación del usuario actual:
+   - admin permisionado → allowedNavSet()
+   - resto (owner / admin sin filas / operarios) → ROLE_NAV[role].items */
+function effectiveNavSet() {
+  if (isPermissionedAdmin()) return allowedNavSet();
+  const u = window.MOCK.user || {};
+  return new Set(window.MOCK.ROLE_NAV[u.role]?.items || []);
+}
+window.effectiveNavSet = effectiveNavSet;
+
+/* ¿El usuario actual puede ver/entrar a este navId?
+   Unifica el filtrado del sidebar y los guards de routing. */
+window.canSeeNav = function (navId) {
+  return effectiveNavSet().has(navId);
+};
+
+/* Primer módulo permitido (landing de un admin permisionado).
+   Usa 'produccion' (no 'produccion-hub') porque ese id funciona en web
+   (compat → ProduccionHubPage) y en mobile (ProduccionPage). */
+window.firstAllowedNav = function () {
+  const order = ['administracion', 'ventas', 'finanzas', 'marketing',
+                 'produccion', 'dashboard', 'notificaciones', 'perfil'];
+  const set = allowedNavSet();
+  for (const id of order) if (set.has(id)) return id;
+  return 'perfil';
+};
+
+/* ¿FinanzasPage debe mostrar SOLO la tab Egresos/Compras?
+   true sólo si el admin tiene 'finanzas_egresos' pero NO 'finanzas' full. */
+window.finanzasEgresosOnly = function () {
+  if (!isPermissionedAdmin()) return false;
+  const p = window.MOCK.userPermissions || [];
+  return p.includes('finanzas_egresos') && !p.includes('finanzas');
+};
+
+/* Carga los permisos del usuario actual (solo si es admin). */
+async function loadMyPermissions() {
+  window.MOCK.userPermissions = [];
+  window.userPermissions = [];
+  const role = (window.MOCK.user?.role || '').toLowerCase();
+  if (role !== 'admin') return; // owner/operarios no usan permisos por módulo
+  const uid = window.MOCK.user?.id;
+  if (!uid) return;
+  try {
+    const { data, error } = await supa.rpc('rpc_admin_get_user_permissions', {
+      p_payload: { user_id: uid },
+    });
+    if (error) throw error;
+    const perms = (data?.permissions || [])
+      .filter(p => p && p.can_access)
+      .map(p => p.module);
+    window.MOCK.userPermissions = perms;
+    window.userPermissions = perms;
+  } catch (e) {
+    // Fail-open: ante error, dejar [] → el admin ve todo su ROLE_NAV.
+    console.error('[data.js] loadMyPermissions fail:', e?.message ?? e);
+  }
 }
 
 async function loadProfiles() {
@@ -709,6 +816,7 @@ async function bootstrap() {
   const has = await loadProfile();
   if (!has) { window.MOCK_BUS.emit(); return; }
   await Promise.all([
+    loadMyPermissions(),
     loadProfiles(),
     loadNotifications(),
     loadCarriers(),
@@ -1267,6 +1375,8 @@ window.MOCK_ACTIONS = {
     await supa.auth.signOut();
     // Vaciar state
     window.MOCK.user = { name:'', initials:'', role:'owner', roleLabel:'', email:'', username:'' };
+    window.MOCK.userPermissions = [];
+    window.userPermissions = [];
     window.MOCK_BUS.emit();
   },
 
@@ -1348,6 +1458,7 @@ const _safe = (p, label) => p.catch(e => {
 
     if (has) {
       await Promise.allSettled([
+        _safe(loadMyPermissions(), 'permissions'),
         _safe(loadProfiles(),      'profiles'),
         _safe(loadNotifications(), 'notifications'),
         _safe(loadCarriers(),      'carriers'),

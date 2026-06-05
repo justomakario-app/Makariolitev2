@@ -123,6 +123,9 @@ window.MOCK = {
   prodLogs: [],
   notifications: [],
   users: [],
+  // S2.22: módulos permitidos del usuario admin actual (['administracion',...]).
+  // Vacío salvo para admins con filas en user_module_permissions.
+  userPermissions: [],
   freeStock: {}, // {sku: cantidad_total}
   categories: [], // listado completo desde sku_categories (incluye categorías sin SKUs)
 
@@ -260,6 +263,91 @@ async function loadProfile() {
     id:        profile.id,
   };
   return true;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   S2.22 — PERMISOS POR MÓDULO (admins)
+   ─────────────────────────────────────────────────────────────────
+   Modelo "reemplazo total": un admin CON filas en user_module_permissions
+   ve EXCLUSIVAMENTE los módulos con can_access=true + un set fijo siempre
+   visible (Perfil/Notificaciones). Un admin SIN filas conserva el
+   comportamiento actual (fail-open → ve todo su ROLE_NAV).
+   owner y operarios NO usan este sistema.
+   Espejo bit-perfect de web/components/data.js.
+   ─────────────────────────────────────────────────────────────────── */
+
+window.MODULE_TO_NAV = {
+  administracion:   ['administracion'],
+  ventas:           ['ventas'],
+  produccion:       ['produccion-hub', 'registrar', 'produccion'],
+  finanzas:         ['finanzas'],
+  finanzas_egresos: ['finanzas'],
+  marketing:        ['marketing'],
+};
+
+window.PERM_ALWAYS_VISIBLE = ['notificaciones', 'perfil'];
+
+function isPermissionedAdmin() {
+  const u = window.MOCK.user || {};
+  const p = window.MOCK.userPermissions;
+  return (u.role === 'admin') && Array.isArray(p) && p.length > 0;
+}
+window.isPermissionedAdmin = isPermissionedAdmin;
+
+function allowedNavSet() {
+  const set = new Set(window.PERM_ALWAYS_VISIBLE);
+  for (const mod of (window.MOCK.userPermissions || [])) {
+    for (const nav of (window.MODULE_TO_NAV[mod] || [])) set.add(nav);
+  }
+  return set;
+}
+window.allowedNavSet = allowedNavSet;
+
+function effectiveNavSet() {
+  if (isPermissionedAdmin()) return allowedNavSet();
+  const u = window.MOCK.user || {};
+  return new Set(window.MOCK.ROLE_NAV[u.role]?.items || []);
+}
+window.effectiveNavSet = effectiveNavSet;
+
+window.canSeeNav = function (navId) {
+  return effectiveNavSet().has(navId);
+};
+
+window.firstAllowedNav = function () {
+  const order = ['administracion', 'ventas', 'finanzas', 'marketing',
+                 'produccion', 'dashboard', 'notificaciones', 'perfil'];
+  const set = allowedNavSet();
+  for (const id of order) if (set.has(id)) return id;
+  return 'perfil';
+};
+
+window.finanzasEgresosOnly = function () {
+  if (!isPermissionedAdmin()) return false;
+  const p = window.MOCK.userPermissions || [];
+  return p.includes('finanzas_egresos') && !p.includes('finanzas');
+};
+
+async function loadMyPermissions() {
+  window.MOCK.userPermissions = [];
+  window.userPermissions = [];
+  const role = (window.MOCK.user?.role || '').toLowerCase();
+  if (role !== 'admin') return;
+  const uid = window.MOCK.user?.id;
+  if (!uid) return;
+  try {
+    const { data, error } = await supa.rpc('rpc_admin_get_user_permissions', {
+      p_payload: { user_id: uid },
+    });
+    if (error) throw error;
+    const perms = (data?.permissions || [])
+      .filter(p => p && p.can_access)
+      .map(p => p.module);
+    window.MOCK.userPermissions = perms;
+    window.userPermissions = perms;
+  } catch (e) {
+    console.error('[data.js] loadMyPermissions fail:', e?.message ?? e);
+  }
 }
 
 async function loadProfiles() {
@@ -709,6 +797,7 @@ async function bootstrap() {
   const has = await loadProfile();
   if (!has) { window.MOCK_BUS.emit(); return; }
   await Promise.all([
+    loadMyPermissions(),
     loadProfiles(),
     loadNotifications(),
     loadCarriers(),
@@ -1267,6 +1356,8 @@ window.MOCK_ACTIONS = {
     await supa.auth.signOut();
     // Vaciar state
     window.MOCK.user = { name:'', initials:'', role:'owner', roleLabel:'', email:'', username:'' };
+    window.MOCK.userPermissions = [];
+    window.userPermissions = [];
     window.MOCK_BUS.emit();
   },
 
@@ -1348,6 +1439,7 @@ const _safe = (p, label) => p.catch(e => {
 
     if (has) {
       await Promise.allSettled([
+        _safe(loadMyPermissions(), 'permissions'),
         _safe(loadProfiles(),      'profiles'),
         _safe(loadNotifications(), 'notifications'),
         _safe(loadCarriers(),      'carriers'),

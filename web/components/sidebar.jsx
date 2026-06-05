@@ -2,7 +2,12 @@
 
 function Sidebar({ current, onNav, onLogout, unread }) {
   const u = window.MOCK.user;
-  const allowed = window.MOCK.ROLE_NAV[u.role]?.items || [];
+  /* S2.22: set efectivo de navegación. Para un admin con permisos por
+     módulo es allowedNavSet() (reemplazo total); para el resto (owner /
+     admin sin permisos / operarios) es su ROLE_NAV de siempre. */
+  const allowed = window.effectiveNavSet
+    ? window.effectiveNavSet()
+    : new Set(window.MOCK.ROLE_NAV[u.role]?.items || []);
 
   /* todos los items posibles */
   const all = [
@@ -35,7 +40,7 @@ function Sidebar({ current, onNav, onLogout, unread }) {
      Toda la sección Gestión requiere FEATURE_ADMIN=true (heredado de B.1). */
   const GESTION_IDS = new Set(['administracion','ventas','finanzas','rrhh','marketing']);
   const visible = all.filter(it =>
-    it.sec || (allowed.includes(it.id) && (!GESTION_IDS.has(it.id) || window.FEATURE_ADMIN === true))
+    it.sec || (allowed.has(it.id) && (!GESTION_IDS.has(it.id) || window.FEATURE_ADMIN === true))
   );
   /* quitar headers de sección que quedaron sin items debajo */
   const cleaned = visible.filter((it, i) => {

@@ -187,3 +187,39 @@ El hub NO tiene su propio `<div className="page">` header — renderiza los comp
 - Commit: `11aab2a`
 
 ---
+
+### [2026-06-05] Sprint S2.22 — Cuentas de usuario con permisos por módulo
+
+**Qué se hizo:**
+1. **Tabla `user_module_permissions`** (migration 0065): `(user_id, module, can_access)` con UNIQUE(user_id, module), RLS, trigger de audit y 2 RPCs.
+2. **2 RPCs nuevos**: `rpc_admin_get_user_permissions(payload)` (owner+admin, lee permisos de un usuario) y `rpc_admin_upsert_user_permissions(payload)` (owner-only, reemplaza el set de permisos de un usuario).
+3. **5 cuentas nuevas** (`@justomakario.app`, pass `Makario2026`): Noelia Castillo (owner), Esteban Fernandez / Romina Puscama / Mikeas Romero / Doble Click (admin). Creadas vía `scripts/create_users_s2_22.js` (Admin API + service role).
+4. **Seed de permisos**: Esteban→[administracion,ventas,produccion]; Romina→[administracion,ventas,produccion,finanzas_egresos]; Mikeas→[produccion]; DobleClick→[marketing]; Noelia→sin filas (owner ve todo por rol).
+5. **Frontend — modelo "reemplazo total"**: un admin CON filas de permisos ve EXCLUSIVAMENTE sus módulos + Perfil/Notificaciones. Sidebar (web) y BottomBar (mobile) filtran por `effectiveNavSet()`. Guards de routing en ambos `app.jsx` usan `canSeeNav()`. Landing del admin permisionado → su primer módulo (`firstAllowedNav()`), no dashboard.
+6. **FinanzasPage egresos-only**: Romina (permiso `finanzas_egresos` sin `finanzas` full) ve SOLO la tab Egresos/Compras (`finanzasEgresosOnly()`).
+
+**Por qué se hizo:**
+Sebas/Jefe necesitan cuentas reales con acceso acotado por área: cada admin solo ve los módulos de su responsabilidad. Owner (Noelia) sin restricciones.
+
+**Cómo se hizo:**
+- Toda la lógica de permisos vive en `data.js` (compartida web/mobile, expuesta en `window`): `isPermissionedAdmin()`, `allowedNavSet()`, `effectiveNavSet()`, `canSeeNav()`, `firstAllowedNav()`, `finanzasEgresosOnly()`, `loadMyPermissions()`, `MODULE_TO_NAV`, `PERM_ALWAYS_VISIBLE`.
+- `loadMyPermissions()` se llama en bootstrap()/boot() tras loadProfile() (solo si role==='admin'); guarda en `MOCK.userPermissions` + `window.userPermissions`. `logout()` los limpia.
+- **Mapeo módulo→nav**: `produccion`→(produccion-hub, registrar, produccion); `finanzas`/`finanzas_egresos`→finanzas; resto 1:1.
+- **Fail-open**: admin SIN filas (o si el RPC falla) → ve todo su ROLE_NAV (comportamiento previo intacto). El filtro solo aplica con ≥1 fila.
+- Archivos: `supabase/migrations/0065_*.sql`, `scripts/create_users_s2_22.js` + `seed_permissions_s2_22.sql` + `package.json`, `web|mobile/components/{data.js,contabilidad.jsx}`, `web/components/{sidebar.jsx,app.jsx}`, `mobile/components/{bottombar.jsx,app.jsx}`, cache busters en ambos HTML.
+
+**Para qué sirve / resultado:**
+Noelia ve todo; Esteban Admin+Ventas+Producción; Romina lo mismo + Finanzas (solo Egresos); Mikeas solo Producción; DobleClick solo Marketing. Migration aplicada y usuarios creados en prod (verificado a nivel data). **Login con EMAIL completo** (no username).
+
+**Decisiones técnicas (divergencias del brief, validadas con Jefe):**
+- Trigger de audit real es `trg_audit_log()` (no `fn_audit_log()` del brief).
+- **RLS de ESCRITURA = owner-only** (no owner+admin del brief): evita que un admin se auto-asigne módulos vía PostgREST. SELECT queda owner+admin. Único path de escritura: RPC owner-only + seed por service_role.
+- `username` con guión bajo (`esteban_fernandez`) por CHECK `^[a-z0-9_]{3,32}$`; el profile se auto-crea por trigger `handle_new_user` desde user_metadata (el script NO inserta profiles).
+- Noelia = 3er owner (ya había 2 en la BD) — confirmado por Jefe.
+- **Mobile**: los 5 son usuarios web. El filtro funciona en mobile, pero módulos sin pantalla mobile (administracion/finanzas/ventas) hacen caer al admin permisionado a Producción/Avisos/Perfil. Documentado, fuera de scope.
+
+**⚠️ PENDIENTE (acción del Jefe):**
+- **Redeploy de EasyPanel**: el frontend con permisos NO está live hasta redeploy. Hasta entonces los nuevos admins ven el ROLE_NAV de admin completo (incluida Administración). El backend (migration + usuarios) YA está en prod.
+- **Sin push** todavía (commit pendiente de OK).
+
+---

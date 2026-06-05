@@ -16,7 +16,12 @@ function App() {
   /* Cuando se loguea, ir a la landing del rol (una sola vez) */
   useEffect(() => {
     if (logged && !didLanding) {
-      const landing = M.ROLE_NAV[M.user.role]?.landing || 'dashboard';
+      let landing = M.ROLE_NAV[M.user.role]?.landing || 'dashboard';
+      // S2.22: un admin permisionado aterriza en su primer módulo permitido
+      // (no en dashboard, que puede no estar entre sus módulos).
+      if (window.isPermissionedAdmin && window.isPermissionedAdmin()) {
+        landing = window.firstAllowedNav ? window.firstAllowedNav() : landing;
+      }
       setPage(landing);
       setDidLanding(true);
     }
@@ -56,10 +61,19 @@ function App() {
 
   /* registrar es un atajo a producción */
   const renderPage = () => {
-    if (page === 'dashboard')   return <DashboardPage onNav={setPage}/>;
-    if (['colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino'].includes(page))
-      return <CarrierPage channel={page} onBack={() => setPage('dashboard')} onNav={setPage}/>;
-    if (page === 'stock') {
+    // S2.22 "reemplazo total": si es admin permisionado y la página pedida
+    // NO está entre sus módulos, lo redirigimos a su primer módulo permitido
+    // (en vez de mostrar el dashboard, que puede no estar permitido).
+    let p = page;
+    if (window.isPermissionedAdmin && window.isPermissionedAdmin() && !window.canSeeNav(p)) {
+      p = window.firstAllowedNav ? window.firstAllowedNav() : 'perfil';
+    }
+    const canSee = (id) => (window.canSeeNav ? window.canSeeNav(id) : true);
+
+    if (p === 'dashboard')   return <DashboardPage onNav={setPage}/>;
+    if (['colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino'].includes(p))
+      return <CarrierPage channel={p} onBack={() => setPage('dashboard')} onNav={setPage}/>;
+    if (p === 'stock') {
       // Guard: stock solo para owner/admin/encargado. Operario que llegue
       // por URL hack o cache vuelve al dashboard sin warning.
       const role = (M.user.role || '').toLowerCase();
@@ -68,57 +82,47 @@ function App() {
         ? <window.StockPage onBack={() => setPage('dashboard')}/>
         : <DashboardPage onNav={setPage}/>;
     }
-    if (page === 'produccion-hub')
+    if (p === 'produccion-hub')
       return window.ProduccionHubPage ? <window.ProduccionHubPage/> : <ProduccionPage/>;
-    if (page === 'registrar') return <ProduccionPage/>;
-    /* Compat: 'produccion' y 'stock' redirigen al hub (bookmarks viejos). */
-    if (page === 'produccion') return window.ProduccionHubPage ? <window.ProduccionHubPage/> : <ProduccionPage/>;
-    if (page === 'stock') {
-      const role = (M.user.role || '').toLowerCase();
-      if (!['owner','admin','encargado'].includes(role)) return <DashboardPage onNav={setPage}/>;
-      return window.ProduccionHubPage ? <window.ProduccionHubPage/> : <DashboardPage onNav={setPage}/>;
-    }
-    if (page === 'qr')             return <QRPage/>;
-    if (page === 'historico')      return <HistoricoPage/>;
-    if (page === 'catalogo')       return <CatalogoPage/>;
-    if (page === 'equipo')         return <EquipoPage/>;
-    if (page === 'administracion') {
-      // S2.21: Administración (proveedores + clientes + cuentas corrientes).
-      // Owner + admin acceden, gated por FEATURE_ADMIN. Otros → fallback.
-      const role = (M.user.role || '').toLowerCase();
-      if (!window.FEATURE_ADMIN || !['owner','admin'].includes(role)) return <DashboardPage onNav={setPage}/>;
+    if (p === 'registrar') return <ProduccionPage/>;
+    /* Compat: 'produccion' redirige al hub (bookmarks viejos + landing S2.22). */
+    if (p === 'produccion') return window.ProduccionHubPage ? <window.ProduccionHubPage/> : <ProduccionPage/>;
+    if (p === 'qr')             return <QRPage/>;
+    if (p === 'historico')      return <HistoricoPage/>;
+    if (p === 'catalogo')       return <CatalogoPage/>;
+    if (p === 'equipo')         return <EquipoPage/>;
+    if (p === 'administracion') {
+      // S2.21: Administración. Owner + admin (gated por FEATURE_ADMIN).
+      // S2.22: además, admin permisionado requiere el módulo 'administracion'.
+      if (!window.FEATURE_ADMIN || !canSee('administracion')) return <DashboardPage onNav={setPage}/>;
       return window.AdministracionPage ? <window.AdministracionPage/> : <DashboardPage onNav={setPage}/>;
     }
-    if (page === 'finanzas') {
-      // S2.21b: Finanzas (cash flow + plan cuentas + egresos + cheques). SOLO owner.
-      const role = (M.user.role || '').toLowerCase();
-      if (!['owner'].includes(role)) return <DashboardPage onNav={setPage}/>;
+    if (p === 'finanzas') {
+      // Owner siempre; admin solo con módulo 'finanzas'/'finanzas_egresos'.
+      if (!canSee('finanzas')) return <DashboardPage onNav={setPage}/>;
       return window.FinanzasPage ? <window.FinanzasPage/> : <DashboardPage onNav={setPage}/>;
     }
-    if (page === 'rrhh') {
-      // S2.21: Recursos Humanos. SOLO owner.
-      const role = (M.user.role || '').toLowerCase();
-      if (!['owner'].includes(role)) return <DashboardPage onNav={setPage}/>;
+    if (p === 'rrhh') {
+      // SOLO owner (ningún módulo de permisos mapea a rrhh).
+      if (!canSee('rrhh')) return <DashboardPage onNav={setPage}/>;
       return window.RrhhPage ? <window.RrhhPage/> : <DashboardPage onNav={setPage}/>;
     }
-    if (page === 'ventas') {
-      // S2.21b: Ventas. SOLO owner.
-      const role = (M.user.role || '').toLowerCase();
-      if (!['owner'].includes(role)) return <DashboardPage onNav={setPage}/>;
+    if (p === 'ventas') {
+      // Owner siempre; admin solo con módulo 'ventas'.
+      if (!canSee('ventas')) return <DashboardPage onNav={setPage}/>;
       return window.VentasPage ? <window.VentasPage/> : <DashboardPage onNav={setPage}/>;
     }
-    if (page === 'marketing') {
-      // S2.21b: Marketing. SOLO owner.
-      const role = (M.user.role || '').toLowerCase();
-      if (!['owner'].includes(role)) return <DashboardPage onNav={setPage}/>;
+    if (p === 'marketing') {
+      // Owner siempre; admin solo con módulo 'marketing'.
+      if (!canSee('marketing')) return <DashboardPage onNav={setPage}/>;
       return window.MarketingPage ? <window.MarketingPage/> : <DashboardPage onNav={setPage}/>;
     }
     /* Compat: rutas legacy 'admin', 'cash-flow' y 'contabilidad' redirigen a nuevos contenedores. */
-    if (page === 'admin')        return window.AdministracionPage ? <window.AdministracionPage/> : <DashboardPage onNav={setPage}/>;
-    if (page === 'cash-flow')    return window.FinanzasPage ? <window.FinanzasPage/> : <DashboardPage onNav={setPage}/>;
-    if (page === 'contabilidad') return window.FinanzasPage ? <window.FinanzasPage/> : <DashboardPage onNav={setPage}/>;
-    if (page === 'notificaciones') return <NotificacionesPage/>;
-    if (page === 'perfil' || page === 'config') return <ConfigPage/>;
+    if (p === 'admin')        return window.AdministracionPage ? <window.AdministracionPage/> : <DashboardPage onNav={setPage}/>;
+    if (p === 'cash-flow')    return window.FinanzasPage ? <window.FinanzasPage/> : <DashboardPage onNav={setPage}/>;
+    if (p === 'contabilidad') return window.FinanzasPage ? <window.FinanzasPage/> : <DashboardPage onNav={setPage}/>;
+    if (p === 'notificaciones') return <NotificacionesPage/>;
+    if (p === 'perfil' || p === 'config') return <ConfigPage/>;
     return <DashboardPage onNav={setPage}/>;
   };
 

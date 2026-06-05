@@ -2,7 +2,13 @@
 
 function BottomBar({ current, onNav, unread }) {
   const u = window.MOCK.user;
-  const allowed = window.MOCK.ROLE_NAV[u.role]?.items || [];
+  /* S2.22: set efectivo de navegación (igual que el Sidebar web). Para un
+     admin con permisos por módulo es allowedNavSet(); para el resto, su
+     ROLE_NAV. */
+  const permissioned = window.isPermissionedAdmin && window.isPermissionedAdmin();
+  const allowed = window.effectiveNavSet
+    ? window.effectiveNavSet()
+    : new Set(window.MOCK.ROLE_NAV[u.role]?.items || []);
 
   /* Tabs según rol — máximo 5 (los más usados) */
   const allTabs = [
@@ -13,9 +19,11 @@ function BottomBar({ current, onNav, unread }) {
     { id:'perfil',      label:'Perfil',     icon:'user' },
   ];
 
-  /* Filtrar por rol — ej: operario sólo ve scan + producción + perfil */
+  /* Filtrar por rol — ej: operario sólo ve scan + producción + perfil.
+     'scan' es siempre visible salvo para un admin permisionado (reemplazo
+     total: solo ve sus módulos + notif/perfil). */
   const visible = allTabs.filter(t =>
-    t.id === 'scan' || allowed.includes(t.id)
+    (!permissioned && t.id === 'scan') || allowed.has(t.id)
   );
 
   return (

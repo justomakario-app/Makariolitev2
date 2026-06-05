@@ -1,0 +1,9 @@
+{
+  "name": "macario-scripts",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Scripts operativos one-off (creación de usuarios, seeds). No forma parte del build de la app.",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0"
+  }
+}

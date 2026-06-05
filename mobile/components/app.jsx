@@ -17,7 +17,13 @@ function App() {
       const role = M.user.role;
       /* En mobile, los operarios aterrizan en SCAN; admin/owner en dashboard */
       const operarioRoles = ['cnc','melamina','pino','embalaje','logistica','encargado','carpinteria'];
-      const landing = operarioRoles.includes(role) ? 'scan' : 'dashboard';
+      let landing = operarioRoles.includes(role) ? 'scan' : 'dashboard';
+      // S2.22: un admin permisionado aterriza en su primer módulo permitido
+      // que exista como pantalla mobile (produccion) o, si no, en avisos/perfil.
+      if (window.isPermissionedAdmin && window.isPermissionedAdmin()) {
+        const set = window.allowedNavSet ? window.allowedNavSet() : new Set();
+        landing = ['produccion','notificaciones','perfil'].find(id => set.has(id)) || 'perfil';
+      }
       setPage(landing);
       setDidLanding(true);
     }
@@ -60,14 +66,22 @@ function App() {
   );
 
   const renderPage = () => {
-    if (page === 'dashboard')   return <DashboardPage onNav={setPage}/>;
-    if (page === 'scan')        return <ScanPage onNav={setPage}/>;
-    if (page === 'produccion')  return <ProduccionPage/>;
-    if (page === 'notificaciones') return <NotificacionesPage/>;
-    if (page === 'perfil')      return <PerfilPage onLogout={handleLogout}/>;
-    if (['colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino'].includes(page))
-      return <CarrierPage channel={page} onBack={() => setPage('dashboard')}/>;
-    if (page === 'stock') {
+    // S2.22 "reemplazo total": admin permisionado que pide una página fuera
+    // de sus módulos → lo mandamos a una pantalla mobile permitida.
+    let p = page;
+    if (window.isPermissionedAdmin && window.isPermissionedAdmin() && !window.canSeeNav(p)) {
+      const set = window.allowedNavSet ? window.allowedNavSet() : new Set();
+      p = ['produccion','notificaciones','perfil'].find(id => set.has(id)) || 'perfil';
+    }
+
+    if (p === 'dashboard')   return <DashboardPage onNav={setPage}/>;
+    if (p === 'scan')        return <ScanPage onNav={setPage}/>;
+    if (p === 'produccion')  return <ProduccionPage/>;
+    if (p === 'notificaciones') return <NotificacionesPage/>;
+    if (p === 'perfil')      return <PerfilPage onLogout={handleLogout}/>;
+    if (['colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino'].includes(p))
+      return <CarrierPage channel={p} onBack={() => setPage('dashboard')}/>;
+    if (p === 'stock') {
       // Guard: stock solo para owner/admin/encargado. Operario que llegue
       // por URL hack o cache vuelve al dashboard sin warning.
       const role = (M.user.role || '').toLowerCase();
@@ -76,7 +90,7 @@ function App() {
         ? <window.StockPage onBack={() => setPage('dashboard')}/>
         : <DashboardPage onNav={setPage}/>;
     }
-    if (page === 'admin') {
+    if (p === 'admin') {
       // Guard: admin solo para owner/admin con flag ON. Operario o flag OFF
       // → fallback silencioso al dashboard.
       const role = (M.user.role || '').toLowerCase();

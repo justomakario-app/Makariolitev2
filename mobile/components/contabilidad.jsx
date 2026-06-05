@@ -10,13 +10,18 @@
    ══ */
 
 function FinanzasPage() {
-  const TABS = [
+  // S2.22: un admin con permiso 'finanzas_egresos' (y NO 'finanzas' full)
+  // ve EXCLUSIVAMENTE la tab Egresos/Compras. Owner y admin con 'finanzas'
+  // full ven las 4 tabs.
+  const egresosOnly = window.finanzasEgresosOnly ? window.finanzasEgresosOnly() : false;
+  const ALL_TABS = [
     { id:'cash-flow',      label:'Cash Flow' },
     { id:'plan-cuentas',   label:'Plan de cuentas' },
     { id:'egresos',        label:'Egresos / Compras' },
     { id:'cheques',        label:'Cheques' },
   ];
-  const [tab, setTab] = useState('cash-flow');
+  const TABS = egresosOnly ? ALL_TABS.filter(t => t.id === 'egresos') : ALL_TABS;
+  const [tab, setTab] = useState(egresosOnly ? 'egresos' : 'cash-flow');
   const active = TABS.find(t => t.id === tab) || TABS[0];
 
   const subtituloMap = {
