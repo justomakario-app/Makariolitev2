@@ -106,6 +106,12 @@
     if (error) throw new Error(error.message || 'No se pudo cargar pedidos');
     return data || [];
   }
+  /* S2.23 patch1: soft delete (activo=false) de un mayorista. owner-only. */
+  async function deleteMayorista(payload) {
+    const { data, error } = await supa.rpc('rpc_mayoristas_delete', { p_payload: payload });
+    if (error) throw new Error(error.message || 'No se pudo eliminar el mayorista');
+    return data;
+  }
 
   /* Validadores: mismos criterios que BD (CHECK constraints).
      Devuelven { ok: bool, msg?: string }. */
@@ -2070,6 +2076,7 @@
     createPedidoMayorista,
     updateEstadoPedidoMayorista,
     listPedidosMayoristas,
+    deleteMayorista,
     validateNombre,
     validateCuit,
     validateEmail,

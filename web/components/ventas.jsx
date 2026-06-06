@@ -1,27 +1,43 @@
-/* ══ VENTAS PAGE (S2.21b · S2.23 Mayoristas)
+/* ══ VENTAS PAGE (S2.21b · S2.23 Mayoristas · S2.23-patch1 rediseño UI)
    Módulo comercial y de clientes — 9 tabs.
-   La tab "Clientes mayoristas" está implementada (S2.23): MayoristasTab.
-   El resto, Próximamente.
-   SOLO owner por rol + admins con permiso 'ventas' (S2.22).
+   Tab "Clientes mayoristas" implementada: MayoristasTab (lista → ficha).
+   El resto, Próximamente. owner por rol + admins con permiso 'ventas'.
    ══ */
 
-/* ── Config de estados de pedido mayorista (colores del brief) ── */
+/* ── Tokens de diseño (premium, inline para mantener bit-perfect) ── */
+const MAY_UI = {
+  pageBg:   '#F9FAFB',
+  cardBg:   '#FFFFFF',
+  border:   '#E5E7EB',
+  borderSoft:'#F0F1F3',
+  ink:      '#111827',
+  inkSoft:  '#374151',
+  inkMuted: '#6B7280',
+  inkFaint: '#9CA3AF',
+  radius:   12,
+  shadowHover: '0 2px 8px rgba(0,0,0,0.08)',
+  trans:    'box-shadow .15s ease, transform .15s ease, opacity .15s ease',
+};
+
+/* ── Estados de pedido (colores S2.23-patch1) ── */
 const MAY_ESTADOS = {
-  cotizacion:    { label: 'Cotización',    bg: '#eef0f2', fg: '#64748b' },
-  confirmado:    { label: 'Confirmado',    bg: '#e0ecff', fg: '#2563eb' },
-  en_produccion: { label: 'En producción', bg: '#fff0e0', fg: '#d97706' },
-  listo:         { label: 'Listo',         bg: '#e8f7ed', fg: '#16a34a' },
-  entregado:     { label: 'Entregado',     bg: '#dcfce7', fg: '#15803d' },
-  cancelado:     { label: 'Cancelado',     bg: '#fee2e2', fg: '#dc2626' },
+  cotizacion:    { label: 'Cotización',    bg: '#F3F4F6', fg: '#6B7280' },
+  confirmado:    { label: 'Confirmado',    bg: '#EFF6FF', fg: '#3B82F6' },
+  en_produccion: { label: 'En producción', bg: '#FEF3C7', fg: '#B45309' },
+  listo:         { label: 'Listo',         bg: '#D1FAE5', fg: '#059669' },
+  entregado:     { label: 'Entregado',     bg: '#065F46', fg: '#FFFFFF' },
+  cancelado:     { label: 'Cancelado',     bg: '#FEE2E2', fg: '#DC2626' },
 };
 const MAY_ESTADO_ORDER = ['cotizacion','confirmado','en_produccion','listo','entregado','cancelado'];
 
-function MayEstadoBadge({ estado }) {
-  const c = MAY_ESTADOS[estado] || { label: estado, bg: '#eef0f2', fg: '#64748b' };
+function MayEstadoBadge({ estado, size = 'md' }) {
+  const c = MAY_ESTADOS[estado] || { label: estado, bg: '#F3F4F6', fg: '#6B7280' };
+  const pad = size === 'sm' ? '2px 8px' : '3px 10px';
+  const fs  = size === 'sm' ? 10 : 11;
   return (
     <span style={{
-      display:'inline-block', fontSize:10, fontWeight:700, padding:'2px 9px',
-      borderRadius:10, background:c.bg, color:c.fg, textTransform:'uppercase', letterSpacing:'.05em',
+      display:'inline-block', fontSize:fs, fontWeight:700, padding:pad,
+      borderRadius:999, background:c.bg, color:c.fg, textTransform:'uppercase', letterSpacing:'.04em',
     }}>{c.label}</span>
   );
 }
@@ -87,27 +103,39 @@ function VentasPage() {
   );
 }
 
-/* ══ MAYORISTAS TAB — 2 vistas: lista de mayoristas → ficha del mayorista ══ */
+/* ══ MAYORISTAS TAB — lista (grilla de cards) → ficha del mayorista ══ */
 function MayoristasTab() {
   const toast = useToast();
   const role = (window.MOCK?.user?.role || '').toLowerCase();
   const isOwner = role === 'owner';
 
-  const [view, setView]         = useState('list');   // 'list' | 'ficha'
-  const [selected, setSelected] = useState(null);     // mayorista seleccionado
+  const [view, setView]         = useState('list');
+  const [selected, setSelected] = useState(null);
   const [items, setItems]       = useState([]);
+  const [pedCount, setPedCount] = useState({});   // { cliente_id: nº pedidos }
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(null);
   const [search, setSearch]     = useState('');
-  const [custModal, setCustModal] = useState(null);   // {mode, initial?, defaultMayorista?}
+  const [custModal, setCustModal] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [removingId, setRemovingId]     = useState(null);
+  const [deleting, setDeleting]         = useState(false);
+  const [hoverId, setHoverId]           = useState(null);
 
   const reload = async () => {
     setLoading(true); setError(null);
     try {
-      const data = await window.ADMIN_DATA.loadMayoristas();
-      setItems(data || []);
-      // Si estamos en ficha, refrescar el seleccionado con data fresca.
-      setSelected(prev => prev ? (data || []).find(m => m.id === prev.id) || prev : prev);
+      const [mayoristas, pedidos] = await Promise.all([
+        window.ADMIN_DATA.loadMayoristas(),
+        window.ADMIN_DATA.listPedidosMayoristas({}),
+      ]);
+      setItems(mayoristas || []);
+      const counts = {};
+      for (const p of (pedidos || [])) {
+        if (p.cliente_id) counts[p.cliente_id] = (counts[p.cliente_id] || 0) + 1;
+      }
+      setPedCount(counts);
+      setSelected(prev => prev ? (mayoristas || []).find(m => m.id === prev.id) || prev : prev);
     } catch (err) {
       const msg = err?.message || 'Error desconocido';
       setError(msg); toast.error(msg);
@@ -128,26 +156,43 @@ function MayoristasTab() {
     );
   }, [items, search]);
 
+  const doDelete = async () => {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
+    try {
+      await window.ADMIN_DATA.deleteMayorista({ id: deleteTarget.id });
+      const id = deleteTarget.id;
+      setDeleteTarget(null);
+      setRemovingId(id);            // dispara el fade-out
+      toast.success('Mayorista eliminado');
+      setTimeout(() => {
+        setItems(prev => prev.filter(x => x.id !== id));
+        setRemovingId(null);
+      }, 180);
+    } catch (err) {
+      toast.error(err?.message || 'No se pudo eliminar');
+    } finally { setDeleting(false); }
+  };
+
   /* ── VISTA 2 — Ficha ── */
   if (view === 'ficha' && selected) {
-    return (
-      <div>
-        <button className="btn-ghost" style={{marginBottom:14}} onClick={() => { setView('list'); setSelected(null); }}>
-          ← Volver
-        </button>
+    const chips = [
+      (selected.provincia || selected.localidad) && { ic: '📍', txt: [selected.provincia, selected.localidad].filter(Boolean).join(' · ') },
+      selected.telefono && { ic: '📞', txt: selected.telefono },
+      selected.email && { ic: '✉️', txt: selected.email },
+      selected.cuit && { ic: '🪪', txt: selected.cuit },
+    ].filter(Boolean);
 
-        <div className="card" style={{marginBottom:16}}>
-          <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:12, padding:'4px 2px'}}>
-            <div>
-              <div style={{fontSize:18, fontWeight:800, letterSpacing:'-.02em'}}>{selected.nombre}</div>
-              <div style={{fontSize:12, color:'var(--ink-muted)', marginTop:4, fontWeight:600}}>
-                {[selected.localidad, selected.provincia].filter(Boolean).join(', ') || 'Sin ubicación'}
-              </div>
-              <div style={{fontSize:12, color:'var(--ink-soft)', marginTop:6, display:'flex', gap:16, flexWrap:'wrap'}}>
-                {selected.telefono && <span>Tel: {selected.telefono}</span>}
-                {selected.email && <span>{selected.email}</span>}
-                {selected.cuit && <span className="order-num">{selected.cuit}</span>}
-              </div>
+    return (
+      <div style={{background:MAY_UI.pageBg, borderRadius:MAY_UI.radius, padding:16}}>
+        <div style={{
+          background:MAY_UI.cardBg, border:`1px solid ${MAY_UI.border}`, borderRadius:MAY_UI.radius,
+          padding:24, marginBottom:16,
+        }}>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap'}}>
+            <div style={{display:'flex', alignItems:'center', gap:14}}>
+              <button className="btn-ghost" onClick={() => { setView('list'); setSelected(null); }}>← Volver</button>
+              <div style={{fontSize:24, fontWeight:700, letterSpacing:'-.02em', color:MAY_UI.ink}}>{selected.nombre}</div>
             </div>
             {isOwner && (
               <button className="btn-primary" onClick={() => setCustModal({ mode:'edit', initial: selected })}>
@@ -155,6 +200,19 @@ function MayoristasTab() {
               </button>
             )}
           </div>
+
+          {chips.length > 0 && (
+            <div style={{display:'flex', flexWrap:'wrap', gap:8, marginTop:16}}>
+              {chips.map((c, i) => (
+                <span key={i} style={{
+                  display:'inline-flex', alignItems:'center', gap:6, padding:'5px 11px',
+                  background:'#F3F4F6', borderRadius:8, fontSize:12, fontWeight:600, color:MAY_UI.inkSoft,
+                }}>
+                  <span style={{fontSize:13}}>{c.ic}</span> {c.txt}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         <MayoristaPedidos clienteId={selected.id} clienteNombre={selected.nombre} isOwner={isOwner}/>
@@ -172,16 +230,21 @@ function MayoristasTab() {
     );
   }
 
-  /* ── VISTA 1 — Lista de mayoristas ── */
+  /* ── VISTA 1 — Lista (grilla de cards) ── */
   return (
-    <div>
-      <div className="admin-tab-header">
-        <div className="admin-search">
-          <Icon n="search" s={14} c="var(--ink-muted)"/>
-          <input className="filter-input admin-search-input"
-                 placeholder="Buscar nombre, localidad, provincia, email…"
-                 value={search}
-                 onChange={e => setSearch(e.target.value)}/>
+    <div style={{background:MAY_UI.pageBg, borderRadius:MAY_UI.radius, padding:16}}>
+      <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, marginBottom:16, flexWrap:'wrap'}}>
+        <div style={{position:'relative', flex:'1 1 240px', maxWidth:360}}>
+          <span style={{position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', display:'flex'}}>
+            <Icon n="search" s={14} c={MAY_UI.inkFaint}/>
+          </span>
+          <input
+            value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar mayorista…"
+            style={{
+              width:'100%', padding:'9px 12px 9px 34px', borderRadius:10,
+              border:`1px solid ${MAY_UI.border}`, background:'#fff', fontSize:13, color:MAY_UI.ink, outline:'none',
+            }}/>
         </div>
         {isOwner && (
           <button className="btn-primary" onClick={() => setCustModal({ mode:'create', defaultMayorista:true })}>
@@ -191,42 +254,82 @@ function MayoristasTab() {
       </div>
 
       {loading ? (
-        <div className="admin-empty-state"><span className="loader" style={{width:24, height:24}}/></div>
+        <div style={{display:'flex', justifyContent:'center', padding:'48px 0'}}><span className="loader" style={{width:26, height:26}}/></div>
       ) : error ? (
-        <div className="admin-empty-state">
+        <div style={emptyBoxStyle()}>
           <Icon n="alert" s={28} c="var(--red)"/>
-          <h3>Error al cargar</h3>
-          <p>{error}</p>
-          <button className="btn-ghost" onClick={reload}><Icon n="refresh" s={13}/> Reintentar</button>
+          <div style={{fontWeight:700, marginTop:8}}>Error al cargar</div>
+          <div style={{fontSize:12, color:MAY_UI.inkMuted, marginTop:2}}>{error}</div>
+          <button className="btn-ghost" style={{marginTop:12}} onClick={reload}><Icon n="refresh" s={13}/> Reintentar</button>
         </div>
       ) : items.length === 0 ? (
-        <div className="admin-empty-state">
-          <Icon n="store" s={32} c="var(--ink-muted)"/>
-          <h3>Todavía no hay mayoristas</h3>
-          <p>Marcá un cliente B2B como "mayorista" o creá uno nuevo.</p>
+        <div style={emptyBoxStyle()}>
+          <Icon n="store" s={34} c={MAY_UI.inkFaint}/>
+          <div style={{fontWeight:700, fontSize:15, marginTop:10, color:MAY_UI.ink}}>Todavía no hay mayoristas</div>
+          <div style={{fontSize:13, color:MAY_UI.inkMuted, marginTop:4}}>Agregá el primero.</div>
           {isOwner && (
-            <button className="btn-primary" onClick={() => setCustModal({ mode:'create', defaultMayorista:true })}>
+            <button className="btn-primary" style={{marginTop:16}} onClick={() => setCustModal({ mode:'create', defaultMayorista:true })}>
               <Icon n="plus" s={13}/> Nuevo mayorista
             </button>
           )}
         </div>
       ) : (
-        <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:12}}>
-          {filtered.map(m => (
-            <button key={m.id} className="card" style={{textAlign:'left', cursor:'pointer', border:'1px solid var(--border-md)', background:'var(--paper)'}}
-                    onClick={() => { setSelected(m); setView('ficha'); }}>
-              <div style={{fontWeight:700, fontSize:15, color:'var(--ink)'}}>{m.nombre}</div>
-              <div style={{fontSize:12, color:'var(--ink-muted)', marginTop:3, fontWeight:600}}>
-                {[m.localidad, m.provincia].filter(Boolean).join(', ') || 'Sin ubicación'}
+        <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(320px, 1fr))', gap:16}}>
+          {filtered.map(m => {
+            const hovered = hoverId === m.id;
+            const removing = removingId === m.id;
+            const n = pedCount[m.id] || 0;
+            return (
+              <div key={m.id}
+                onMouseEnter={() => setHoverId(m.id)} onMouseLeave={() => setHoverId(null)}
+                style={{
+                  background:MAY_UI.cardBg, border:`1px solid ${MAY_UI.border}`, borderRadius:MAY_UI.radius,
+                  padding:20, display:'flex', flexDirection:'column', gap:12,
+                  boxShadow: hovered ? MAY_UI.shadowHover : 'none',
+                  transform: removing ? 'scale(0.98)' : 'none',
+                  opacity: removing ? 0 : 1,
+                  transition: MAY_UI.trans,
+                }}>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:10}}>
+                  <div style={{minWidth:0}}>
+                    <div style={{fontSize:16, fontWeight:600, color:MAY_UI.ink, lineHeight:1.25}}>{m.nombre}</div>
+                    <div style={{fontSize:12, color:MAY_UI.inkMuted, marginTop:3, fontWeight:600}}>
+                      {[m.provincia, m.localidad].filter(Boolean).join(' · ') || 'Sin ubicación'}
+                    </div>
+                  </div>
+                  <span style={{
+                    flexShrink:0, fontSize:11, fontWeight:700, padding:'3px 10px', borderRadius:999,
+                    background:'#EEF2FF', color:'#4F46E5', whiteSpace:'nowrap',
+                  }}>{n} pedido{n === 1 ? '' : 's'}</span>
+                </div>
+
+                <div style={{display:'flex', flexDirection:'column', gap:4, fontSize:12.5, color:MAY_UI.inkSoft}}>
+                  {m.telefono && <span style={{display:'flex', alignItems:'center', gap:7}}><span style={{opacity:.7}}>📞</span> {m.telefono}</span>}
+                  {m.email && <span style={{display:'flex', alignItems:'center', gap:7, minWidth:0}}><span style={{opacity:.7}}>✉️</span> <span style={{overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{m.email}</span></span>}
+                  {!m.telefono && !m.email && <span style={{color:MAY_UI.inkFaint}}>Sin datos de contacto</span>}
+                </div>
+
+                <div style={{display:'flex', gap:8, marginTop:'auto', paddingTop:4}}>
+                  <button className="btn-primary" style={{flex:1, justifyContent:'center'}}
+                          onClick={() => { setSelected(m); setView('ficha'); }}>
+                    Ver ficha
+                  </button>
+                  {isOwner && (
+                    <button onClick={() => setDeleteTarget(m)}
+                            style={{
+                              display:'inline-flex', alignItems:'center', gap:6, padding:'8px 12px', borderRadius:8,
+                              border:'1px solid #FCA5A5', background:'#FEF2F2', color:'#DC2626',
+                              fontSize:12, fontWeight:600, cursor:'pointer', transition:'background .15s',
+                            }}>
+                      <Icon n="trash" s={12}/> Eliminar
+                    </button>
+                  )}
+                </div>
               </div>
-              <div style={{fontSize:11, color:'var(--ink-soft)', marginTop:8, display:'flex', flexDirection:'column', gap:2}}>
-                {m.telefono && <span>Tel: {m.telefono}</span>}
-                {m.email && <span>{m.email}</span>}
-              </div>
-            </button>
-          ))}
+            );
+          })}
           {filtered.length === 0 && (
-            <div style={{gridColumn:'1/-1', textAlign:'center', padding:'24px', color:'var(--ink-muted)'}}>
+            <div style={{gridColumn:'1/-1', textAlign:'center', padding:'24px', color:MAY_UI.inkMuted}}>
               Sin resultados para "{search}"
             </div>
           )}
@@ -242,8 +345,27 @@ function MayoristasTab() {
           onSuccess={async () => { setCustModal(null); await reload(); }}
         />
       )}
+
+      {deleteTarget && window.ConfirmModal && (
+        <window.ConfirmModal
+          open={true}
+          title="Eliminar mayorista"
+          message={`¿Eliminar a "${deleteTarget.nombre}"? Esta acción no se puede deshacer.`}
+          confirmText="Eliminar"
+          danger
+          onClose={() => { if (!deleting) setDeleteTarget(null); }}
+          onConfirm={doDelete}
+        />
+      )}
     </div>
   );
+}
+
+function emptyBoxStyle() {
+  return {
+    background:MAY_UI.cardBg, border:`1px solid ${MAY_UI.border}`, borderRadius:MAY_UI.radius,
+    padding:'48px 24px', textAlign:'center', display:'flex', flexDirection:'column', alignItems:'center',
+  };
 }
 
 /* ── Lista de pedidos de un mayorista (dentro de la ficha) ── */
@@ -251,7 +373,7 @@ function MayoristaPedidos({ clienteId, clienteNombre, isOwner }) {
   const toast = useToast();
   const [pedidos, setPedidos]   = useState([]);
   const [loading, setLoading]   = useState(true);
-  const [expanded, setExpanded] = useState(null);   // pedido_id expandido
+  const [expanded, setExpanded] = useState(null);
   const [pedidoModal, setPedidoModal] = useState(false);
   const [estadoSaving, setEstadoSaving] = useState(null);
 
@@ -280,55 +402,73 @@ function MayoristaPedidos({ clienteId, clienteNombre, isOwner }) {
     } finally { setEstadoSaving(null); }
   };
 
-  return (
-    <div className="card">
-      <div className="card-header">
-        <div className="card-title">Pedidos de {clienteNombre}</div>
-        {isOwner && (
-          <button className="btn-primary" onClick={() => setPedidoModal(true)}>
-            <Icon n="plus" s={13}/> Nuevo pedido
-          </button>
-        )}
+  const headerRow = (
+    <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, marginBottom:14, flexWrap:'wrap'}}>
+      <div style={{display:'flex', alignItems:'center', gap:10}}>
+        <div style={{fontSize:15, fontWeight:700, color:MAY_UI.ink}}>Pedidos de {clienteNombre}</div>
+        <span style={{fontSize:11, fontWeight:700, padding:'2px 9px', borderRadius:999, background:'#EEF2FF', color:'#4F46E5'}}>
+          {pedidos.length}
+        </span>
       </div>
+      {isOwner && (
+        <button className="btn-primary" onClick={() => setPedidoModal(true)}>
+          <Icon n="plus" s={13}/> Nuevo pedido
+        </button>
+      )}
+    </div>
+  );
+
+  return (
+    <div>
+      {headerRow}
 
       {loading ? (
-        <div className="empty"><span className="loader" style={{width:22, height:22}}/></div>
+        <div style={{display:'flex', justifyContent:'center', padding:'32px 0'}}><span className="loader" style={{width:22, height:22}}/></div>
       ) : pedidos.length === 0 ? (
-        <div className="empty">
-          <Icon n="package" s={26} c="var(--ink-faint)"/>
-          <div style={{fontSize:12, color:'var(--ink-muted)'}}>Sin pedidos todavía.</div>
+        <div style={emptyBoxStyle()}>
+          <Icon n="package" s={30} c={MAY_UI.inkFaint}/>
+          <div style={{fontWeight:700, marginTop:10, color:MAY_UI.ink}}>Sin pedidos todavía</div>
+          {isOwner && (
+            <button className="btn-primary" style={{marginTop:14}} onClick={() => setPedidoModal(true)}>
+              <Icon n="plus" s={13}/> Nuevo pedido
+            </button>
+          )}
         </div>
       ) : (
-        <div style={{display:'flex', flexDirection:'column', gap:10, padding:'4px 2px'}}>
+        <div style={{display:'flex', flexDirection:'column', gap:12}}>
           {pedidos.map(p => {
             const open = expanded === p.id;
             const total = pedidoTotal(p);
-            const resumen = (p.items || []).map(it => `${it.cantidad}× ${it.modelo || it.sku}`).join(' · ');
+            const resumen = (p.items || []).map(it => `${it.cantidad}× ${it.modelo || it.sku}`).join(', ');
             return (
-              <div key={p.id} style={{border:'1px solid var(--border-md)', borderRadius:8, overflow:'hidden'}}>
-                <div style={{display:'flex', alignItems:'center', gap:12, padding:'12px 14px', cursor:'pointer', background:'var(--paper)'}}
-                     onClick={() => setExpanded(open ? null : p.id)}>
-                  <div style={{flex:1, minWidth:0}}>
-                    <div style={{display:'flex', alignItems:'center', gap:10}}>
-                      <span className="order-num" style={{fontWeight:700}}>{p.numero_pedido}</span>
-                      <MayEstadoBadge estado={p.estado}/>
-                    </div>
-                    <div style={{fontSize:11, color:'var(--ink-muted)', marginTop:4}}>
-                      {(p.fecha_pedido || '').slice(0,10)}
-                      {p.fecha_entrega_estimada ? ` · entrega ${String(p.fecha_entrega_estimada).slice(0,10)}` : ''}
-                    </div>
-                    {!open && resumen && <div style={{fontSize:11, color:'var(--ink-soft)', marginTop:4, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{resumen}</div>}
+              <div key={p.id} style={{
+                background:MAY_UI.cardBg, border:`1px solid ${MAY_UI.border}`, borderRadius:MAY_UI.radius, padding:18,
+                transition:MAY_UI.trans,
+              }}>
+                <div style={{display:'flex', alignItems:'center', gap:10, flexWrap:'wrap'}}>
+                  <span style={{fontFamily:'var(--mono)', fontWeight:700, fontSize:14, color:MAY_UI.ink}}>{p.numero_pedido}</span>
+                  <MayEstadoBadge estado={p.estado}/>
+                  <span style={{marginLeft:'auto', fontSize:12, color:MAY_UI.inkMuted}}>
+                    {(p.fecha_pedido || '').slice(0,10)}
+                    {p.fecha_entrega_estimada ? ` · entrega ${String(p.fecha_entrega_estimada).slice(0,10)}` : ''}
+                  </span>
+                </div>
+
+                {resumen && <div style={{fontSize:13, color:MAY_UI.inkSoft, marginTop:10}}>{resumen}</div>}
+
+                <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, marginTop:12}}>
+                  <div>
+                    <div style={{fontSize:10, fontWeight:700, letterSpacing:'.08em', textTransform:'uppercase', color:MAY_UI.inkFaint}}>Total</div>
+                    <div style={{fontFamily:'var(--mono)', fontWeight:800, fontSize:20, color:MAY_UI.ink, lineHeight:1.1}}>{mayMoney(total)}</div>
                   </div>
-                  <div style={{textAlign:'right'}}>
-                    <div style={{fontFamily:'var(--mono)', fontWeight:700, fontSize:14}}>{mayMoney(total)}</div>
-                    <div style={{fontSize:10, color:'var(--ink-faint)'}}>{(p.items || []).length} ítem{(p.items||[]).length===1?'':'s'}</div>
-                  </div>
-                  <Icon n={open ? 'chev-down' : 'chev-right'} s={14} c="var(--ink-muted)"/>
+                  <button className="btn-ghost" onClick={() => setExpanded(open ? null : p.id)}>
+                    {open ? 'Ocultar detalle' : 'Ver detalle'} <Icon n={open ? 'chev-down' : 'chev-right'} s={13}/>
+                  </button>
                 </div>
 
                 {open && (
-                  <div style={{padding:'4px 14px 14px', borderTop:'1px solid var(--border-soft)'}}>
-                    <table className="data-table" style={{marginTop:8}}>
+                  <div style={{marginTop:14, paddingTop:14, borderTop:`1px solid ${MAY_UI.borderSoft}`}}>
+                    <table className="data-table">
                       <thead>
                         <tr><th>SKU</th><th>Producto</th><th style={{textAlign:'right'}}>Cant.</th><th style={{textAlign:'right'}}>P. unit.</th><th style={{textAlign:'right'}}>Subtotal</th></tr>
                       </thead>
@@ -344,19 +484,16 @@ function MayoristaPedidos({ clienteId, clienteNombre, isOwner }) {
                         ))}
                       </tbody>
                     </table>
-                    {p.condicion_pago && <div style={{fontSize:11, color:'var(--ink-soft)', marginTop:8}}><strong>Condición de pago:</strong> {p.condicion_pago}</div>}
-                    {p.notas && <div style={{fontSize:11, color:'var(--ink-soft)', marginTop:4}}><strong>Notas:</strong> {p.notas}</div>}
+                    {p.condicion_pago && <div style={{fontSize:12, color:MAY_UI.inkSoft, marginTop:10}}><strong>Condición de pago:</strong> {p.condicion_pago}</div>}
+                    {p.notas && <div style={{fontSize:12, color:MAY_UI.inkSoft, marginTop:4}}><strong>Notas:</strong> {p.notas}</div>}
 
                     {isOwner && (
-                      <div style={{display:'flex', alignItems:'center', gap:8, marginTop:12}}>
-                        <span style={{fontSize:11, color:'var(--ink-muted)', fontWeight:600}}>Cambiar estado:</span>
-                        <select className="field-input" style={{maxWidth:200, padding:'6px 8px'}}
-                                value={p.estado}
-                                disabled={estadoSaving === p.id}
+                      <div style={{display:'flex', alignItems:'center', gap:8, marginTop:14}}>
+                        <span style={{fontSize:12, color:MAY_UI.inkMuted, fontWeight:600}}>Cambiar estado:</span>
+                        <select className="field-input" style={{maxWidth:200, padding:'7px 10px'}}
+                                value={p.estado} disabled={estadoSaving === p.id}
                                 onChange={e => cambiarEstado(p.id, e.target.value)}>
-                          {MAY_ESTADO_ORDER.map(es => (
-                            <option key={es} value={es}>{MAY_ESTADOS[es].label}</option>
-                          ))}
+                          {MAY_ESTADO_ORDER.map(es => <option key={es} value={es}>{MAY_ESTADOS[es].label}</option>)}
                         </select>
                         {estadoSaving === p.id && <span className="loader" style={{width:16, height:16}}/>}
                       </div>
@@ -371,8 +508,7 @@ function MayoristaPedidos({ clienteId, clienteNombre, isOwner }) {
 
       {pedidoModal && (
         <PedidoMayoristaModal
-          clienteId={clienteId}
-          clienteNombre={clienteNombre}
+          clienteId={clienteId} clienteNombre={clienteNombre}
           onClose={() => setPedidoModal(false)}
           onCreated={async () => { setPedidoModal(false); await reload(); }}
         />
@@ -385,12 +521,7 @@ function MayoristaPedidos({ clienteId, clienteNombre, isOwner }) {
 function PedidoMayoristaModal({ clienteId, clienteNombre, onClose, onCreated }) {
   const toast = useToast();
   const today = new Date().toISOString().slice(0, 10);
-  const [form, setForm] = useState({
-    fecha_pedido: today,
-    fecha_entrega_estimada: '',
-    condicion_pago: '',
-    notas: '',
-  });
+  const [form, setForm] = useState({ fecha_pedido: today, fecha_entrega_estimada: '', condicion_pago: '', notas: '' });
   const [lineas, setLineas] = useState([{ sku:'', cantidad:'', precio_unitario:'' }]);
   const [saving, setSaving] = useState(false);
 
@@ -399,7 +530,6 @@ function PedidoMayoristaModal({ clienteId, clienteNombre, onClose, onCreated }) 
   const addLinea = () => setLineas(arr => [...arr, { sku:'', cantidad:'', precio_unitario:'' }]);
   const delLinea = (i) => setLineas(arr => arr.length > 1 ? arr.filter((_, idx) => idx !== i) : arr);
 
-  // Opciones de SKU activos desde el catálogo cargado.
   const skuOptions = useMemo(() => {
     const db = window.SKU_DB || {};
     return Object.keys(db)
@@ -419,10 +549,7 @@ function PedidoMayoristaModal({ clienteId, clienteNombre, onClose, onCreated }) 
     const itemsValid = lineas
       .map(l => ({ sku: (l.sku || '').trim(), cantidad: parseInt(l.cantidad, 10), precio_unitario: Number(l.precio_unitario) }))
       .filter(l => l.sku && l.cantidad > 0 && l.precio_unitario >= 0 && Number.isFinite(l.precio_unitario));
-    if (itemsValid.length === 0) {
-      toast.error('Agregá al menos un ítem válido (SKU, cantidad > 0, precio ≥ 0)');
-      return;
-    }
+    if (itemsValid.length === 0) { toast.error('Agregá al menos un ítem válido (SKU, cantidad > 0, precio ≥ 0)'); return; }
     setSaving(true);
     try {
       const res = await window.ADMIN_DATA.createPedidoMayorista({
@@ -436,11 +563,8 @@ function PedidoMayoristaModal({ clienteId, clienteNombre, onClose, onCreated }) 
       toast.success(`Pedido ${res?.numero_pedido || ''} creado`);
       onCreated?.();
     } catch (err) {
-      if (err && /periodo_cerrado/i.test(err.message || '')) {
-        toast.error('No se puede crear: período contable cerrado.');
-      } else {
-        toast.error(err?.message || 'No se pudo crear el pedido');
-      }
+      if (err && /periodo_cerrado/i.test(err.message || '')) toast.error('No se puede crear: período contable cerrado.');
+      else toast.error(err?.message || 'No se pudo crear el pedido');
       setSaving(false);
     }
   };
@@ -458,20 +582,17 @@ function PedidoMayoristaModal({ clienteId, clienteNombre, onClose, onCreated }) 
       <div style={{display:'flex', gap:12}}>
         <div className="field-group" style={{flex:1}}>
           <label className="field-label">Fecha pedido</label>
-          <input className="field-input" type="date" value={form.fecha_pedido}
-                 onChange={e => set('fecha_pedido', e.target.value)}/>
+          <input className="field-input" type="date" value={form.fecha_pedido} onChange={e => set('fecha_pedido', e.target.value)}/>
         </div>
         <div className="field-group" style={{flex:1}}>
           <label className="field-label">Entrega estimada</label>
-          <input className="field-input" type="date" value={form.fecha_entrega_estimada}
-                 onChange={e => set('fecha_entrega_estimada', e.target.value)}/>
+          <input className="field-input" type="date" value={form.fecha_entrega_estimada} onChange={e => set('fecha_entrega_estimada', e.target.value)}/>
         </div>
       </div>
 
       <div className="field-group">
         <label className="field-label">Condición de pago</label>
-        <input className="field-input" value={form.condicion_pago}
-               placeholder="Ej: 30 días, contado, 50% anticipo…"
+        <input className="field-input" value={form.condicion_pago} placeholder="Ej: 30 días, contado, 50% anticipo…"
                onChange={e => set('condicion_pago', e.target.value)}/>
       </div>
 
@@ -485,23 +606,15 @@ function PedidoMayoristaModal({ clienteId, clienteNombre, onClose, onCreated }) 
             {lineas.map((l, i) => (
               <tr key={i}>
                 <td>
-                  <select className="field-input" style={{padding:'6px 8px'}} value={l.sku}
-                          onChange={e => setLinea(i, 'sku', e.target.value)}>
+                  <select className="field-input" style={{padding:'6px 8px'}} value={l.sku} onChange={e => setLinea(i, 'sku', e.target.value)}>
                     <option value="">— elegir SKU —</option>
                     {skuOptions.map(o => <option key={o.sku} value={o.sku}>{o.label}</option>)}
                   </select>
                 </td>
-                <td>
-                  <input className="field-input" style={{padding:'6px 8px', textAlign:'right'}} type="number" min="1"
-                         value={l.cantidad} onChange={e => setLinea(i, 'cantidad', e.target.value)}/>
-                </td>
-                <td>
-                  <input className="field-input" style={{padding:'6px 8px', textAlign:'right'}} type="number" min="0" step="0.01"
-                         value={l.precio_unitario} onChange={e => setLinea(i, 'precio_unitario', e.target.value)}/>
-                </td>
+                <td><input className="field-input" style={{padding:'6px 8px', textAlign:'right'}} type="number" min="1" value={l.cantidad} onChange={e => setLinea(i, 'cantidad', e.target.value)}/></td>
+                <td><input className="field-input" style={{padding:'6px 8px', textAlign:'right'}} type="number" min="0" step="0.01" value={l.precio_unitario} onChange={e => setLinea(i, 'precio_unitario', e.target.value)}/></td>
                 <td style={{textAlign:'right', width:1}}>
-                  <button className="btn-ghost" style={{padding:'5px 8px'}} title="Quitar ítem"
-                          onClick={() => delLinea(i)} disabled={lineas.length <= 1}>
+                  <button className="btn-ghost" style={{padding:'5px 8px'}} title="Quitar ítem" onClick={() => delLinea(i)} disabled={lineas.length <= 1}>
                     <Icon n="trash" s={12}/>
                   </button>
                 </td>
@@ -509,20 +622,17 @@ function PedidoMayoristaModal({ clienteId, clienteNombre, onClose, onCreated }) 
             ))}
           </tbody>
         </table>
-        <button className="btn-ghost" style={{marginTop:8}} onClick={addLinea}>
-          <Icon n="plus" s={12}/> Agregar ítem
-        </button>
+        <button className="btn-ghost" style={{marginTop:8}} onClick={addLinea}><Icon n="plus" s={12}/> Agregar ítem</button>
       </div>
 
-      <div style={{display:'flex', justifyContent:'flex-end', alignItems:'center', gap:10, marginTop:8, paddingTop:8, borderTop:'1px solid var(--border-soft)'}}>
-        <span style={{fontSize:12, color:'var(--ink-muted)', fontWeight:600, textTransform:'uppercase', letterSpacing:'.05em'}}>Total</span>
+      <div style={{display:'flex', justifyContent:'flex-end', alignItems:'center', gap:10, marginTop:8, paddingTop:8, borderTop:`1px solid ${MAY_UI.borderSoft}`}}>
+        <span style={{fontSize:12, color:MAY_UI.inkMuted, fontWeight:600, textTransform:'uppercase', letterSpacing:'.05em'}}>Total</span>
         <span style={{fontFamily:'var(--mono)', fontSize:18, fontWeight:800}}>{mayMoney(total)}</span>
       </div>
 
       <div className="field-group" style={{marginTop:12}}>
         <label className="field-label">Notas</label>
-        <textarea className="field-input" rows={2} value={form.notas}
-                  onChange={e => set('notas', e.target.value)}/>
+        <textarea className="field-input" rows={2} value={form.notas} onChange={e => set('notas', e.target.value)}/>
       </div>
     </Cmp>
   );

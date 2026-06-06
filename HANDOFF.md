@@ -255,3 +255,32 @@ Conectar Ventas (gestión de mayoristas + pedidos) → Producción (qué fabrica
 - **Push** pendiente de OK del Jefe.
 
 ---
+
+### [2026-06-06] S2.23 patch1 — Rediseño UI MayoristasTab + soft delete
+
+**Qué se hizo:**
+1. **Migration 0067**: `rpc_mayoristas_delete(jsonb)` — owner-only, soft delete (`activo=false`) de un mayorista (solo si `es_mayorista`). No borra físico (preserva pedidos/cta cte).
+2. **Rediseño completo de MayoristasTab** (`ventas.jsx`, web + espejo mobile):
+   - **Lista**: grilla responsive de cards (auto 2-col/1-col vía `minmax(320px,1fr)`), fondo `#F9FAFB`, cards blancas borde `#E5E7EB` radius 12, **sombra en hover** (estado React + transición 0.15s), badge "N pedidos", botones "Ver ficha" + "Eliminar" (ghost rojo, owner), search, empty state.
+   - **Eliminar**: `window.ConfirmModal` → `rpc_mayoristas_delete` → **fade-out** (opacity+scale, 180ms) → quita la card del state.
+   - **Ficha**: header card limpio (nombre 24px + Volver/Editar) + chips 📍📞✉️🪪 + pedidos como cards full-width (número + badge estado + fecha / resumen / total + "Ver detalle" expandible / "Cambiar estado" owner).
+   - **Badges de estado** recoloreados (entregado = verde sólido `#065F46` texto blanco).
+3. **admin-data.js** (web+mobile): wrapper `deleteMayorista()` + export.
+
+**Por qué se hizo:**
+Patch de UX sobre S2.23 ya deployado: look premium/moderno + poder dar de baja mayoristas.
+
+**Cómo se hizo (detalles técnicos / decisiones):**
+- **Hover/fade/transiciones inline** (estado React + `transition`), sin tocar CSS files → bit-perfect web/mobile sin cache buster de CSS.
+- **Badge "N pedidos" client-side**: 1 fetch de `listPedidosMayoristas({})` al cargar la lista, agrupado por `cliente_id` (cuenta todos los pedidos del mayorista). El brief no extendió `rpc_mayoristas_list`, así que no se tocó backend.
+- `deleteMayorista` agregado en admin-data (el brief solo listaba ventas.jsx).
+- Cache busters: web ventas v3, admin-data v18 · mobile ventas v3, admin-data v18.
+- Validación: 8/8 JSX transpilan con Babel; props de `ConfirmModal` verificadas contra `modals.jsx`.
+
+**Para qué sirve / resultado:**
+- Migration 0067 **aplicada en prod** (Management API; no figura en `schema_migrations`, igual que 0065/0066).
+- **Smoke OK** (owner Noelia, `DO`+`RAISE EXCEPTION` → rollback, 0 datos sintéticos): crear mayorista → `activo` true → `rpc_mayoristas_delete` → `activo=false` → desaparece de `rpc_mayoristas_list`. Dato real intacto (1 mayorista real activo creado por el Jefe vía app post-redeploy).
+
+**⚠️ PENDIENTE:** redeploy EasyPanel para activar el frontend nuevo.
+
+---
