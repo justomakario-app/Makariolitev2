@@ -284,3 +284,18 @@ Patch de UX sobre S2.23 ya deployado: look premium/moderno + poder dar de baja m
 **⚠️ PENDIENTE:** redeploy EasyPanel para activar el frontend nuevo.
 
 ---
+
+### [2026-06-06] S2.23 patch2 — Fix: cliente borrado seguía en Cuentas Corrientes
+
+**Qué se hizo:**
+`loadCustomersWithCredit` (admin-data.js, web+mobile) ahora **excluye clientes inactivos** (`customers_b2b.activo=false`).
+
+**Por qué:**
+Bug reportado por el Jefe: al borrar un mayorista en Ventas (soft delete `activo=false`), la pestaña **Administración → Cuentas Corrientes → Clientes B2B** lo seguía mostrando (era la única vista que no filtraba por `activo`; la lista de Mayoristas y la pestaña Clientes ya lo ocultaban). Caso: "Aaron Leal" (activo=false, saldo 0) seguía visible.
+
+**Cómo:**
+Se agrega `activo` al embed `customers_b2b(...)` y se filtra client-side `r.customers_b2b.activo !== false` (robusto, sin cambiar la semántica del join). Sin migration. Cache busters: admin-data v19 (web+mobile).
+
+**Resultado:** un cliente dado de baja desaparece de TODAS las vistas. El soft delete se preserva en BD (recuperable con "Reactivar" en la pestaña Clientes; el saldo de cta cte, si lo hubiera, queda registrado). Requiere redeploy.
+
+---

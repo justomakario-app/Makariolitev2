@@ -247,11 +247,16 @@
   async function loadCustomersWithCredit() {
     const { data, error } = await supa
       .from('customers_credit')
-      .select('id, saldo, updated_at, customer_type, customers_b2b(id, nombre, cuit, email)')
+      // S2.23 patch2: traer `activo` del cliente para no mostrar en Cuentas
+      // Corrientes los clientes dados de baja (soft delete activo=false),
+      // igual que ya hacen la pestaña Clientes y la lista de Mayoristas.
+      .select('id, saldo, updated_at, customer_type, customers_b2b(id, nombre, cuit, email, activo)')
       .eq('customer_type', 'b2b')
       .order('nombre', { referencedTable: 'customers_b2b', ascending: true });
     if (error) throw new Error(error.message || 'No se pudo cargar clientes');
-    return data || [];
+    // Filtro client-side (robusto, sin depender de embedded !inner): excluye
+    // clientes inactivos. Un saldo distinto de 0 igual queda registrado en BD.
+    return (data || []).filter(r => r.customers_b2b && r.customers_b2b.activo !== false);
   }
 
   async function loadSupplierMovements(supplierCreditId) {
