@@ -223,3 +223,35 @@ Noelia ve todo; Esteban Admin+Ventas+Producción; Romina lo mismo + Finanzas (so
 - **Sin push** todavía (commit pendiente de OK).
 
 ---
+
+### [2026-06-06] Sprint S2.23 — Módulo Mayoristas
+
+**Qué se hizo:**
+1. **Migration 0066**: columnas `es_mayorista`/`localidad`/`provincia` en `customers_b2b`; enum `pedido_mayorista_estado` (cotizacion→confirmado→en_produccion→listo→entregado→cancelado); tablas `pedidos_mayoristas` + `pedidos_mayoristas_items`; secuencia + `fn_next_numero_pedido_mayorista()` (MAY-0001…); triggers updated_at + audit; RLS; 4 RPCs mayoristas; y **extensión** de `rpc_admin_create_customer_b2b` / `rpc_admin_update_customer_b2b`.
+2. **Ventas → Clientes mayoristas** (`ventas.jsx`): `MayoristasTab` con 2 vistas — lista de mayoristas (cards, búsqueda, "+ Nuevo mayorista") → ficha (datos + "+ Nuevo pedido" con modal de ítems/total + lista de pedidos con badges de estado y cambio de estado).
+3. **Producción** (`produccion.jsx`): `MayoristasEnProduccion` — card en el tab **Distribuidores** (solo owner/admin) con pedidos `confirmado`/`en_produccion` y botón "Marcar como listo" (owner).
+4. **Administración → Clientes** (`admin/customers-tab.jsx` + `admin/customer-modal.jsx`): badge **MAYORISTA** + toggle "Es mayorista" + localidad + provincia (dropdown ARG_PROVINCIAS).
+5. **admin-data.js**: `COLS_CUSTOMER` ampliado + 4 wrappers (`loadMayoristas`, `createPedidoMayorista`, `updateEstadoPedidoMayorista`, `listPedidosMayoristas`).
+6. Espejos mobile bit-perfect + cache busters en ambos HTML.
+
+**Por qué se hizo:**
+Conectar Ventas (gestión de mayoristas + pedidos) → Producción (qué fabricar) en un flujo de estados. (Stock/descuento al entregar = S2.23b.)
+
+**Cómo se hizo (detalles técnicos / decisiones):**
+- **Permisos**: list/list_pedidos = owner+admin; create_pedido/update_estado = **owner-only**. RLS de pedidos: SELECT owner+admin, escritura **owner-only** (un admin no crea pedidos por PostgREST directo). Mismo criterio que S2.22.
+- **Gap del brief corregido**: los RPCs de cliente listan columnas explícitas → se extendieron (aditivo) para persistir es_mayorista/localidad/provincia. En el UPDATE se usa el operador `?` (existencia de key) para que `desactivar`/`reactivar` (que no mandan esos campos) **no los pisen**.
+- **`set_updated_at()`** (no `fn_set_updated_at` del brief, inexistente).
+- **Producción**: la card sólo fetchea para owner/admin (la RPC es owner+admin; un operario daría "Sin permiso"). `MayoristasEnProduccion` es autocontenida (mapa de estados local) para no depender de `ventas.jsx` (carga después).
+- **MayoristasTab/pedido-modal viven inline en `ventas.jsx`** (no nuevos archivos → menos script tags). El SKU dropdown sale de `window.SKU_DB` (activos). "Nuevo mayorista" reusa `CustomerModal` con prop `defaultMayorista`.
+- Cache busters: web admin-data v17, customer-modal v2, customers-tab v4, ventas v2, produccion v16 · mobile: admin-data v17, customer-modal v2, customers-tab v4, ventas v2, produccion v4.
+
+**Para qué sirve / resultado:**
+- Migration 0066 **aplicada en prod** (vía Management API; igual que 0065, **no figura en `supabase_migrations.schema_migrations`** — DB tiene los objetos, el registro CLI no).
+- **Smoke OK** (como owner Noelia, en bloque `DO` con `RAISE EXCEPTION` → rollback total, **0 datos sintéticos commiteados**): crear mayorista → list lo incluye → pedido 2 ítems (total 12500) → cotización→confirmado→en_producción→listo → visible en Producción. Secuencia reseteada a MAY-0001.
+
+**⚠️ PENDIENTE:**
+- **Descuento de stock al entregar → S2.23b** (sku_catalog sin columna de stock).
+- **Redeploy EasyPanel** para activar el frontend.
+- **Push** pendiente de OK del Jefe.
+
+---

@@ -14,11 +14,14 @@
             onClose, onSuccess }
    ══ */
 
-function CustomerModal({ mode, initial, onClose, onSuccess }) {
+function CustomerModal({ mode, initial, onClose, onSuccess, defaultMayorista }) {
   const toast = useToast();
   const isEdit = mode === 'edit';
   const title = isEdit ? 'Editar cliente B2B' : 'Nuevo cliente B2B';
   const okMsg = isEdit ? 'Cliente actualizado' : 'Cliente creado';
+
+  // S2.23: provincias argentinas reutilizadas del data layer admin.
+  const PROVINCIAS = (window.ADMIN_DATA && window.ADMIN_DATA.ARG_PROVINCIAS) || [];
 
   const [form, setForm] = useState({
     nombre:   (initial && initial.nombre)   || '',
@@ -26,6 +29,10 @@ function CustomerModal({ mode, initial, onClose, onSuccess }) {
     email:    (initial && initial.email)    || '',
     telefono: (initial && initial.telefono) || '',
     notas:    (initial && initial.notas)    || '',
+    // S2.23 mayoristas
+    es_mayorista: (initial && initial.es_mayorista) || !!defaultMayorista || false,
+    localidad:    (initial && initial.localidad) || '',
+    provincia:    (initial && initial.provincia) || '',
   });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
@@ -54,6 +61,10 @@ function CustomerModal({ mode, initial, onClose, onSuccess }) {
         email:    form.email.trim(),
         telefono: form.telefono.trim(),
         notas:    form.notas.trim(),
+        // S2.23 mayoristas
+        es_mayorista: !!form.es_mayorista,
+        localidad:    form.localidad.trim(),
+        provincia:    form.provincia,
       };
       if (isEdit) {
         payload.id = initial.id;
@@ -119,6 +130,32 @@ function CustomerModal({ mode, initial, onClose, onSuccess }) {
         <label className="field-label">Telefono</label>
         <input className="field-input" value={form.telefono}
                onChange={e => set('telefono', e.target.value)}/>
+      </div>
+
+      {/* S2.23 mayoristas: toggle + ubicación */}
+      <div className="field-group">
+        <label style={{display:'flex', alignItems:'center', gap:8, cursor:'pointer', fontSize:13, fontWeight:600, color:'var(--ink)'}}>
+          <input type="checkbox" checked={!!form.es_mayorista}
+                 onChange={e => set('es_mayorista', e.target.checked)}/>
+          Es mayorista
+        </label>
+        <div className="field-help">Habilita al cliente en el módulo Ventas → Clientes mayoristas.</div>
+      </div>
+
+      <div style={{display:'flex', gap:12}}>
+        <div className="field-group" style={{flex:1}}>
+          <label className="field-label">Localidad</label>
+          <input className="field-input" value={form.localidad}
+                 onChange={e => set('localidad', e.target.value)}/>
+        </div>
+        <div className="field-group" style={{flex:1}}>
+          <label className="field-label">Provincia</label>
+          <select className="field-input" value={form.provincia}
+                  onChange={e => set('provincia', e.target.value)}>
+            <option value="">—</option>
+            {PROVINCIAS.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </div>
       </div>
 
       <div className="field-group">

@@ -11,7 +11,7 @@
     return;
   }
 
-  const COLS_CUSTOMER = 'id, nombre, cuit, email, telefono, notas, activo, created_at, created_by';
+  const COLS_CUSTOMER = 'id, nombre, cuit, email, telefono, notas, activo, created_at, created_by, es_mayorista, localidad, provincia';
   /* S2.2: suppliers usa '*' para traer los 11 campos nuevos de ficha
      ampliada sin tener que enumerarlos uno a uno. */
   const COLS_SUPPLIER = '*';
@@ -81,6 +81,30 @@
     const { data, error } = await supa.rpc('rpc_admin_create_customer_b2b', { p_payload: payload });
     if (error) throw new Error(error.message || 'No se pudo crear cliente');
     return data;
+  }
+
+  /* ── S2.23 MAYORISTAS ──────────────────────────────────────────────
+     Wrappers de los 4 RPCs de migration 0066. Los consume MayoristasTab
+     (ventas.jsx) y la sección de Producción (produccion.jsx). */
+  async function loadMayoristas() {
+    const { data, error } = await supa.rpc('rpc_mayoristas_list', { p_payload: {} });
+    if (error) throw new Error(error.message || 'No se pudo cargar mayoristas');
+    return data || [];
+  }
+  async function createPedidoMayorista(payload) {
+    const { data, error } = await supa.rpc('rpc_mayoristas_create_pedido', { p_payload: payload });
+    if (error) throw new Error(error.message || 'No se pudo crear el pedido');
+    return data;
+  }
+  async function updateEstadoPedidoMayorista(payload) {
+    const { data, error } = await supa.rpc('rpc_mayoristas_update_estado', { p_payload: payload });
+    if (error) throw new Error(error.message || 'No se pudo actualizar el estado');
+    return data;
+  }
+  async function listPedidosMayoristas(payload) {
+    const { data, error } = await supa.rpc('rpc_mayoristas_list_pedidos', { p_payload: payload || {} });
+    if (error) throw new Error(error.message || 'No se pudo cargar pedidos');
+    return data || [];
   }
 
   /* Validadores: mismos criterios que BD (CHECK constraints).
@@ -2041,6 +2065,11 @@
     loadCustomersB2B,
     createSupplier,
     createCustomerB2B,
+    // S2.23 mayoristas
+    loadMayoristas,
+    createPedidoMayorista,
+    updateEstadoPedidoMayorista,
+    listPedidosMayoristas,
     validateNombre,
     validateCuit,
     validateEmail,

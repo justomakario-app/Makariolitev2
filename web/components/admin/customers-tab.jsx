@@ -157,7 +157,14 @@ function CustomersTab() {
                   const isInactive = s.activo === false;
                   return (
                     <tr key={s.id} className={isInactive ? 'row-inactive' : ''}>
-                      <td style={{fontWeight:600}}>{s.nombre}</td>
+                      <td style={{fontWeight:600}}>
+                        {s.nombre}
+                        {s.es_mayorista && (
+                          <span style={{marginLeft:8, fontSize:9, fontWeight:700, padding:'1px 6px', borderRadius:6, background:'#e6f7ec', color:'#15803d', textTransform:'uppercase', letterSpacing:'.05em', verticalAlign:'middle'}}>
+                            Mayorista
+                          </span>
+                        )}
+                      </td>
                       <td><span className="order-num">{s.cuit || '—'}</span></td>
                       <td>{s.email || '—'}</td>
                       <td>{s.telefono || '—'}</td>

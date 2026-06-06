@@ -114,6 +114,8 @@ function ProduccionPage() {
 
       {/* Lista de SKUs como cards */}
       <div style={{padding:'4px 16px 100px'}}>
+        {/* S2.23: pedidos mayoristas en fabricación (canal Distribuidores, owner/admin) */}
+        {tab === 'distribuidor' && window.MayoristasEnProduccion && <window.MayoristasEnProduccion/>}
         {rows.length === 0 ? (
           <div className="m-empty">
             <Icon n="check-circle" s={32} c="var(--green)"/>
@@ -178,3 +180,85 @@ function ProduccionPage() {
 }
 
 window.ProduccionPage = ProduccionPage;
+
+/* ══ S2.23 — Pedidos mayoristas en fabricación (espejo de web) ══
+   Solo owner/admin (la RPC rpc_mayoristas_list_pedidos es owner+admin).
+   "Marcar como listo" solo owner. */
+function MayoristasEnProduccion() {
+  const toast = useToast();
+  const role = (window.MOCK?.user?.role || '').toLowerCase();
+  if (!['owner', 'admin'].includes(role)) return null;
+  const isOwner = role === 'owner';
+
+  const ESTADO_C = {
+    cotizacion:    { label:'Cotización',    bg:'#eef0f2', fg:'#64748b' },
+    confirmado:    { label:'Confirmado',    bg:'#e0ecff', fg:'#2563eb' },
+    en_produccion: { label:'En producción', bg:'#fff0e0', fg:'#d97706' },
+    listo:         { label:'Listo',         bg:'#e8f7ed', fg:'#16a34a' },
+    entregado:     { label:'Entregado',     bg:'#dcfce7', fg:'#15803d' },
+    cancelado:     { label:'Cancelado',     bg:'#fee2e2', fg:'#dc2626' },
+  };
+
+  const [pedidos, setPedidos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving]   = useState(null);
+
+  const reload = async () => {
+    setLoading(true);
+    try {
+      const data = await window.ADMIN_DATA.listPedidosMayoristas({});
+      setPedidos((data || []).filter(p => p.estado === 'confirmado' || p.estado === 'en_produccion'));
+    } catch (err) {
+      console.error('[produccion] mayoristas en produccion:', err?.message ?? err);
+      setPedidos([]);
+    } finally { setLoading(false); }
+  };
+
+  useEffect(() => { reload(); /* eslint-disable-next-line */ }, []);
+
+  const marcarListo = async (id) => {
+    setSaving(id);
+    try {
+      await window.ADMIN_DATA.updateEstadoPedidoMayorista({ pedido_id: id, estado: 'listo' });
+      toast.success('Pedido marcado como listo');
+      await reload();
+    } catch (err) {
+      toast.error(err?.message || 'No se pudo actualizar');
+    } finally { setSaving(null); }
+  };
+
+  if (loading || pedidos.length === 0) return null;
+
+  return (
+    <div style={{marginBottom:12}}>
+      <div style={{fontSize:11, fontWeight:700, letterSpacing:'.08em', textTransform:'uppercase', color:'var(--ink-muted)', margin:'4px 2px 8px'}}>
+        Pedidos mayoristas en fabricación
+      </div>
+      {pedidos.map(p => {
+        const c = ESTADO_C[p.estado] || { label:p.estado, bg:'#eef0f2', fg:'#64748b' };
+        const resumen = (p.items || []).map(it => `${it.cantidad}× ${it.modelo || it.sku}`).join(' · ');
+        return (
+          <div key={p.id} className="m-prod-card">
+            <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:8}}>
+              <span className="order-num" style={{fontWeight:700}}>{p.numero_pedido}</span>
+              <span style={{fontSize:9, fontWeight:700, padding:'2px 8px', borderRadius:8, background:c.bg, color:c.fg, textTransform:'uppercase', letterSpacing:'.05em'}}>{c.label}</span>
+            </div>
+            <div style={{fontSize:13, fontWeight:600, marginTop:4}}>{p.cliente_nombre}</div>
+            <div style={{fontSize:11, color:'var(--ink-muted)', marginTop:2}}>
+              {p.fecha_entrega_estimada ? `Entrega ${String(p.fecha_entrega_estimada).slice(0,10)}` : 'Sin fecha de entrega'}
+            </div>
+            {resumen && <div style={{fontSize:11, color:'var(--ink-soft)', marginTop:6}}>{resumen}</div>}
+            {isOwner && (
+              <button className="btn-primary" style={{marginTop:10, padding:'7px 14px', fontSize:10}}
+                      onClick={() => marcarListo(p.id)} disabled={saving === p.id}>
+                <Icon n="check" s={11}/> Marcar como listo
+              </button>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+window.MayoristasEnProduccion = MayoristasEnProduccion;

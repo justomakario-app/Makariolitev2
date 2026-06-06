@@ -130,6 +130,10 @@ function ProduccionPage() {
           </div>
         </div>
 
+        {/* S2.23: pedidos mayoristas en fabricación — solo en el canal
+            Distribuidores y solo para owner/admin (la RPC es owner+admin). */}
+        {tabCanal === 'distribuidor' && window.MayoristasEnProduccion && <window.MayoristasEnProduccion/>}
+
         {/* Tabla SKU × Canal */}
         <div className="card">
           <div className="card-header">
@@ -336,3 +340,103 @@ function ProduccionPage() {
 }
 
 window.ProduccionPage = ProduccionPage;
+
+/* ══ S2.23 — Pedidos mayoristas en fabricación ══
+   Lista los pedidos mayoristas en estado 'confirmado' / 'en_produccion'
+   para que producción sepa qué fabricar. Solo owner/admin (la RPC
+   rpc_mayoristas_list_pedidos es owner+admin; un operario obtendría
+   "Sin permiso"). "Marcar como listo" solo owner. */
+function MayoristasEnProduccion() {
+  const toast = useToast();
+  const role = (window.MOCK?.user?.role || '').toLowerCase();
+  if (!['owner', 'admin'].includes(role)) return null;
+  const isOwner = role === 'owner';
+
+  // Mapa de colores local (no dependemos de ventas.jsx, que carga después).
+  const ESTADO_C = {
+    cotizacion:    { label:'Cotización',    bg:'#eef0f2', fg:'#64748b' },
+    confirmado:    { label:'Confirmado',    bg:'#e0ecff', fg:'#2563eb' },
+    en_produccion: { label:'En producción', bg:'#fff0e0', fg:'#d97706' },
+    listo:         { label:'Listo',         bg:'#e8f7ed', fg:'#16a34a' },
+    entregado:     { label:'Entregado',     bg:'#dcfce7', fg:'#15803d' },
+    cancelado:     { label:'Cancelado',     bg:'#fee2e2', fg:'#dc2626' },
+  };
+
+  const [pedidos, setPedidos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving]   = useState(null);
+
+  const reload = async () => {
+    setLoading(true);
+    try {
+      const data = await window.ADMIN_DATA.listPedidosMayoristas({});
+      setPedidos((data || []).filter(p => p.estado === 'confirmado' || p.estado === 'en_produccion'));
+    } catch (err) {
+      // Silencioso: si no hay permiso o falla, no rompemos la pantalla de producción.
+      console.error('[produccion] mayoristas en produccion:', err?.message ?? err);
+      setPedidos([]);
+    } finally { setLoading(false); }
+  };
+
+  useEffect(() => { reload(); /* eslint-disable-next-line */ }, []);
+
+  const marcarListo = async (id) => {
+    setSaving(id);
+    try {
+      await window.ADMIN_DATA.updateEstadoPedidoMayorista({ pedido_id: id, estado: 'listo' });
+      toast.success('Pedido marcado como listo');
+      await reload();
+    } catch (err) {
+      toast.error(err?.message || 'No se pudo actualizar');
+    } finally { setSaving(null); }
+  };
+
+  if (loading) {
+    return (
+      <div className="card" style={{marginBottom:14}}>
+        <div className="card-header"><div className="card-title">Pedidos mayoristas en fabricación</div></div>
+        <div className="empty"><span className="loader" style={{width:22, height:22}}/></div>
+      </div>
+    );
+  }
+  if (pedidos.length === 0) return null;  // nada que fabricar → no ocupar espacio
+
+  return (
+    <div className="card" style={{marginBottom:14}}>
+      <div className="card-header">
+        <div className="card-title">Pedidos mayoristas en fabricación</div>
+        <div style={{fontSize:11, color:'var(--ink-muted)', fontWeight:600}}>{pedidos.length} pedido{pedidos.length===1?'':'s'}</div>
+      </div>
+      <table className="data-table">
+        <thead>
+          <tr><th>Pedido</th><th>Cliente</th><th>Entrega</th><th>Ítems</th><th>Estado</th><th></th></tr>
+        </thead>
+        <tbody>
+          {pedidos.map(p => {
+            const resumen = (p.items || []).map(it => `${it.cantidad}× ${it.modelo || it.sku}`).join(' · ');
+            const cAlt = ESTADO_C[p.estado] || { label: p.estado, bg:'#eef0f2', fg:'#64748b' };
+            return (
+              <tr key={p.id}>
+                <td><span className="order-num" style={{fontWeight:700}}>{p.numero_pedido}</span></td>
+                <td style={{fontWeight:600}}>{p.cliente_nombre}{p.localidad ? <div style={{fontSize:10, color:'var(--ink-muted)', fontWeight:500}}>{p.localidad}</div> : null}</td>
+                <td style={{fontSize:12, color:'var(--ink-soft)'}}>{p.fecha_entrega_estimada ? String(p.fecha_entrega_estimada).slice(0,10) : '—'}</td>
+                <td style={{fontSize:11, color:'var(--ink-soft)', maxWidth:280}}>{resumen || '—'}</td>
+                <td><span style={{display:'inline-block', fontSize:10, fontWeight:700, padding:'2px 9px', borderRadius:10, background:cAlt.bg, color:cAlt.fg, textTransform:'uppercase', letterSpacing:'.05em'}}>{cAlt.label}</span></td>
+                <td style={{textAlign:'right', width:1, whiteSpace:'nowrap'}}>
+                  {isOwner && (
+                    <button className="btn-ghost" style={{padding:'5px 10px', fontSize:10}}
+                            onClick={() => marcarListo(p.id)} disabled={saving === p.id}>
+                      <Icon n="check" s={11}/> Marcar como listo
+                    </button>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+window.MayoristasEnProduccion = MayoristasEnProduccion;
