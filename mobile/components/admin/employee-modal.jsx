@@ -49,6 +49,8 @@ function EmployeeModal({ mode, initial, onClose, onSuccess }) {
                               ? String(initial.sueldo_bruto_base) : '',
     dias_vacaciones_anuales:(initial && initial.dias_vacaciones_anuales != null)
                               ? String(initial.dias_vacaciones_anuales) : '',
+    valor_hora_extra:       (initial && initial.valor_hora_extra != null)
+                              ? String(initial.valor_hora_extra) : '',
     // bloque 4 — pago
     banco:        (initial && initial.banco)        || '',
     cbu:          (initial && initial.cbu)          || '',
@@ -94,6 +96,11 @@ function EmployeeModal({ mode, initial, onClose, onSuccess }) {
       e.sueldo_bruto_base = 'Debe ser numérico >= 0';
     }
 
+    const vhe = String(form.valor_hora_extra).trim();
+    if (vhe && (isNaN(Number(vhe)) || Number(vhe) < 0)) {
+      e.valor_hora_extra = 'Debe ser numérico >= 0';
+    }
+
     if (form.notas.length > 500) e.notas = 'Máximo 500 caracteres';
 
     setErrors(e);
@@ -135,6 +142,7 @@ function EmployeeModal({ mode, initial, onClose, onSuccess }) {
         convenio: form.convenio.trim(),
         sueldo_bruto_base: form.sueldo_bruto_base !== '' ? String(Number(form.sueldo_bruto_base)) : '',
         dias_vacaciones_anuales: form.dias_vacaciones_anuales !== '' ? String(parseInt(form.dias_vacaciones_anuales, 10)) : '',
+        valor_hora_extra: form.valor_hora_extra !== '' ? String(Number(form.valor_hora_extra)) : '0',
         banco: form.banco.trim(),
         cbu: form.cbu.trim().replace(/\s+/g, ''),
         alias_cbu: form.alias_cbu.trim(),
@@ -329,6 +337,18 @@ function EmployeeModal({ mode, initial, onClose, onSuccess }) {
                    value={form.dias_vacaciones_anuales}
                    onChange={e => set('dias_vacaciones_anuales', e.target.value)}/>
           </div>
+        </div>
+
+        <div className="field-group">
+          <label className="field-label">Valor hora extra ($)</label>
+          <input type="number" step="0.01" min="0"
+                 className={`field-input ${errors.valor_hora_extra ? 'has-error' : ''}`}
+                 value={form.valor_hora_extra}
+                 onChange={e => set('valor_hora_extra', e.target.value)}
+                 onBlur={validate}/>
+          {errors.valor_hora_extra
+            ? <div className="field-error">{errors.valor_hora_extra}</div>
+            : <div className="field-help">Valor por hora extra (S2.24). Editable también por registro al cargar horas.</div>}
         </div>
       </EmpSection>
 

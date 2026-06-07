@@ -1091,6 +1091,37 @@
     return _rpcWithHint('rpc_admin_delete_employee', payload, 'No se pudo eliminar empleado');
   }
 
+  /* ── S2.24 HORAS EXTRAS ─────────────────────────────────────────────
+     Wrappers de los 5 RPCs de migration 0068. Los consume HsExtrasTab
+     (rrhh.jsx). El campo valor_hora_extra del empleado se guarda con el
+     resto del modal (rpc_admin_update/create_employee extendidos) o
+     puntualmente con updateValorHoraEmpleado (quick edit del tab). */
+  async function listHorasExtras(payload) {
+    const { data, error } = await supa.rpc('rpc_rrhh_list_horas_extras', { p_payload: payload || {} });
+    if (error) throw new Error(error.message || 'No se pudo cargar horas extras');
+    return data || [];
+  }
+  async function createHoraExtra(payload) {
+    const { data, error } = await supa.rpc('rpc_rrhh_create_hora_extra', { p_payload: payload });
+    if (error) throw new Error(error.message || 'No se pudo registrar la hora extra');
+    return data;
+  }
+  async function deleteHoraExtra(payload) {
+    const { data, error } = await supa.rpc('rpc_rrhh_delete_hora_extra', { p_payload: payload });
+    if (error) throw new Error(error.message || 'No se pudo eliminar la hora extra');
+    return data;
+  }
+  async function reporteHsExtras(payload) {
+    const { data, error } = await supa.rpc('rpc_rrhh_reporte_hs_extras', { p_payload: payload });
+    if (error) throw new Error(error.message || 'No se pudo generar el reporte');
+    return data || [];
+  }
+  async function updateValorHoraEmpleado(payload) {
+    const { data, error } = await supa.rpc('rpc_rrhh_update_valor_hora', { p_payload: payload });
+    if (error) throw new Error(error.message || 'No se pudo actualizar el valor hora');
+    return data;
+  }
+
   async function getEmployeeHistorial(employeeId) {
     const { data, error } = await supa.rpc('rpc_admin_get_employee_historial', { p_employee_id: employeeId });
     if (error) throw new Error(error.message || 'No se pudo cargar historial');
@@ -2171,6 +2202,12 @@
     createEmployee,
     updateEmployee,
     deleteEmployee,
+    // S2.24 horas extras
+    listHorasExtras,
+    createHoraExtra,
+    deleteHoraExtra,
+    reporteHsExtras,
+    updateValorHoraEmpleado,
     getEmployeeHistorial,
     checkCuilsExist,
     bulkCreateEmployees,

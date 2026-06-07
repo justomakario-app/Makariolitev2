@@ -299,3 +299,32 @@ Se agrega `activo` al embed `customers_b2b(...)` y se filtra client-side `r.cust
 **Resultado:** un cliente dado de baja desaparece de TODAS las vistas. El soft delete se preserva en BD (recuperable con "Reactivar" en la pestaña Clientes; el saldo de cta cte, si lo hubiera, queda registrado). Requiere redeploy.
 
 ---
+
+### [2026-06-07] Sprint S2.24 — Gestión de horas extras
+
+**Qué se hizo:**
+1. **Migration 0068**: `employees.valor_hora_extra numeric(10,2)`; tabla `horas_extras` (con `total`/`periodo_mes`/`periodo_anio` GENERATED STORED, `liquidado`, `recibo_id`, soft delete `activo`) + índices + triggers (updated_at + audit) + RLS; **5 RPCs** (list/create/delete/reporte/update_valor_hora) + **extensión de `rpc_admin_create_employee` y `rpc_admin_update_employee`** para persistir `valor_hora_extra`.
+2. **RRHH → Gestión hs extras** (`rrhh.jsx`, `HsExtrasTab`): reemplaza el placeholder. Dos paneles responsive — **Registro** (selector empleado con badge de valor/hora + mini-modal "Editar valor/hora", fecha, horas, valor editable, total en vivo verde, descripción) y **Historial** (filtros mes/año/empleado/solo-pendientes, lista con badge Pendiente/Liquidado, eliminar con ConfirmModal solo si no liquidada, totalizador). **Reporte mensual** (tabla por empleado expandible + totales + export PDF jsPDF + volver).
+3. **RRHH → Empleados**: campo "Valor hora extra ($)" en la sección Liquidación del modal (`employee-modal.jsx`).
+4. **admin-data.js**: 5 wrappers (`listHorasExtras`, `createHoraExtra`, `deleteHoraExtra`, `reporteHsExtras`, `updateValorHoraEmpleado`) + exports.
+5. Espejos mobile bit-perfect + cache busters.
+
+**Por qué se hizo:**
+Reemplazar el placeholder de hs extras con gestión real (registro, historial, reporte mensual liquidable).
+
+**Cómo se hizo (detalles técnicos / decisiones):**
+- Funciones reales verificadas: `set_updated_at`, `trg_audit_log`, `_admin_check_periodo_cerrado` (el brief acertó los nombres esta vez).
+- **valor_hora**: del payload (editable por registro) con **fallback** al `valor_hora_extra` del empleado si no se pasa. No se deriva del sueldo.
+- **Extendí create_employee además de update** (el brief solo mencionaba update) — necesario para que el campo persista en alta.
+- RLS owner+admin (helper `is_owner_or_admin()`). RRHH es owner-only en la nav → en la práctica solo el owner usa el tab.
+- `HsExtrasTab` inline en `rrhh.jsx` (sin archivos nuevos); estándar visual premium (cards, total verde, badges, hover).
+- Cache busters: rrhh v3, admin-data v20, employee-modal v3 (web+mobile).
+- Validado: 4/4 JSX transpilan con Babel; admin-data `node --check`; espejos mobile idénticos.
+
+**Para qué sirve / resultado:**
+- Migration 0068 **aplicada en prod** (Management API; no figura en `schema_migrations`, igual que 0065-0067).
+- **Smoke OK** (owner Noelia, `DO`+`RAISE EXCEPTION` → rollback, **0 datos sintéticos**): empleado con valor 1500 → he1 3×2000=6000, he2 2×(fallback 1500)=3000 → list=2 → reporte 5hs/$9000 → delete he1 → list=1. Todo revertido.
+
+**⚠️ PENDIENTE:** redeploy EasyPanel para activar el frontend nuevo. (Liquidación de hs extras → recibos: `recibo_id`/`liquidado` ya están en el modelo, la UI de liquidar queda para sprint futuro.)
+
+---
