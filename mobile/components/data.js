@@ -297,7 +297,12 @@ window.isPermissionedAdmin = isPermissionedAdmin;
 function allowedNavSet() {
   const set = new Set(window.PERM_ALWAYS_VISIBLE);
   for (const mod of (window.MOCK.userPermissions || [])) {
-    for (const nav of (window.MODULE_TO_NAV[mod] || [])) set.add(nav);
+    const navs = window.MODULE_TO_NAV[mod];
+    if (navs) { for (const nav of navs) set.add(nav); }
+    // S2.24b: si el módulo no tiene mapeo compuesto, el módulo ES el navId.
+    // Habilita dashboard/canales/historico por usuario vía
+    // user_module_permissions sin tocar PERM_ALWAYS_VISIBLE (que es global).
+    else { set.add(mod); }
   }
   return set;
 }

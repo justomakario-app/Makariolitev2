@@ -80,6 +80,73 @@
 
 ---
 
+### [2026-06-09] S2.24b — Dashboard de producción para Esteban y Romina (per-usuario)
+
+**Qué se hizo:**
+Dar acceso al **Dashboard de producción + canales + producción + histórico** a los admins **Esteban Fernandez** y **Romina Puscama** únicamente (no a Mikeas ni Doble Click).
+
+**Por qué (y qué NO era el problema):**
+El supuesto inicial (falta `dashboard` en ROLE_NAV admin / hay guard owner-only) era falso: `dashboard` ya estaba en `ROLE_NAV.admin`, no hay guard owner-only en [app.jsx](web/components/app.jsx) y `dashboard.jsx` ya habilita admin (`puedeAdmin = ['owner','admin','encargado']`). El verdadero freno es el modelo S2.22 "reemplazo total": un admin permisionado solo ve `allowedNavSet()` = `PERM_ALWAYS_VISIBLE` ∪ módulos mapeados.
+
+**Cómo (per-usuario, sin tocar a los otros admins):**
+1. **BD** — INSERT en `user_module_permissions` de los módulos `dashboard, colecta, flex, tiendanube, distribuidor, no_flex, correo_argentino, produccion-hub, registrar, historico` para los `user_id` de Esteban (`cbc2491d…`) y Romina (`cd85b4a8…`) **solamente** (`ON CONFLICT DO UPDATE` idempotente). Mikeas/DobleClick intactos.
+2. **Frontend** — `allowedNavSet()` (data.js web+mobile) ahora tiene un **fallback genérico**: si un módulo no está en `MODULE_TO_NAV`, el nombre del módulo **es** el navId. Sin esto, los módulos nuevos (dashboard/canales/historico) eran inertes. **NO se tocó `PERM_ALWAYS_VISIBLE`** (descartado porque es global = afectaría a TODOS los admins).
+
+**Detalles técnicos:**
+- Se descartó el primer enfoque (agregar producción a `PERM_ALWAYS_VISIBLE`) porque aplica a todos los admins.
+- El fallback es future-proof: cualquier módulo cuyo nombre coincida con un navId se habilita por usuario vía la tabla, sin tocar el mapa.
+- Cache busters: data.js web v43, mobile v42. Sin migration, sin RPC nuevo.
+- Estado intermedio seguro: con la BD lista pero el frontend viejo deployado, el `allowedNavSet` anterior ignora los módulos no mapeados → nadie ve nada roto hasta el redeploy.
+
+**Resultado:** Esteban y Romina ven y operan el dashboard igual que owner (jornada/+producir/exportar/entrar a canales). Mikeas (solo produccion) y DobleClick (solo marketing) sin cambios. Requiere redeploy.
+
+---
+
+### [2026-06-08] Carga masiva de SKUs desde Excel
+
+**Qué se hizo:**
+Se cargaron 77 SKUs nuevos al catálogo (`sku_catalog`) desde el archivo `sku para sistema.xlsx` (4 hojas). También se creó la categoría `CNC` en `sku_categories`.
+
+**Conteo post-carga:**
+| Categoría | SKUs |
+|---|---|
+| ACCESORIOS | 72 |
+| CNC | 29 |
+| Mesas | 17 |
+| Ratonas | 8 |
+| Luz | 1 |
+| Recibidoras | 1 |
+| **TOTAL** | **128** |
+
+**Nuevos SKUs por grupo:**
+- **Mesas individuales nuevas**: MAD010–MAD041 (redonda 30/40, boomerang, gota XL — blanco y negro)
+- **Ratonas nuevas**: MAD350–MAD351 (SET DOBLE BOOM blanco y negro)
+- **TAP nuevas**: TAP013–TAP026 (todas las tapas faltantes: gota grande/chica/XL, yori, hikari, rectangular, marmol)
+- **SOP nuevos**: SOP003–SOP008 (soportes x3/x4/x6 blanco y negro)
+- **KIT nuevos**: KIT006–KIT009 (hikari x1/x2 + M50 blanco/negro)
+- **AGU nuevas**: AGU004–AGU008 (tapas tornillos hikari y yori variantes color)
+- **FIL nuevos**: FIL001–FIL002 (filos blanco y negro)
+- **CAJ nuevas**: CAJ001–CAJ004 (cajas N°1 a N°4, `es_fabricado=false`)
+- **VAR nuevas**: VAR001–VAR002 (varillas 14mm y 25mm, `es_fabricado=false`)
+- **TOR nuevos**: TOR005–TOR008 (variantes rectangulares y set)
+- **CNC Placas Blancas**: PLB001–PLB010
+- **CNC Placas Negras**: PLN001–PLN010
+- **CNC Mármol Blanco**: PMB001, PMB002, PMB005
+- **CNC Mármol Negro**: PMN001, PMN002
+- **CNC Combinadas**: COM001–COM004
+
+**Cómo se hizo:**
+Se leyó el `.xlsx` vía Node.js con la librería `xlsx` (instalada en `C:\Temp\xlsxtmp`). Se cruzó contra el contenido actual de `sku_catalog` para identificar los 77 SKUs nuevos. Se ejecutó un `INSERT ... ON CONFLICT (sku) DO NOTHING` para ser idempotente.
+
+**Decisiones tomadas:**
+- MAD350/351 → categoría `Ratonas` (igual que MAD301-304 que son sets de boomerang)
+- KIT006/007 agregados aunque KIT004/005 tienen el mismo nombre (el usuario lo confirmó)
+- CNC plates agregados (el usuario lo confirmó)
+- `es_fabricado=false` para CAJ y VAR (son insumos comprados, no fabricados)
+- TOR005-008 usan las primeras definiciones del Excel (variantes rectangular/set) ya que TOR005/006/007 aparecen duplicados con nombres distintos en el documento fuente — revisar con Seba si hace falta corregir alguno
+
+---
+
 ### [2026-06-03] Reset operativo completo — "app como nueva"
 
 **Qué se hizo:**
