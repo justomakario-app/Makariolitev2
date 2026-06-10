@@ -80,6 +80,30 @@
 
 ---
 
+### [2026-06-10] S2.26 — Presupuestos B2B
+
+**Qué se hizo:**
+Módulo Presupuestos completo en Ventas → tab Presupuestos.
+- **Migration 0069**: enum `presupuesto_estado` (borrador/enviado/aceptado/rechazado/vencido) + seq/`fn_next_numero_presupuesto` (PRES-xxxx) + tablas `presupuestos` (fecha_validez GENERATED = emisión+dias_validez, descuento_global, pedido_id) y `presupuestos_items` (descuento_pct, subtotal GENERATED) + triggers + RLS + **5 RPCs owner+admin**: list (auto-vence + items + totales), create, update (solo borrador), update_estado (al aceptar genera pedido_mayorista), soft_delete.
+- **Frontend** (`ventas.jsx`, `PresupuestosTab`): lista con KPIs + filtros + cards, modal con ítems y cálculo live (subtotal/descuentos/total), vista detalle con acciones por estado y **PDF** (jsPDF + company_settings). Foco a `MayoristasTab` para "Ver pedido generado".
+
+**Por qué / decisiones (validadas con Jefe):**
+- **RPCs owner+admin** (Ventas operado por admins con permiso 'ventas'). RLS SELECT owner+admin / write owner-only (mismo patrón que pedidos_mayoristas).
+- **Al aceptar**, el pedido generado usa **precio efectivo** = precio × (1-dto_item/100) × (1-dto_global/100) → **TOTAL pedido == TOTAL presupuesto** (el pedido no tiene campos de descuento).
+
+**Detalles técnicos:**
+- Las RPCs se llaman con `window.SUPA.rpc(...)` desde ventas.jsx → **no se tocó admin-data.js** (solo ventas.jsx + HTMLs). Funciones reusadas: set_updated_at, trg_audit_log, _admin_check_periodo_cerrado, fn_next_numero_pedido_mayorista, getCompanySettings.
+- "Ver pedido generado": abre la ficha en MayoristasTab solo si el cliente es mayorista; si no, toast (el detalle igual muestra `pedido_numero`). Pedido nace en estado `confirmado`. Period-check en create (emisión) y accept (hoy).
+- Cache busters: ventas v5 (web+mobile). Validado: Babel transpila, espejos idénticos, 0 archivos admin/pages tocados.
+
+**Para qué sirve / resultado:**
+- Migration 0069 **aplicada en prod** (Management API; no en `schema_migrations`, igual que 0065-0068).
+- **Smoke OK** (owner Noelia, `DO`+`RAISE EXCEPTION` → rollback, **0 datos sintéticos**): cliente+presupuesto (2 ítems, dto item 20% + dto global 10%) → subtotal 18000, total 16200 → aceptar → pedido MAY con total 16200 (**match con el presupuesto**). Secuencias PRES/MAY reseteadas a 1.
+
+**⚠️ PENDIENTE:** redeploy EasyPanel. Push pendiente de OK del Jefe.
+
+---
+
 ### [2026-06-10] S2.25 — Ventas: Alta clientes B2B + Cta cte + Base de productos
 
 **Qué se hizo:**

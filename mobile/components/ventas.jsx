@@ -61,7 +61,8 @@ function VentasPage() {
     { id:'base-productos',   label:'Base de productos' },
   ];
   const [tab, setTab] = useState('alta-clientes');
-  const [ctaCteFocus, setCtaCteFocus] = useState(null); // S2.25: cliente_id para abrir su cta cte
+  const [ctaCteFocus, setCtaCteFocus] = useState(null);     // S2.25: cliente_id para abrir su cta cte
+  const [mayoristasFocus, setMayoristasFocus] = useState(null); // S2.26: cliente_id del pedido generado
   const active = TABS.find(t => t.id === tab) || TABS[0];
 
   return (
@@ -88,9 +89,10 @@ function VentasPage() {
       </div>
 
       <div role="tabpanel">
-        {tab === 'mayoristas'       ? <MayoristasTab/> :
+        {tab === 'mayoristas'       ? <MayoristasTab focusClienteId={mayoristasFocus} onClearFocus={() => setMayoristasFocus(null)}/> :
          tab === 'alta-clientes'    ? <ClientesB2BTab onVerCtaCte={(id) => { setCtaCteFocus(id); setTab('cta-cte-clientes'); }}/> :
          tab === 'cta-cte-clientes' ? <CtaCteClientesTab focusClienteId={ctaCteFocus} onClearFocus={() => setCtaCteFocus(null)}/> :
+         tab === 'presupuestos'     ? <PresupuestosTab onVerPedido={(clienteId) => { setMayoristasFocus(clienteId); setTab('mayoristas'); }}/> :
          tab === 'base-productos'   ? <BaseProductosTab/> :
          window.ProximamentePlaceholder ? <window.ProximamentePlaceholder nombre={active.label}/> :
          (
@@ -106,7 +108,7 @@ function VentasPage() {
 }
 
 /* ══ MAYORISTAS TAB — lista (grilla de cards) → ficha del mayorista ══ */
-function MayoristasTab() {
+function MayoristasTab({ focusClienteId, onClearFocus } = {}) {
   const toast = useToast();
   const role = (window.MOCK?.user?.role || '').toLowerCase();
   const isOwner = role === 'owner';
@@ -145,6 +147,17 @@ function MayoristasTab() {
   };
 
   useEffect(() => { reload(); /* eslint-disable-next-line */ }, []);
+
+  // S2.26: foco desde "Ver pedido generado" → abrir la ficha del cliente
+  // (solo si es mayorista; un pedido de un cliente no-mayorista no aparece acá).
+  useEffect(() => {
+    if (!focusClienteId || !items.length) return;
+    const m = items.find(x => x.id === focusClienteId);
+    if (m) { setSelected(m); setView('ficha'); }
+    else toast.info('El pedido es de un cliente no mayorista — vélo desde el listado de pedidos.');
+    onClearFocus && onClearFocus();
+    /* eslint-disable-next-line */
+  }, [focusClienteId, items]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -1252,8 +1265,499 @@ function BaseProductosTab() {
   );
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   S2.26 — Presupuestos B2B (tab Presupuestos)
+   Backend: migration 0069 (presupuestos + items, 5 RPCs). Llamadas vía
+   window.SUPA.rpc (no toca admin-data.js). Estilo premium MAY_UI.
+   ══════════════════════════════════════════════════════════════════ */
+
+const PRES_ESTADOS = {
+  borrador:  { label:'Borrador',  bg:'#F3F4F6', fg:'#6B7280' },
+  enviado:   { label:'Enviado',   bg:'#EFF6FF', fg:'#2563EB' },
+  aceptado:  { label:'Aceptado',  bg:'#D1FAE5', fg:'#059669' },
+  rechazado: { label:'Rechazado', bg:'#FEE2E2', fg:'#DC2626' },
+  vencido:   { label:'Vencido',   bg:'#FEF3C7', fg:'#B45309' },
+};
+function PresEstadoBadge({ estado }) {
+  const c = PRES_ESTADOS[estado] || { label:estado, bg:'#F3F4F6', fg:'#6B7280' };
+  return <span style={{ fontSize:10, fontWeight:700, padding:'3px 10px', borderRadius:999, background:c.bg, color:c.fg, textTransform:'uppercase', letterSpacing:'.04em' }}>{c.label}</span>;
+}
+
+async function presRpc(name, payload) {
+  const { data, error } = await window.SUPA.rpc(name, { p_payload: payload || {} });
+  if (error) throw new Error(error.message);
+  return data;
+}
+function presAddDays(dateStr, n) {
+  const [y, m, d] = (dateStr || '').split('-').map(Number);
+  if (!y) return '';
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + (Number(n) || 0));
+  return dt.toISOString().slice(0, 10);
+}
+
+function PresupuestosTab({ onVerPedido }) {
+  const toast = useToast();
+  const role = (window.MOCK?.user?.role || '').toLowerCase();
+  const canEdit = ['owner', 'admin'].includes(role);
+
+  const [view, setView]       = useState('lista');   // 'lista' | 'detalle'
+  const [selected, setSelected] = useState(null);
+  const [list, setList]       = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState(null);
+  const [search, setSearch]   = useState('');
+  const [estadoF, setEstadoF] = useState('');
+  const [desde, setDesde]     = useState('');
+  const [hasta, setHasta]     = useState('');
+  const [clientes, setClientes] = useState([]);
+  const [company, setCompany]   = useState(null);
+  const [modal, setModal]     = useState(null);       // {mode, initial?}
+  const [delTarget, setDelTarget] = useState(null);
+  const [busy, setBusy]       = useState(false);
+
+  const reload = async () => {
+    setLoading(true); setError(null);
+    try {
+      const payload = {};
+      if (estadoF) payload.estado = estadoF;
+      if (desde) payload.desde = desde;
+      if (hasta) payload.hasta = hasta;
+      const data = await presRpc('rpc_presupuestos_list', payload);
+      const arr = data || [];
+      setList(arr);
+      setSelected(prev => prev ? arr.find(p => p.id === prev.id) || null : null);
+    } catch (err) { const m = err?.message || 'Error'; setError(m); toast.error(m); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { reload(); /* eslint-disable-next-line */ }, [estadoF, desde, hasta]);
+  useEffect(() => {
+    window.ADMIN_DATA.loadCustomersB2B({ includeInactive: false }).then(setClientes).catch(() => {});
+    if (window.ADMIN_DATA.getCompanySettings) window.ADMIN_DATA.getCompanySettings().then(setCompany).catch(() => {});
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter(p => (p.numero || '').toLowerCase().includes(q) || (p.cliente_nombre || '').toLowerCase().includes(q));
+  }, [list, search]);
+
+  const now = new Date();
+  const kTotal = list.length;
+  const kPend = list.filter(p => p.estado === 'borrador' || p.estado === 'enviado').length;
+  const kAcMes = list.filter(p => p.estado === 'aceptado' && p.fecha_emision && new Date(p.fecha_emision + 'T00:00').getMonth() === now.getMonth() && new Date(p.fecha_emision + 'T00:00').getFullYear() === now.getFullYear()).length;
+  const kMonto = list.filter(p => p.estado === 'aceptado').reduce((s, p) => s + (Number(p.total) || 0), 0);
+
+  const cambiarEstado = async (pres, estado) => {
+    if (!estado || busy) return;
+    if (estado === 'aceptado' && !window.confirm(`Aceptar ${pres.numero} generará un pedido mayorista. ¿Confirmás?`)) return;
+    setBusy(true);
+    try {
+      const res = await presRpc('rpc_presupuestos_update_estado', { id: pres.id, estado });
+      toast.success(estado === 'aceptado' ? `Aceptado · pedido ${res?.pedido_numero || ''} generado` : 'Estado actualizado');
+      await reload();
+    } catch (err) {
+      if (err && /periodo_cerrado/i.test(err.message || '')) toast.error('No se puede: período contable cerrado.');
+      else toast.error(err?.message || 'No se pudo cambiar el estado');
+    } finally { setBusy(false); }
+  };
+
+  const doDelete = async () => {
+    if (!delTarget || busy) return;
+    setBusy(true);
+    try { await presRpc('rpc_presupuestos_soft_delete', { id: delTarget.id }); toast.success('Presupuesto eliminado'); setDelTarget(null); await reload(); }
+    catch (err) { toast.error(err?.message || 'No se pudo eliminar'); }
+    finally { setBusy(false); }
+  };
+
+  /* ── VISTA DETALLE ── */
+  if (view === 'detalle' && selected) {
+    const p = selected;
+    return (
+      <div style={{ background:MAY_UI.pageBg, borderRadius:MAY_UI.radius, padding:16 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, marginBottom:14, flexWrap:'wrap' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+            <button className="btn-ghost" onClick={() => { setView('lista'); }}>← Volver</button>
+            <span style={{ fontFamily:'var(--mono)', fontWeight:800, fontSize:18, color:MAY_UI.ink }}>{p.numero}</span>
+            <PresEstadoBadge estado={p.estado}/>
+          </div>
+          <button className="btn-ghost" onClick={() => presupuestoPDF(p, company)}><Icon n="download" s={13}/> Descargar PDF</button>
+        </div>
+
+        <div style={{ background:MAY_UI.cardBg, border:`1px solid ${MAY_UI.border}`, borderRadius:MAY_UI.radius, padding:20, marginBottom:14 }}>
+          <div style={{ display:'flex', gap:24, flexWrap:'wrap' }}>
+            <div>
+              <div style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'.08em', color:MAY_UI.inkFaint }}>Cliente</div>
+              <div style={{ fontWeight:700, fontSize:15, marginTop:2 }}>{p.cliente_nombre}</div>
+              <div style={{ fontSize:12, color:MAY_UI.inkMuted }}>{[p.cliente_cuit, p.cliente_localidad, p.cliente_provincia].filter(Boolean).join(' · ') || '—'}</div>
+            </div>
+            <div>
+              <div style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'.08em', color:MAY_UI.inkFaint }}>Emisión</div>
+              <div style={{ fontSize:13, marginTop:2 }}>{venFecha(p.fecha_emision)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'.08em', color:MAY_UI.inkFaint }}>Validez</div>
+              <div style={{ fontSize:13, marginTop:2 }}>{venFecha(p.fecha_validez)}</div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ background:MAY_UI.cardBg, border:`1px solid ${MAY_UI.border}`, borderRadius:MAY_UI.radius, overflow:'hidden' }}>
+          <table className="data-table">
+            <thead><tr><th>SKU</th><th>Producto</th><th style={{ textAlign:'right' }}>Cant.</th><th style={{ textAlign:'right' }}>Precio</th><th style={{ textAlign:'right' }}>Dto%</th><th style={{ textAlign:'right' }}>Subtotal</th></tr></thead>
+            <tbody>
+              {(p.items || []).map((it, i) => (
+                <tr key={it.id || i}>
+                  <td><span className="order-num">{it.sku}</span></td>
+                  <td>{it.modelo || it.sku}{it.color && it.color !== '—' ? ` · ${it.color}` : ''}</td>
+                  <td style={{ textAlign:'right' }}>{it.cantidad}</td>
+                  <td style={{ textAlign:'right' }}>{mayMoney(it.precio_unitario)}</td>
+                  <td style={{ textAlign:'right' }}>{Number(it.descuento_pct) || 0}%</td>
+                  <td style={{ textAlign:'right', fontWeight:600 }}>{mayMoney(it.subtotal)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div style={{ padding:'12px 16px', borderTop:`1px solid ${MAY_UI.borderSoft}`, display:'flex', flexDirection:'column', alignItems:'flex-end', gap:3 }}>
+            <div style={{ fontSize:12, color:MAY_UI.inkMuted }}>Subtotal: <strong>{mayMoney(p.subtotal_items)}</strong></div>
+            <div style={{ fontSize:12, color:MAY_UI.inkMuted }}>Descuento global: <strong>{Number(p.descuento_global) || 0}%</strong></div>
+            <div style={{ fontSize:18, fontWeight:800, fontFamily:'var(--mono)', color:MAY_UI.ink }}>TOTAL {mayMoney(p.total)}</div>
+          </div>
+        </div>
+
+        {(p.condicion_pago || p.notas) && (
+          <div style={{ fontSize:12, color:MAY_UI.inkSoft, marginTop:12 }}>
+            {p.condicion_pago && <div><strong>Condición de pago:</strong> {p.condicion_pago}</div>}
+            {p.notas && <div><strong>Notas:</strong> {p.notas}</div>}
+          </div>
+        )}
+
+        {canEdit && (
+          <div style={{ display:'flex', gap:8, marginTop:16, flexWrap:'wrap' }}>
+            {p.estado === 'borrador' && <>
+              <button className="btn-primary" onClick={() => cambiarEstado(p, 'enviado')} disabled={busy}>Marcar como enviado</button>
+              <button className="btn-ghost" onClick={() => setModal({ mode:'edit', initial:p })}><Icon n="edit" s={13}/> Editar</button>
+              <button className="btn-ghost" style={{ color:'#DC2626', borderColor:'#FCA5A5' }} onClick={() => setDelTarget(p)}><Icon n="trash" s={13}/> Eliminar</button>
+            </>}
+            {p.estado === 'enviado' && <>
+              <button className="btn-primary" onClick={() => cambiarEstado(p, 'aceptado')} disabled={busy}>Marcar como aceptado</button>
+              <button className="btn-ghost" style={{ color:'#DC2626', borderColor:'#FCA5A5' }} onClick={() => cambiarEstado(p, 'rechazado')} disabled={busy}>Marcar como rechazado</button>
+            </>}
+            {p.estado === 'aceptado' && p.cliente_id && (
+              <button className="btn-primary" onClick={() => onVerPedido && onVerPedido(p.cliente_id)}>
+                Ver pedido generado{p.pedido_numero ? ` (${p.pedido_numero})` : ''}
+              </button>
+            )}
+          </div>
+        )}
+
+        {modal && <PresupuestoModal mode={modal.mode} initial={modal.initial} clientes={clientes}
+          onClose={() => setModal(null)} onSaved={async () => { setModal(null); await reload(); }}/>}
+        {delTarget && window.ConfirmModal && (
+          <window.ConfirmModal open={true} title="Eliminar presupuesto"
+            message={`¿Eliminar ${delTarget.numero}? Esta acción no se puede deshacer.`}
+            confirmText="Eliminar" danger onClose={() => { if (!busy) setDelTarget(null); }} onConfirm={doDelete}/>
+        )}
+      </div>
+    );
+  }
+
+  /* ── VISTA LISTA ── */
+  return (
+    <div style={{ background:MAY_UI.pageBg, borderRadius:MAY_UI.radius, padding:16 }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, marginBottom:14, flexWrap:'wrap' }}>
+        <div style={{ fontSize:16, fontWeight:700, color:MAY_UI.ink }}>Presupuestos</div>
+        {canEdit && <button className="btn-primary" onClick={() => setModal({ mode:'create' })}><Icon n="plus" s={13}/> Nuevo presupuesto</button>}
+      </div>
+
+      <div style={{ display:'flex', gap:12, marginBottom:14, flexWrap:'wrap' }}>
+        <VenKpi label="Total" value={kTotal}/>
+        <VenKpi label="Pendientes de respuesta" value={kPend} accent="#2563EB"/>
+        <VenKpi label="Aceptados este mes" value={kAcMes} accent="#15803d"/>
+        <VenKpi label="Monto aceptado" value={mayMoney(kMonto)} accent="#15803d"/>
+      </div>
+
+      <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:14 }}>
+        <div style={{ position:'relative', flex:'1 1 220px', maxWidth:320 }}>
+          <span style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', display:'flex' }}><Icon n="search" s={14} c={MAY_UI.inkFaint}/></span>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar cliente o número…"
+                 style={{ width:'100%', padding:'9px 12px 9px 34px', borderRadius:10, border:`1px solid ${MAY_UI.border}`, background:'#fff', fontSize:13, outline:'none' }}/>
+        </div>
+        <select className="field-input" style={{ width:150, padding:'8px 10px' }} value={estadoF} onChange={e => setEstadoF(e.target.value)}>
+          <option value="">Todos los estados</option>
+          {Object.keys(PRES_ESTADOS).map(e => <option key={e} value={e}>{PRES_ESTADOS[e].label}</option>)}
+        </select>
+        <input type="date" className="field-input" style={{ padding:'8px 10px' }} value={desde} onChange={e => setDesde(e.target.value)} title="Desde"/>
+        <input type="date" className="field-input" style={{ padding:'8px 10px' }} value={hasta} onChange={e => setHasta(e.target.value)} title="Hasta"/>
+      </div>
+
+      {loading ? (
+        <div style={{ display:'flex', justifyContent:'center', padding:'48px 0' }}><span className="loader" style={{ width:26, height:26 }}/></div>
+      ) : error ? (
+        <div style={venEmptyBox()}><Icon n="alert" s={28} c="var(--red)"/><div style={{ fontWeight:700, marginTop:8 }}>{error}</div><button className="btn-ghost" style={{ marginTop:12 }} onClick={reload}>Reintentar</button></div>
+      ) : list.length === 0 ? (
+        <div style={venEmptyBox()}>
+          <Icon n="tag" s={32} c={MAY_UI.inkFaint}/>
+          <div style={{ fontWeight:700, fontSize:15, marginTop:10 }}>Sin presupuestos</div>
+          {canEdit && <button className="btn-primary" style={{ marginTop:16 }} onClick={() => setModal({ mode:'create' })}><Icon n="plus" s={13}/> Nuevo presupuesto</button>}
+        </div>
+      ) : (
+        <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+          {filtered.map(p => (
+            <div key={p.id} style={{ background:MAY_UI.cardBg, border:`1px solid ${MAY_UI.border}`, borderRadius:MAY_UI.radius, padding:16 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+                <span style={{ fontFamily:'var(--mono)', fontWeight:700, fontSize:14 }}>{p.numero}</span>
+                <PresEstadoBadge estado={p.estado}/>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontWeight:600, fontSize:14 }}>{p.cliente_nombre}</div>
+                  <div style={{ fontSize:11, color:MAY_UI.inkMuted }}>Emisión {venFecha(p.fecha_emision)} · Validez {venFecha(p.fecha_validez)}</div>
+                </div>
+                <div style={{ textAlign:'right' }}>
+                  <div style={{ fontFamily:'var(--mono)', fontWeight:800, fontSize:18, color:MAY_UI.ink }}>{mayMoney(p.total)}</div>
+                  <div style={{ fontSize:10, color:MAY_UI.inkFaint }}>{(p.items || []).length} ítem{(p.items||[]).length===1?'':'s'}</div>
+                </div>
+              </div>
+              <div style={{ display:'flex', gap:8, marginTop:12, flexWrap:'wrap', alignItems:'center' }}>
+                <button className="btn-primary" onClick={() => { setSelected(p); setView('detalle'); }}>Ver detalle</button>
+                {canEdit && (p.estado === 'borrador' || p.estado === 'enviado') && (
+                  <select className="field-input" style={{ maxWidth:170, padding:'7px 10px' }} value="" disabled={busy}
+                          onChange={e => { if (e.target.value) cambiarEstado(p, e.target.value); }}>
+                    <option value="">Cambiar estado…</option>
+                    {p.estado === 'borrador' && <option value="enviado">Enviado</option>}
+                    {p.estado === 'enviado' && <option value="aceptado">Aceptado (genera pedido)</option>}
+                    {p.estado === 'enviado' && <option value="rechazado">Rechazado</option>}
+                  </select>
+                )}
+                {canEdit && p.estado === 'borrador' && (
+                  <button className="btn-ghost" style={{ color:'#DC2626', borderColor:'#FCA5A5' }} onClick={() => setDelTarget(p)}><Icon n="trash" s={12}/> Eliminar</button>
+                )}
+              </div>
+            </div>
+          ))}
+          {filtered.length === 0 && <div style={{ textAlign:'center', padding:'24px', color:MAY_UI.inkMuted }}>Sin resultados</div>}
+        </div>
+      )}
+
+      {modal && <PresupuestoModal mode={modal.mode} initial={modal.initial} clientes={clientes}
+        onClose={() => setModal(null)} onSaved={async () => { setModal(null); await reload(); }}/>}
+      {delTarget && window.ConfirmModal && (
+        <window.ConfirmModal open={true} title="Eliminar presupuesto"
+          message={`¿Eliminar ${delTarget.numero}? Esta acción no se puede deshacer.`}
+          confirmText="Eliminar" danger onClose={() => { if (!busy) setDelTarget(null); }} onConfirm={doDelete}/>
+      )}
+    </div>
+  );
+}
+
+/* Modal de alta/edición de presupuesto. */
+function PresupuestoModal({ mode, initial, clientes, onClose, onSaved }) {
+  const toast = useToast();
+  const isEdit = mode === 'edit';
+  const today = new Date().toISOString().slice(0, 10);
+
+  const [form, setForm] = useState({
+    cliente_id:    (initial && initial.cliente_id) || '',
+    fecha_emision: (initial && initial.fecha_emision ? String(initial.fecha_emision).slice(0,10) : today),
+    dias_validez:  (initial && initial.dias_validez != null) ? String(initial.dias_validez) : '15',
+    condicion_pago:(initial && initial.condicion_pago) || '',
+    notas:         (initial && initial.notas) || '',
+    descuento_global: (initial && initial.descuento_global != null) ? String(initial.descuento_global) : '0',
+  });
+  const [lineas, setLineas] = useState(
+    (initial && initial.items && initial.items.length)
+      ? initial.items.map(it => ({ sku:it.sku, cantidad:String(it.cantidad), precio_unitario:String(it.precio_unitario), descuento_pct:String(it.descuento_pct || 0) }))
+      : [{ sku:'', cantidad:'', precio_unitario:'', descuento_pct:'0' }]
+  );
+  const [saving, setSaving] = useState(false);
+
+  const set = (k, v) => setForm(s => ({ ...s, [k]: v }));
+  const setLinea = (i, k, v) => setLineas(arr => arr.map((l, idx) => idx === i ? { ...l, [k]: v } : l));
+  const addLinea = () => setLineas(arr => [...arr, { sku:'', cantidad:'', precio_unitario:'', descuento_pct:'0' }]);
+  const delLinea = (i) => setLineas(arr => arr.length > 1 ? arr.filter((_, idx) => idx !== i) : arr);
+
+  const skuOptions = useMemo(() => {
+    const db = window.SKU_DB || {};
+    return Object.keys(db).filter(s => db[s] && db[s].activo !== false).sort().map(s => {
+      const x = db[s]; const label = x.color && x.color !== '—' ? `${s} — ${x.modelo} ${x.color}` : `${s} — ${x.modelo || ''}`;
+      return { sku:s, label };
+    });
+  }, []);
+
+  const lineSub = (l) => (Number(l.cantidad) || 0) * (Number(l.precio_unitario) || 0) * (1 - (Number(l.descuento_pct) || 0) / 100);
+  const subtotal = lineas.reduce((s, l) => s + lineSub(l), 0);
+  const total = subtotal * (1 - (Number(form.descuento_global) || 0) / 100);
+  const fechaVenc = presAddDays(form.fecha_emision, form.dias_validez);
+
+  const guardar = async (estadoFinal) => {
+    if (saving) return;
+    if (!form.cliente_id) { toast.error('Elegí un cliente'); return; }
+    const items = lineas
+      .map(l => ({ sku:(l.sku || '').trim(), cantidad:parseInt(l.cantidad, 10), precio_unitario:Number(l.precio_unitario), descuento_pct:Number(l.descuento_pct) || 0 }))
+      .filter(l => l.sku && l.cantidad > 0 && l.precio_unitario >= 0 && Number.isFinite(l.precio_unitario) && l.descuento_pct >= 0 && l.descuento_pct <= 100);
+    if (items.length === 0) { toast.error('Agregá al menos un ítem válido'); return; }
+    setSaving(true);
+    try {
+      const payload = {
+        cliente_id: form.cliente_id, fecha_emision: form.fecha_emision,
+        dias_validez: parseInt(form.dias_validez, 10) || 15,
+        condicion_pago: form.condicion_pago.trim(), notas: form.notas.trim(),
+        descuento_global: Number(form.descuento_global) || 0, items,
+      };
+      if (isEdit) {
+        payload.id = initial.id;
+        await presRpc('rpc_presupuestos_update', payload);
+        if (estadoFinal === 'enviado') await presRpc('rpc_presupuestos_update_estado', { id: initial.id, estado: 'enviado' });
+        toast.success('Presupuesto actualizado');
+      } else {
+        payload.estado = estadoFinal;
+        const res = await presRpc('rpc_presupuestos_create', payload);
+        toast.success(`Presupuesto ${res?.numero || ''} creado`);
+      }
+      onSaved && onSaved();
+    } catch (err) {
+      if (err && /periodo_cerrado/i.test(err.message || '')) toast.error('No se puede: período contable cerrado.');
+      else toast.error(err?.message || 'No se pudo guardar');
+      setSaving(false);
+    }
+  };
+
+  const Cmp = window.Modal;
+  return (
+    <Cmp open={true} title={isEdit ? `Editar ${initial.numero}` : 'Nuevo presupuesto'} size="lg" onClose={() => { if (!saving) onClose?.(); }} footer={
+      <>
+        <button className="btn-ghost" onClick={() => { if (!saving) onClose?.(); }} disabled={saving}>Cancelar</button>
+        <button className="btn-ghost" onClick={() => guardar('borrador')} disabled={saving}>Guardar borrador</button>
+        <button className="btn-primary" onClick={() => guardar('enviado')} disabled={saving}>{saving ? 'Guardando…' : 'Guardar y enviar'}</button>
+      </>
+    }>
+      <div className="field-group">
+        <label className="field-label">Cliente B2B *</label>
+        <select className="field-input" value={form.cliente_id} onChange={e => set('cliente_id', e.target.value)}>
+          <option value="">— Elegí cliente —</option>
+          {(clientes || []).map(c => <option key={c.id} value={c.id}>{c.nombre}{c.cuit ? ` · ${c.cuit}` : ''}</option>)}
+        </select>
+      </div>
+
+      <div style={{ display:'flex', gap:12 }}>
+        <div className="field-group" style={{ flex:1 }}>
+          <label className="field-label">Fecha emisión</label>
+          <input type="date" className="field-input" value={form.fecha_emision} onChange={e => set('fecha_emision', e.target.value)}/>
+        </div>
+        <div className="field-group" style={{ flex:1 }}>
+          <label className="field-label">Días de validez</label>
+          <input type="number" min="0" className="field-input" value={form.dias_validez} onChange={e => set('dias_validez', e.target.value)}/>
+          <div className="field-help">Vence: {fechaVenc ? venFecha(fechaVenc) : '—'}</div>
+        </div>
+      </div>
+
+      <div className="field-group">
+        <label className="field-label">Condición de pago</label>
+        <input className="field-input" value={form.condicion_pago} placeholder="Ej: 30 días, contado…" onChange={e => set('condicion_pago', e.target.value)}/>
+      </div>
+
+      <div className="field-group">
+        <label className="field-label">Ítems</label>
+        <table className="data-table">
+          <thead><tr><th style={{ width:'38%' }}>SKU</th><th style={{ width:'13%', textAlign:'right' }}>Cant.</th><th style={{ width:'20%', textAlign:'right' }}>Precio</th><th style={{ width:'12%', textAlign:'right' }}>Dto%</th><th style={{ textAlign:'right' }}>Subtotal</th><th></th></tr></thead>
+          <tbody>
+            {lineas.map((l, i) => (
+              <tr key={i}>
+                <td>
+                  <select className="field-input" style={{ padding:'6px 8px' }} value={l.sku} onChange={e => setLinea(i, 'sku', e.target.value)}>
+                    <option value="">— SKU —</option>
+                    {skuOptions.map(o => <option key={o.sku} value={o.sku}>{o.label}</option>)}
+                  </select>
+                </td>
+                <td><input className="field-input" style={{ padding:'6px 8px', textAlign:'right' }} type="number" min="1" value={l.cantidad} onChange={e => setLinea(i, 'cantidad', e.target.value)}/></td>
+                <td><input className="field-input" style={{ padding:'6px 8px', textAlign:'right' }} type="number" min="0" step="0.01" value={l.precio_unitario} onChange={e => setLinea(i, 'precio_unitario', e.target.value)}/></td>
+                <td><input className="field-input" style={{ padding:'6px 8px', textAlign:'right' }} type="number" min="0" max="100" step="0.5" value={l.descuento_pct} onChange={e => setLinea(i, 'descuento_pct', e.target.value)}/></td>
+                <td style={{ textAlign:'right', fontWeight:600 }}>{mayMoney(lineSub(l))}</td>
+                <td style={{ textAlign:'right', width:1 }}><button className="btn-ghost" style={{ padding:'5px 8px' }} onClick={() => delLinea(i)} disabled={lineas.length <= 1}><Icon n="trash" s={12}/></button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <button className="btn-ghost" style={{ marginTop:8 }} onClick={addLinea}><Icon n="plus" s={12}/> Agregar ítem</button>
+      </div>
+
+      <div style={{ display:'flex', justifyContent:'flex-end', alignItems:'center', gap:14, marginTop:8, paddingTop:10, borderTop:`1px solid ${MAY_UI.borderSoft}` }}>
+        <div style={{ fontSize:12, color:MAY_UI.inkMuted }}>Subtotal <strong>{mayMoney(subtotal)}</strong></div>
+        <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:MAY_UI.inkMuted }}>
+          Dto global
+          <input type="number" min="0" max="100" step="0.5" className="field-input" style={{ width:70, padding:'5px 8px', textAlign:'right' }} value={form.descuento_global} onChange={e => set('descuento_global', e.target.value)}/>%
+        </div>
+        <div style={{ fontFamily:'var(--mono)', fontSize:20, fontWeight:800, color:'#16A34A' }}>{mayMoney(total)}</div>
+      </div>
+
+      <div className="field-group" style={{ marginTop:12 }}>
+        <label className="field-label">Notas</label>
+        <textarea className="field-input" rows={2} value={form.notas} onChange={e => set('notas', e.target.value)}/>
+      </div>
+    </Cmp>
+  );
+}
+
+/* Genera el PDF del presupuesto (jsPDF, patrón de los reportes existentes). */
+function presupuestoPDF(p, company) {
+  if (!window.jspdf || !window.jspdf.jsPDF) { try { window.MOCK_BUS; } catch (_) {} alert('Librería PDF no cargada — refrescá la página'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'mm', format:'a4' });
+  const M = 14; let y = 18;
+  doc.setFont('helvetica','bold'); doc.setFontSize(16);
+  doc.text(`PRESUPUESTO ${p.numero}`, M, y); y += 7;
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(80,80,80);
+  if (company) {
+    doc.text(`${company.razon_social || ''}${company.cuit ? '  ·  CUIT ' + company.cuit : ''}`, M, y); y += 4;
+    const dom = [company.domicilio, company.ciudad, company.provincia].filter(Boolean).join(', ');
+    if (dom) { doc.text(dom, M, y); y += 4; }
+    const cont = [company.telefono, company.email].filter(Boolean).join('  ·  ');
+    if (cont) { doc.text(cont, M, y); y += 4; }
+  }
+  doc.setTextColor(0,0,0);
+  y += 2;
+  doc.text(`Emisión: ${venFecha(p.fecha_emision)}     Validez: ${venFecha(p.fecha_validez)}`, M, y); y += 7;
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(10);
+  doc.text('Cliente', M, y); y += 5;
+  doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  doc.text(`${p.cliente_nombre || ''}${p.cliente_cuit ? '  ·  ' + p.cliente_cuit : ''}`, M, y); y += 4;
+  if (p.cliente_localidad || p.cliente_provincia) { doc.text([p.cliente_localidad, p.cliente_provincia].filter(Boolean).join(', '), M, y); y += 4; }
+  y += 3;
+
+  // Tabla
+  const cols = [M, M+24, M+92, M+112, M+134, M+154];
+  doc.setFillColor(240,240,240); doc.rect(M, y-4, 182, 6, 'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(8);
+  ['SKU','Producto','Cant','Precio','Dto%','Subtotal'].forEach((h, i) => doc.text(h, cols[i], y));
+  y += 5; doc.setFont('helvetica','normal');
+  for (const it of (p.items || [])) {
+    if (y > 270) { doc.addPage(); y = 18; }
+    const prod = `${(it.modelo || it.sku)}${it.color && it.color !== '—' ? ' ' + it.color : ''}`.slice(0, 38);
+    doc.text(String(it.sku || ''), cols[0], y);
+    doc.text(prod, cols[1], y);
+    doc.text(String(it.cantidad || 0), cols[2], y, { align:'left' });
+    doc.text(mayMoney(it.precio_unitario), cols[3], y);
+    doc.text(`${Number(it.descuento_pct) || 0}%`, cols[4], y);
+    doc.text(mayMoney(it.subtotal), cols[5], y);
+    y += 5;
+  }
+  y += 3; doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  doc.text(`Subtotal: ${mayMoney(p.subtotal_items)}`, cols[4] - 10, y); y += 4;
+  doc.text(`Descuento global: ${Number(p.descuento_global) || 0}%`, cols[4] - 10, y); y += 5;
+  doc.setFont('helvetica','bold'); doc.setFontSize(12);
+  doc.text(`TOTAL: ${mayMoney(p.total)}`, cols[4] - 10, y); y += 9;
+
+  doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(80,80,80);
+  if (p.condicion_pago) { doc.text(`Condición de pago: ${p.condicion_pago}`, M, y); y += 4; }
+  if (p.notas) { doc.text(`Notas: ${String(p.notas).slice(0,120)}`, M, y); y += 4; }
+  doc.text(`Presupuesto válido hasta ${venFecha(p.fecha_validez)}.`, M, y);
+
+  doc.save(`presupuesto-${p.numero}.pdf`);
+}
+
 window.VentasPage = VentasPage;
 window.MayoristasTab = MayoristasTab;
 window.ClientesB2BTab = ClientesB2BTab;
 window.CtaCteClientesTab = CtaCteClientesTab;
 window.BaseProductosTab = BaseProductosTab;
+window.PresupuestosTab = PresupuestosTab;
