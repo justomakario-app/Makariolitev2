@@ -80,6 +80,31 @@
 
 ---
 
+### [2026-06-10] S2.25 — Ventas: Alta clientes B2B + Cta cte + Base de productos
+
+**Qué se hizo:**
+3 tabs reales en `VentasPage` (reemplazan los placeholders), todos con estilo premium MAY_UI (igual que Mayoristas):
+1. **Alta y mod. clientes** (`ClientesB2BTab`): KPIs (activos/mayoristas/nuevos del mes), search + filtro provincia + toggles (solo mayoristas / inactivos), tabla con badges Mayorista/Cliente + Activo/Inactivo, acciones Editar / Ver cta cte (cross-tab) / Desactivar. Modal = `CustomerModal`.
+2. **Cta cte clientes** (`CtaCteClientesTab`): KPIs (cuentas/a favor/en contra), cards por cliente con saldo (verde/rojo), expand → tabla de movimientos con badges por tipo + alta/edición/baja. Modal = `CtaCteMovementModal`.
+3. **Base de productos** (`BaseProductosTab`): KPIs (activos/incompletos/fabricados/comprados) + badges por categoría, search + filtros, toggle Tabla/Galería, chip de color (color_hex), editar / activar-desactivar. Modal = `ProductoEditModal`.
+
+**Por qué / decisión clave:**
+El brief pedía "reusar CustomersTab/CuentasCorrientesTab" pero a la vez un UI premium (KPIs, MAY_UI, Ver-cta-cte) que esos componentes no tienen. Se resolvió (validado con Jefe): **construir tabs nuevos en ventas.jsx reusando la CAPA DE DATOS (`ADMIN_DATA`/`SUPA`/`MOCK_ACTIONS`) y los MODALES existentes, sin tocar los componentes admin.**
+
+**Cómo (detalles técnicos / desvíos):**
+- **NO se modificó** ningún archivo `admin/` ni `pages.jsx` (solo `ventas.jsx` web+mobile + cache busters). Cero migration, cero RPC nuevo.
+- Tab 2 tipos reales `cargo/pago/ajuste/devolucion` (el modal no tiene `nota_credito`). **"Nueva cuenta" omitida** (cada cliente B2B ya recibe su cta cte al crearse). `referencia_externa` se muestra pero el modal reusado no la setea. "Último movimiento" → se muestra `updated_at` en la card y los movimientos al expandir (evita N+1); localidad traída con un load extra de clientes.
+- Tab 3 lee `sku_catalog` fresco vía `window.SUPA` (no `SKU_DB`, que no expone `incompleto` y tiene nombres de display). El toggle activo usa valores oficiales de la fila para no corromper modelo/color. Alta/edición vía `ProductoEditModal` + `crearOActualizarSku` (mismo path que CatalogoPage).
+- Desactivar cliente: se pasan los campos completos (el RPC update setea email/telefono/notas incondicionalmente).
+- "Ver cta cte" levanta estado en VentasPage (`ctaCteFocus`) → cambia a tab cta-cte y expande esa cuenta.
+- Cache busters: ventas v4 (web+mobile). Validado: Babel transpila, espejos idénticos.
+
+**Para qué sirve / resultado:** Ventas pasa a tener 4 tabs funcionales (Mayoristas + estos 3). Requiere redeploy. Smoke visual pendiente del Jefe (no se hizo smoke con datos sintéticos).
+
+**⚠️ PENDIENTE:** redeploy EasyPanel.
+
+---
+
 ### [2026-06-09] S2.24b — Dashboard de producción para Esteban y Romina (per-usuario)
 
 **Qué se hizo:**
