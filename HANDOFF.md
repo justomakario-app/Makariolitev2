@@ -80,6 +80,20 @@
 
 ---
 
+### [2026-06-10] Producción en Línea — Fase 1, patch RLS (0072)
+
+**Qué se hizo:** Migration 0072 — 2 correcciones de RLS sobre tablas de 0071 (solo policies nuevas, aditivas, sin tocar las existentes):
+1. `prod_solicitud_upd_admin`: owner/admin pueden UPDATE cualquier solicitud (aprobar/gestionar). Antes solo SELECT.
+2. `prod_embalaje_upd_coord` + `prod_embalaje_del_coord`: el coordinador `embalaje` puede UPDATE y DELETE sus propios registros (`cargado_por = auth.uid()`), **sin tope de 24h** (prod_embalaje no tiene `editable_hasta`).
+
+**Por qué:** resuelve los 2 flags que quedaron de la Fase 1 (owner/admin no gestionaban solicitudes; embalaje no editaba lo propio).
+
+**Cómo:** policies separadas permisivas (se OR-ean con las de 0071), patrón `current_user_role()`. Sin cambios de datos ni tablas.
+
+**Resultado:** aplicada en prod (Management API), 3 policies verificadas. Sin smoke de datos (cambio solo de RLS).
+
+---
+
 ### [2026-06-10] Producción en Línea — Fase 1 (tablas maestras + vistas)
 
 **Qué se hizo:**
