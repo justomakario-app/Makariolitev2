@@ -80,6 +80,35 @@
 
 ---
 
+### [2026-06-10] Producción en Línea — Fase 1 (tablas maestras + vistas)
+
+**Qué se hizo:**
+**Migration 0071** — base del módulo "Producción en Línea" (brief Sebas v2.0), todo bajo prefijo `prod_`, aislamiento total:
+- **21 tablas** `prod_*`: maestras (pieza, placa, placa_pieza_extra, producto, receta, insumo), operación diaria (jornada, corte, melamina, embalaje, pino), stock por eslabón (stock_pieza/melamina/patas/terminado), soporte (solicitud, mantenimiento, remito, alerta, auditoria, pedido_estado).
+- **5 vistas**: `prod_v_cortes_dia`, `prod_v_demanda_tap`, `prod_v_armables`, `prod_v_prioridad_melamina`, `prod_v_resumen_dia`.
+- **Triggers**: updated_at (insumo + 4 stock), alerta de stock bajo, auditoría de UPDATE por encargado/owner/admin.
+- **RLS** en las 21 tablas (70 policies) por `profiles.role`.
+
+**Por qué / decisiones (validadas con Jefe):**
+- **Roles vía `profiles.role`** (`current_user_role()`), NO app_metadata (adaptación al repo).
+- **`producido` no existe en `orders`** → las vistas de demanda lo toman de **`carrier_state`** (LEFT JOIN channel_id+sku) = demanda NETA. Solo lectura.
+- `orders.status` no tiene `'despachado'` → comparación `status::text <> 'despachado'` (segura).
+- **Edge Function `import-skus` DIFERIDA a Fase 1b**: el Excel real (`sku para sistema.xlsx`) NO coincide con el parser del brief (pestañas "INSUMOS"/"sku x producto"/"SKU DE PLACAS DE CORTE CNC"/"SKU DE PRODUCTOS", y `prod_insumo` sin datos de stock/categoría/sector en el Excel). Pendiente alinear mapeo real.
+
+**Detalles técnicos / interpretaciones:**
+- CERO ALTER/DROP sobre tablas existentes (verificado). FKs a orders/auth.users no las modifican.
+- Auditoría: `motivo`/`sector` se leen de GUC de sesión (`set_config('prod.audit_motivo',…,true)`); 1 fila por campo cambiado. Alerta: `critico` si stock < 50% del mínimo, `bajo` si < mínimo.
+- `prod_embalaje` sin `editable_hasta` → el coordinador embalaje no hace UPDATE (solo encargado/owner/admin). `prod_solicitud`: encargado/owner/admin solo SELECT (tal cual el brief — pendiente confirmar si owner/admin debería gestionar).
+- Vistas devuelven filas recién cuando haya datos en `prod_producto`/`prod_receta` (Fase 1b).
+
+**Para qué sirve / resultado:**
+- Migration 0071 **aplicada en prod** (Management API; no en `schema_migrations`).
+- **Smoke OK** (owner Noelia, rollback, **0 datos sintéticos**): maestras + jornada + corte → `prod_v_cortes_dia` totales=498 → `prod_v_armables`=5 (LEAST 30 vs 20/4) → UPDATE corte dispara auditoría (`hojas:10>12`) → UPDATE insumo dispara alerta `critico`. Todo revertido.
+
+**⚠️ PENDIENTE:** Fase 1b = Edge Function `import-skus` (alinear mapeo del Excel real). Push pendiente de OK del Jefe. (Frontend de Producción en Línea = fases siguientes.)
+
+---
+
 ### [2026-06-10] S2.27 — Remitos B2B
 
 **Qué se hizo:**
