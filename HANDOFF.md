@@ -80,6 +80,31 @@
 
 ---
 
+### [2026-06-10] S2.27 — Remitos B2B
+
+**Qué se hizo:**
+Módulo Remitos completo en Ventas → tab Remitos (nota de entrega B2B).
+- **Migration 0070**: enum `remito_estado` (borrador/confirmado/anulado) + seq/`fn_next_numero_remito` (REM-xxxx) + tablas `remitos` (cliente_id, **pedido_id nullable**, fechas, condicion_entrega, transportista) y `remitos_items` (cantidad_remitida, precio_unitario ref, subtotal GENERATED) + triggers + RLS + **6 RPCs owner+admin**: list (items+cliente+pedido+progreso), create (valida SKU∈pedido), **update (solo borrador)**, confirmar (**cierre auto** del pedido a `entregado` al 100%), anular (**revierte** a `listo`), soft_delete.
+- **Frontend** (`ventas.jsx`, `RemitosTab`): lista con KPIs/filtros/cards, modal con vínculo a pedido + pre-carga de pendiente (entrega parcial), vista detalle con **barra de progreso** + PDF (jsPDF + company_settings, "Recibí conforme"). Editar borradores. Foco a MayoristasTab.
+
+**Por qué / decisiones:**
+- RPCs **owner+admin** + period-check (consistente con S2.26).
+- **Cierre automático**: al confirmar un remito con pedido_id, si la suma de remitido (todos los remitos confirmados del pedido) cubre cada ítem → pedido `entregado`. Al anular, si deja de estar 100% → vuelve a `listo`.
+- `rpc_remitos_update` agregado a pedido del Jefe (editar borradores).
+
+**Detalles técnicos:**
+- RPCs vía `presRpc` (`window.SUPA.rpc`) desde ventas.jsx → **no toca admin-data.js** (solo ventas.jsx + HTMLs). Reusa `rpc_mayoristas_list_pedidos` (selector de pedidos), `getCompanySettings` (PDF), patrón `presupuestoPDF`.
+- Over-delivery: cap client-side (backend valida SKU∈pedido, no cantidad). precio_unitario referencial (no toca stock — no hay stock en sku_catalog).
+- Cache busters: ventas v6 (web+mobile). Validado: Babel transpila, espejos idénticos, 0 archivos admin/pages.
+
+**Para qué sirve / resultado:**
+- Migration 0070 **aplicada en prod** (Management API; no en `schema_migrations`).
+- **Smoke OK** (owner Noelia, rollback, **0 datos sintéticos**): pedido 'listo' (sku1=10, sku2=5) → remito1 parcial (editado 3→4 vía update) → confirmar (NO cierra) → remito2 completa → confirmar (**pedido → entregado**) → anular remito2 (**pedido → listo**). Secuencias REM/MAY reseteadas.
+
+**⚠️ PENDIENTE:** redeploy EasyPanel. Push pendiente de OK del Jefe.
+
+---
+
 ### [2026-06-10] S2.26 — Presupuestos B2B
 
 **Qué se hizo:**

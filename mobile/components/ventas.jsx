@@ -93,6 +93,7 @@ function VentasPage() {
          tab === 'alta-clientes'    ? <ClientesB2BTab onVerCtaCte={(id) => { setCtaCteFocus(id); setTab('cta-cte-clientes'); }}/> :
          tab === 'cta-cte-clientes' ? <CtaCteClientesTab focusClienteId={ctaCteFocus} onClearFocus={() => setCtaCteFocus(null)}/> :
          tab === 'presupuestos'     ? <PresupuestosTab onVerPedido={(clienteId) => { setMayoristasFocus(clienteId); setTab('mayoristas'); }}/> :
+         tab === 'remitos'          ? <RemitosTab onVerPedido={(clienteId) => { setMayoristasFocus(clienteId); setTab('mayoristas'); }}/> :
          tab === 'base-productos'   ? <BaseProductosTab/> :
          window.ProximamentePlaceholder ? <window.ProximamentePlaceholder nombre={active.label}/> :
          (
@@ -1755,9 +1756,527 @@ function presupuestoPDF(p, company) {
   doc.save(`presupuesto-${p.numero}.pdf`);
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   S2.27 — Remitos B2B (tab Remitos)
+   Backend: migration 0070 (remitos + items, 5 RPCs). Llamadas vía
+   presRpc (window.SUPA.rpc). Estilo premium MAY_UI.
+   ══════════════════════════════════════════════════════════════════ */
+
+const REM_ESTADOS = {
+  borrador:   { label:'Borrador',   bg:'#F3F4F6', fg:'#6B7280' },
+  confirmado: { label:'Confirmado', bg:'#D1FAE5', fg:'#059669' },
+  anulado:    { label:'Anulado',    bg:'#FEE2E2', fg:'#DC2626' },
+};
+function RemEstadoBadge({ estado }) {
+  const c = REM_ESTADOS[estado] || { label:estado, bg:'#F3F4F6', fg:'#6B7280' };
+  return <span style={{ fontSize:10, fontWeight:700, padding:'3px 10px', borderRadius:999, background:c.bg, color:c.fg, textTransform:'uppercase', letterSpacing:'.04em' }}>{c.label}</span>;
+}
+function remInMonth(dateStr) {
+  if (!dateStr) return false;
+  const d = new Date(String(dateStr).slice(0,10) + 'T00:00'); const n = new Date();
+  return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
+}
+
+function RemitosTab({ onVerPedido }) {
+  const toast = useToast();
+  const role = (window.MOCK?.user?.role || '').toLowerCase();
+  const canEdit = ['owner', 'admin'].includes(role);
+
+  const [view, setView]       = useState('lista');
+  const [selected, setSelected] = useState(null);
+  const [list, setList]       = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState(null);
+  const [search, setSearch]   = useState('');
+  const [estadoF, setEstadoF] = useState('');
+  const [desde, setDesde]     = useState('');
+  const [hasta, setHasta]     = useState('');
+  const [soloPed, setSoloPed] = useState(false);
+  const [clientes, setClientes] = useState([]);
+  const [company, setCompany]   = useState(null);
+  const [modal, setModal]     = useState(null);
+  const [delTarget, setDelTarget] = useState(null);
+  const [busy, setBusy]       = useState(false);
+
+  const reload = async () => {
+    setLoading(true); setError(null);
+    try {
+      const payload = {};
+      if (estadoF) payload.estado = estadoF;
+      if (desde) payload.desde = desde;
+      if (hasta) payload.hasta = hasta;
+      const data = await presRpc('rpc_remitos_list', payload);
+      const arr = data || [];
+      setList(arr);
+      setSelected(prev => prev ? arr.find(r => r.id === prev.id) || null : null);
+    } catch (err) { const m = err?.message || 'Error'; setError(m); toast.error(m); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { reload(); /* eslint-disable-next-line */ }, [estadoF, desde, hasta]);
+  useEffect(() => {
+    window.ADMIN_DATA.loadCustomersB2B({ includeInactive: false }).then(setClientes).catch(() => {});
+    if (window.ADMIN_DATA.getCompanySettings) window.ADMIN_DATA.getCompanySettings().then(setCompany).catch(() => {});
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return list.filter(r => {
+      if (soloPed && !r.pedido_id) return false;
+      if (!q) return true;
+      return (r.numero || '').toLowerCase().includes(q) || (r.cliente_nombre || '').toLowerCase().includes(q);
+    });
+  }, [list, search, soloPed]);
+
+  const kTotalMes = list.filter(r => remInMonth(r.fecha_emision)).length;
+  const kConfMes = list.filter(r => r.estado === 'confirmado' && remInMonth(r.fecha_emision)).length;
+  const kCerrados = new Set(list.filter(r => r.pedido_estado === 'entregado' && r.pedido_id).map(r => r.pedido_id)).size;
+  const kBorr = list.filter(r => r.estado === 'borrador').length;
+
+  const confirmar = async (rm) => {
+    if (busy) return; setBusy(true);
+    try {
+      const res = await presRpc('rpc_remitos_confirmar', { id: rm.id });
+      toast.success(res?.pedido_cerrado ? 'Confirmado · pedido entregado al 100%' : 'Remito confirmado');
+      await reload();
+    } catch (err) {
+      if (err && /periodo_cerrado/i.test(err.message || '')) toast.error('No se puede: período contable cerrado.');
+      else toast.error(err?.message || 'No se pudo confirmar');
+    } finally { setBusy(false); }
+  };
+  const anular = async (rm) => {
+    if (busy) return;
+    if (!window.confirm(`¿Anular ${rm.numero}?`)) return;
+    setBusy(true);
+    try {
+      const res = await presRpc('rpc_remitos_anular', { id: rm.id });
+      toast.success(res?.pedido_revertido ? 'Anulado · pedido vuelto a "listo"' : 'Remito anulado');
+      await reload();
+    } catch (err) { toast.error(err?.message || 'No se pudo anular'); }
+    finally { setBusy(false); }
+  };
+  const doDelete = async () => {
+    if (!delTarget || busy) return; setBusy(true);
+    try { await presRpc('rpc_remitos_soft_delete', { id: delTarget.id }); toast.success('Remito eliminado'); setDelTarget(null); await reload(); }
+    catch (err) { toast.error(err?.message || 'No se pudo eliminar'); }
+    finally { setBusy(false); }
+  };
+
+  /* ── VISTA DETALLE ── */
+  if (view === 'detalle' && selected) {
+    const r = selected;
+    const Y = Number(r.pedido_unidades) || 0;
+    const X = Number(r.remitido_unidades) || 0;
+    const pct = Y > 0 ? Math.min(100, Math.round((X / Y) * 100)) : 0;
+    return (
+      <div style={{ background:MAY_UI.pageBg, borderRadius:MAY_UI.radius, padding:16 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, marginBottom:14, flexWrap:'wrap' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+            <button className="btn-ghost" onClick={() => setView('lista')}>← Volver</button>
+            <span style={{ fontFamily:'var(--mono)', fontWeight:800, fontSize:18 }}>{r.numero}</span>
+            <RemEstadoBadge estado={r.estado}/>
+          </div>
+          {r.estado === 'confirmado' && <button className="btn-ghost" onClick={() => remitoPDF(r, company)}><Icon n="download" s={13}/> Descargar PDF</button>}
+        </div>
+
+        <div style={{ background:MAY_UI.cardBg, border:`1px solid ${MAY_UI.border}`, borderRadius:MAY_UI.radius, padding:20, marginBottom:14 }}>
+          <div style={{ display:'flex', gap:24, flexWrap:'wrap' }}>
+            <div>
+              <div style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'.08em', color:MAY_UI.inkFaint }}>Cliente</div>
+              <div style={{ fontWeight:700, fontSize:15, marginTop:2 }}>{r.cliente_nombre}</div>
+              <div style={{ fontSize:12, color:MAY_UI.inkMuted }}>{[r.cliente_cuit, r.cliente_localidad].filter(Boolean).join(' · ') || '—'}</div>
+            </div>
+            <div><div style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'.08em', color:MAY_UI.inkFaint }}>Emisión</div><div style={{ fontSize:13, marginTop:2 }}>{venFecha(r.fecha_emision)}</div></div>
+            <div><div style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'.08em', color:MAY_UI.inkFaint }}>Entrega</div><div style={{ fontSize:13, marginTop:2 }}>{venFecha(r.fecha_entrega)}</div></div>
+            {r.transportista && <div><div style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'.08em', color:MAY_UI.inkFaint }}>Transportista</div><div style={{ fontSize:13, marginTop:2 }}>{r.transportista}</div></div>}
+          </div>
+        </div>
+
+        {r.pedido_id && (
+          <div style={{ background:MAY_UI.cardBg, border:`1px solid ${MAY_UI.border}`, borderRadius:MAY_UI.radius, padding:16, marginBottom:14 }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, flexWrap:'wrap' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                <span style={{ fontSize:12, color:MAY_UI.inkMuted }}>Pedido vinculado</span>
+                <button className="btn-ghost" style={{ padding:'4px 10px' }} onClick={() => onVerPedido && onVerPedido(r.cliente_id)}>{r.pedido_numero || 'pedido'} →</button>
+                {r.pedido_estado && <span style={{ fontSize:10, color:MAY_UI.inkMuted }}>{r.pedido_estado}</span>}
+              </div>
+              <div style={{ fontSize:12, fontWeight:700, color: pct >= 100 ? '#15803d' : MAY_UI.inkSoft }}>{X} de {Y} uds ({pct}%)</div>
+            </div>
+            <div style={{ height:8, background:'var(--paper-dim, #eee)', borderRadius:4, overflow:'hidden', marginTop:8 }}>
+              <div style={{ height:'100%', width:`${pct}%`, background: pct >= 100 ? '#16A34A' : '#6366f1', transition:'width .4s' }}/>
+            </div>
+          </div>
+        )}
+
+        <div style={{ background:MAY_UI.cardBg, border:`1px solid ${MAY_UI.border}`, borderRadius:MAY_UI.radius, overflow:'hidden' }}>
+          <table className="data-table">
+            <thead><tr><th>SKU</th><th>Producto</th><th style={{ textAlign:'right' }}>Cant.</th><th style={{ textAlign:'right' }}>Precio ref</th><th style={{ textAlign:'right' }}>Subtotal</th></tr></thead>
+            <tbody>
+              {(r.items || []).map((it, i) => (
+                <tr key={it.id || i}>
+                  <td><span className="order-num">{it.sku}</span></td>
+                  <td>{it.modelo || it.sku}{it.color && it.color !== '—' ? ` · ${it.color}` : ''}</td>
+                  <td style={{ textAlign:'right' }}>{it.cantidad_remitida}</td>
+                  <td style={{ textAlign:'right' }}>{mayMoney(it.precio_unitario)}</td>
+                  <td style={{ textAlign:'right', fontWeight:600 }}>{mayMoney(it.subtotal)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div style={{ padding:'12px 16px', borderTop:`1px solid ${MAY_UI.borderSoft}`, display:'flex', justifyContent:'flex-end', gap:8, alignItems:'baseline' }}>
+            <span style={{ fontSize:11, color:MAY_UI.inkFaint, textTransform:'uppercase', letterSpacing:'.05em' }}>Total ref.</span>
+            <span style={{ fontFamily:'var(--mono)', fontWeight:800, fontSize:18 }}>{mayMoney(r.total_ref)}</span>
+          </div>
+        </div>
+
+        {(r.condicion_entrega || r.notas) && (
+          <div style={{ fontSize:12, color:MAY_UI.inkSoft, marginTop:12 }}>
+            {r.condicion_entrega && <div><strong>Condición de entrega:</strong> {r.condicion_entrega}</div>}
+            {r.notas && <div><strong>Notas:</strong> {r.notas}</div>}
+          </div>
+        )}
+
+        {canEdit && (
+          <div style={{ display:'flex', gap:8, marginTop:16, flexWrap:'wrap' }}>
+            {r.estado === 'borrador' && <>
+              <button className="btn-primary" onClick={() => confirmar(r)} disabled={busy}>Confirmar</button>
+              <button className="btn-ghost" onClick={() => setModal({ mode:'edit', initial:r })}><Icon n="edit" s={13}/> Editar</button>
+              <button className="btn-ghost" style={{ color:'#DC2626', borderColor:'#FCA5A5' }} onClick={() => setDelTarget(r)}><Icon n="trash" s={13}/> Eliminar</button>
+            </>}
+            {r.estado === 'confirmado' && (
+              <button className="btn-ghost" style={{ color:'#DC2626', borderColor:'#FCA5A5' }} onClick={() => anular(r)} disabled={busy}>Anular</button>
+            )}
+          </div>
+        )}
+
+        {modal && <RemitoModal mode={modal.mode} initial={modal.initial} clientes={clientes} onClose={() => setModal(null)} onSaved={async () => { setModal(null); await reload(); }}/>}
+        {delTarget && window.ConfirmModal && (
+          <window.ConfirmModal open={true} title="Eliminar remito" message={`¿Eliminar ${delTarget.numero}?`}
+            confirmText="Eliminar" danger onClose={() => { if (!busy) setDelTarget(null); }} onConfirm={doDelete}/>
+        )}
+      </div>
+    );
+  }
+
+  /* ── VISTA LISTA ── */
+  return (
+    <div style={{ background:MAY_UI.pageBg, borderRadius:MAY_UI.radius, padding:16 }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, marginBottom:14, flexWrap:'wrap' }}>
+        <div style={{ fontSize:16, fontWeight:700 }}>Remitos</div>
+        {canEdit && <button className="btn-primary" onClick={() => setModal({ mode:'create' })}><Icon n="plus" s={13}/> Nuevo remito</button>}
+      </div>
+
+      <div style={{ display:'flex', gap:12, marginBottom:14, flexWrap:'wrap' }}>
+        <VenKpi label="Remitos del mes" value={kTotalMes}/>
+        <VenKpi label="Confirmados del mes" value={kConfMes} accent="#15803d"/>
+        <VenKpi label="Pedidos cerrados (mes)" value={kCerrados} accent="#15803d"/>
+        <VenKpi label="Pendientes de confirmar" value={kBorr} accent="#B45309"/>
+      </div>
+
+      <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:14 }}>
+        <div style={{ position:'relative', flex:'1 1 200px', maxWidth:300 }}>
+          <span style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', display:'flex' }}><Icon n="search" s={14} c={MAY_UI.inkFaint}/></span>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar número o cliente…"
+                 style={{ width:'100%', padding:'9px 12px 9px 34px', borderRadius:10, border:`1px solid ${MAY_UI.border}`, background:'#fff', fontSize:13, outline:'none' }}/>
+        </div>
+        <select className="field-input" style={{ width:140, padding:'8px 10px' }} value={estadoF} onChange={e => setEstadoF(e.target.value)}>
+          <option value="">Todos los estados</option>
+          {Object.keys(REM_ESTADOS).map(e => <option key={e} value={e}>{REM_ESTADOS[e].label}</option>)}
+        </select>
+        <input type="date" className="field-input" style={{ padding:'8px 10px' }} value={desde} onChange={e => setDesde(e.target.value)} title="Desde"/>
+        <input type="date" className="field-input" style={{ padding:'8px 10px' }} value={hasta} onChange={e => setHasta(e.target.value)} title="Hasta"/>
+        <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:MAY_UI.inkSoft, fontWeight:600 }}>
+          <input type="checkbox" checked={soloPed} onChange={e => setSoloPed(e.target.checked)}/> Con pedido
+        </label>
+      </div>
+
+      {loading ? (
+        <div style={{ display:'flex', justifyContent:'center', padding:'48px 0' }}><span className="loader" style={{ width:26, height:26 }}/></div>
+      ) : error ? (
+        <div style={venEmptyBox()}><Icon n="alert" s={28} c="var(--red)"/><div style={{ fontWeight:700, marginTop:8 }}>{error}</div><button className="btn-ghost" style={{ marginTop:12 }} onClick={reload}>Reintentar</button></div>
+      ) : list.length === 0 ? (
+        <div style={venEmptyBox()}>
+          <Icon n="truck" s={32} c={MAY_UI.inkFaint}/>
+          <div style={{ fontWeight:700, fontSize:15, marginTop:10 }}>Sin remitos</div>
+          {canEdit && <button className="btn-primary" style={{ marginTop:16 }} onClick={() => setModal({ mode:'create' })}><Icon n="plus" s={13}/> Nuevo remito</button>}
+        </div>
+      ) : (
+        <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+          {filtered.map(r => {
+            const resumen = (r.items || []).slice(0, 2).map(it => `${it.cantidad_remitida}× ${it.modelo || it.sku}`).join(', ');
+            const extra = (r.items || []).length - 2;
+            return (
+              <div key={r.id} style={{ background:MAY_UI.cardBg, border:`1px solid ${MAY_UI.border}`, borderRadius:MAY_UI.radius, padding:16 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+                  <span style={{ fontFamily:'var(--mono)', fontWeight:700, fontSize:14 }}>{r.numero}</span>
+                  <RemEstadoBadge estado={r.estado}/>
+                  {r.pedido_id && (
+                    <button className="btn-ghost" style={{ padding:'2px 9px', fontSize:11 }} onClick={() => onVerPedido && onVerPedido(r.cliente_id)}>Pedido {r.pedido_numero || ''}</button>
+                  )}
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontWeight:600, fontSize:14 }}>{r.cliente_nombre}</div>
+                    <div style={{ fontSize:11, color:MAY_UI.inkMuted }}>Entrega {venFecha(r.fecha_entrega)}{resumen ? ` · ${resumen}${extra > 0 ? ` y ${extra} más` : ''}` : ''}</div>
+                  </div>
+                </div>
+                <div style={{ display:'flex', gap:8, marginTop:12, flexWrap:'wrap' }}>
+                  <button className="btn-primary" onClick={() => { setSelected(r); setView('detalle'); }}>Ver detalle</button>
+                  {canEdit && r.estado === 'borrador' && <button className="btn-ghost" onClick={() => confirmar(r)} disabled={busy}><Icon n="check" s={12}/> Confirmar</button>}
+                  {canEdit && r.estado === 'borrador' && <button className="btn-ghost" onClick={() => setModal({ mode:'edit', initial:r })}><Icon n="edit" s={12}/> Editar</button>}
+                  {canEdit && r.estado === 'confirmado' && <button className="btn-ghost" style={{ color:'#DC2626', borderColor:'#FCA5A5' }} onClick={() => anular(r)} disabled={busy}>Anular</button>}
+                  {canEdit && r.estado === 'borrador' && <button className="btn-ghost" style={{ color:'#DC2626', borderColor:'#FCA5A5' }} onClick={() => setDelTarget(r)}><Icon n="trash" s={12}/> Eliminar</button>}
+                </div>
+              </div>
+            );
+          })}
+          {filtered.length === 0 && <div style={{ textAlign:'center', padding:'24px', color:MAY_UI.inkMuted }}>Sin resultados</div>}
+        </div>
+      )}
+
+      {modal && <RemitoModal mode={modal.mode} initial={modal.initial} clientes={clientes} onClose={() => setModal(null)} onSaved={async () => { setModal(null); await reload(); }}/>}
+      {delTarget && window.ConfirmModal && (
+        <window.ConfirmModal open={true} title="Eliminar remito" message={`¿Eliminar ${delTarget.numero}?`}
+          confirmText="Eliminar" danger onClose={() => { if (!busy) setDelTarget(null); }} onConfirm={doDelete}/>
+      )}
+    </div>
+  );
+}
+
+/* Modal de alta de remito (vinculado a pedido o standalone). */
+function RemitoModal({ mode, initial, clientes, onClose, onSaved }) {
+  const toast = useToast();
+  const isEdit = mode === 'edit';
+  const today = new Date().toISOString().slice(0, 10);
+  const [form, setForm] = useState({
+    cliente_id:        (initial && initial.cliente_id) || '',
+    fecha_emision:     (initial && initial.fecha_emision) ? String(initial.fecha_emision).slice(0,10) : today,
+    fecha_entrega:     (initial && initial.fecha_entrega) ? String(initial.fecha_entrega).slice(0,10) : today,
+    condicion_entrega: (initial && initial.condicion_entrega) || '',
+    transportista:     (initial && initial.transportista) || '',
+    notas:             (initial && initial.notas) || '',
+  });
+  const [vincular, setVincular] = useState(!!(initial && initial.pedido_id));
+  const [pedidos, setPedidos]   = useState([]);
+  const [pedidoId, setPedidoId] = useState((initial && initial.pedido_id) || '');
+  const [lineas, setLineas]     = useState(
+    (initial && initial.items && initial.items.length)
+      ? initial.items.map(it => ({ sku:it.sku, cantidad_remitida:String(it.cantidad_remitida), precio_unitario:String(it.precio_unitario || 0), max:null, modelo:`${it.modelo || it.sku}${it.color && it.color !== '—' ? ' ' + it.color : ''}` }))
+      : [{ sku:'', cantidad_remitida:'', precio_unitario:'', max:null, modelo:'' }]
+  );
+  const [saving, setSaving]     = useState(false);
+
+  const set = (k, v) => setForm(s => ({ ...s, [k]: v }));
+  const setLinea = (i, k, v) => setLineas(arr => arr.map((l, idx) => idx === i ? { ...l, [k]: v } : l));
+  const addLinea = () => setLineas(arr => [...arr, { sku:'', cantidad_remitida:'', precio_unitario:'', max:null, modelo:'' }]);
+  const delLinea = (i) => setLineas(arr => arr.length > 1 ? arr.filter((_, idx) => idx !== i) : arr);
+
+  const skuOptions = useMemo(() => {
+    const db = window.SKU_DB || {};
+    return Object.keys(db).filter(s => db[s] && db[s].activo !== false).sort().map(s => {
+      const x = db[s]; const label = x.color && x.color !== '—' ? `${s} — ${x.modelo} ${x.color}` : `${s} — ${x.modelo || ''}`;
+      return { sku:s, label };
+    });
+  }, []);
+
+  // Cargar pedidos del cliente al activar "vincular".
+  useEffect(() => {
+    if (!vincular || !form.cliente_id) { setPedidos([]); setPedidoId(''); return; }
+    presRpc('rpc_mayoristas_list_pedidos', { cliente_id: form.cliente_id })
+      .then(data => setPedidos((data || []).filter(p => ['confirmado','en_produccion','listo'].includes(p.estado))))
+      .catch(() => setPedidos([]));
+    /* eslint-disable-next-line */
+  }, [vincular, form.cliente_id]);
+
+  const onSelectPedido = async (pid) => {
+    setPedidoId(pid);
+    const ped = pedidos.find(p => p.id === pid);
+    if (!ped) { setLineas([{ sku:'', cantidad_remitida:'', precio_unitario:'', max:null, modelo:'' }]); return; }
+    const remMap = {};
+    try {
+      const rems = await presRpc('rpc_remitos_list', { pedido_id: pid });
+      for (const rm of (rems || [])) {
+        if (rm.estado !== 'confirmado') continue;
+        for (const it of (rm.items || [])) remMap[it.sku] = (remMap[it.sku] || 0) + (Number(it.cantidad_remitida) || 0);
+      }
+    } catch (_) {}
+    const nuevas = (ped.items || []).map(it => {
+      const pend = Math.max(0, (Number(it.cantidad) || 0) - (remMap[it.sku] || 0));
+      return { sku:it.sku, modelo:`${it.modelo || it.sku}${it.color && it.color !== '—' ? ' ' + it.color : ''}`, cantidad_remitida:String(pend), precio_unitario:String(it.precio_unitario || 0), max:pend };
+    }).filter(l => l.max > 0);
+    setLineas(nuevas.length ? nuevas : [{ sku:'', cantidad_remitida:'', precio_unitario:'', max:null, modelo:'' }]);
+  };
+
+  const lineSub = (l) => (Number(l.cantidad_remitida) || 0) * (Number(l.precio_unitario) || 0);
+  const totalRef = lineas.reduce((s, l) => s + lineSub(l), 0);
+
+  const guardar = async (confirmar) => {
+    if (saving) return;
+    if (!form.cliente_id) { toast.error('Elegí un cliente'); return; }
+    const items = lineas
+      .map(l => ({ sku:(l.sku || '').trim(), cantidad_remitida:parseInt(l.cantidad_remitida, 10), precio_unitario:Number(l.precio_unitario) || 0, _max:l.max }))
+      .filter(l => l.sku && l.cantidad_remitida > 0);
+    if (items.length === 0) { toast.error('Agregá al menos un ítem con cantidad'); return; }
+    const over = items.find(l => l._max != null && l.cantidad_remitida > l._max);
+    if (over) { toast.error(`La cantidad de ${over.sku} supera lo pendiente del pedido (${over._max}).`); return; }
+    setSaving(true);
+    try {
+      const payload = {
+        cliente_id: form.cliente_id, pedido_id: (vincular && pedidoId) ? pedidoId : null,
+        fecha_emision: form.fecha_emision, fecha_entrega: form.fecha_entrega || null,
+        condicion_entrega: form.condicion_entrega.trim(), transportista: form.transportista.trim(), notas: form.notas.trim(),
+        items: items.map(l => ({ sku:l.sku, cantidad_remitida:l.cantidad_remitida, precio_unitario:l.precio_unitario })),
+      };
+      if (isEdit) {
+        payload.id = initial.id;
+        await presRpc('rpc_remitos_update', payload);
+        if (confirmar) await presRpc('rpc_remitos_confirmar', { id: initial.id });
+        toast.success(`Remito ${initial.numero} ${confirmar ? 'confirmado' : 'actualizado'}`);
+      } else {
+        const res = await presRpc('rpc_remitos_create', payload);
+        if (confirmar) await presRpc('rpc_remitos_confirmar', { id: res.id });
+        toast.success(`Remito ${res?.numero || ''} ${confirmar ? 'confirmado' : 'guardado'}`);
+      }
+      onSaved && onSaved();
+    } catch (err) {
+      if (err && /periodo_cerrado/i.test(err.message || '')) toast.error('No se puede: período contable cerrado.');
+      else toast.error(err?.message || 'No se pudo guardar');
+      setSaving(false);
+    }
+  };
+
+  const Cmp = window.Modal;
+  return (
+    <Cmp open={true} title={isEdit ? `Editar ${initial.numero}` : 'Nuevo remito'} size="lg" onClose={() => { if (!saving) onClose?.(); }} footer={
+      <>
+        <button className="btn-ghost" onClick={() => { if (!saving) onClose?.(); }} disabled={saving}>Cancelar</button>
+        <button className="btn-ghost" onClick={() => guardar(false)} disabled={saving}>Guardar borrador</button>
+        <button className="btn-primary" onClick={() => guardar(true)} disabled={saving}>{saving ? 'Guardando…' : 'Guardar y confirmar'}</button>
+      </>
+    }>
+      <div className="field-group">
+        <label className="field-label">Cliente B2B *</label>
+        <select className="field-input" value={form.cliente_id} onChange={e => { set('cliente_id', e.target.value); setPedidoId(''); }}>
+          <option value="">— Elegí cliente —</option>
+          {(clientes || []).map(c => <option key={c.id} value={c.id}>{c.nombre}{c.cuit ? ` · ${c.cuit}` : ''}</option>)}
+        </select>
+      </div>
+
+      <div className="field-group">
+        <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', fontSize:13, fontWeight:600 }}>
+          <input type="checkbox" checked={vincular} onChange={e => { setVincular(e.target.checked); if (!e.target.checked) { setPedidoId(''); setLineas([{ sku:'', cantidad_remitida:'', precio_unitario:'', max:null, modelo:'' }]); } }} disabled={!form.cliente_id}/>
+          Vincular a un pedido
+        </label>
+        {vincular && (
+          <select className="field-input" style={{ marginTop:6 }} value={pedidoId} onChange={e => onSelectPedido(e.target.value)}>
+            <option value="">— Elegí pedido (listo / en producción / confirmado) —</option>
+            {pedidos.map(p => <option key={p.id} value={p.id}>{p.numero_pedido} · {p.estado} · {(p.items || []).length} ítems</option>)}
+          </select>
+        )}
+      </div>
+
+      <div style={{ display:'flex', gap:12 }}>
+        <div className="field-group" style={{ flex:1 }}><label className="field-label">Fecha emisión</label><input type="date" className="field-input" value={form.fecha_emision} onChange={e => set('fecha_emision', e.target.value)}/></div>
+        <div className="field-group" style={{ flex:1 }}><label className="field-label">Fecha entrega</label><input type="date" className="field-input" value={form.fecha_entrega} onChange={e => set('fecha_entrega', e.target.value)}/></div>
+      </div>
+      <div style={{ display:'flex', gap:12 }}>
+        <div className="field-group" style={{ flex:1 }}><label className="field-label">Condición de entrega</label><input className="field-input" value={form.condicion_entrega} placeholder="Ej: retira en fábrica, envío a domicilio" onChange={e => set('condicion_entrega', e.target.value)}/></div>
+        <div className="field-group" style={{ flex:1 }}><label className="field-label">Transportista</label><input className="field-input" value={form.transportista} onChange={e => set('transportista', e.target.value)}/></div>
+      </div>
+
+      <div className="field-group">
+        <label className="field-label">Ítems</label>
+        <table className="data-table">
+          <thead><tr><th style={{ width:'42%' }}>SKU / Producto</th><th style={{ width:'18%', textAlign:'right' }}>Cant.{vincular && pedidoId ? ' (máx)' : ''}</th><th style={{ width:'22%', textAlign:'right' }}>Precio ref</th><th style={{ textAlign:'right' }}>Subtotal</th><th></th></tr></thead>
+          <tbody>
+            {lineas.map((l, i) => (
+              <tr key={i}>
+                <td>
+                  {l.max != null
+                    ? <span style={{ fontSize:12 }}><span className="order-num">{l.sku}</span> {l.modelo}</span>
+                    : <select className="field-input" style={{ padding:'6px 8px' }} value={l.sku} onChange={e => setLinea(i, 'sku', e.target.value)}>
+                        <option value="">— SKU —</option>
+                        {skuOptions.map(o => <option key={o.sku} value={o.sku}>{o.label}</option>)}
+                      </select>}
+                </td>
+                <td><input className="field-input" style={{ padding:'6px 8px', textAlign:'right' }} type="number" min="1" max={l.max != null ? l.max : undefined} value={l.cantidad_remitida} onChange={e => setLinea(i, 'cantidad_remitida', e.target.value)}/>{l.max != null && <div style={{ fontSize:9, color:MAY_UI.inkFaint, textAlign:'right' }}>máx {l.max}</div>}</td>
+                <td><input className="field-input" style={{ padding:'6px 8px', textAlign:'right' }} type="number" min="0" step="0.01" value={l.precio_unitario} onChange={e => setLinea(i, 'precio_unitario', e.target.value)}/></td>
+                <td style={{ textAlign:'right', fontWeight:600 }}>{mayMoney(lineSub(l))}</td>
+                <td style={{ textAlign:'right', width:1 }}>{l.max == null && <button className="btn-ghost" style={{ padding:'5px 8px' }} onClick={() => delLinea(i)} disabled={lineas.length <= 1}><Icon n="trash" s={12}/></button>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!(vincular && pedidoId) && <button className="btn-ghost" style={{ marginTop:8 }} onClick={addLinea}><Icon n="plus" s={12}/> Agregar ítem</button>}
+      </div>
+
+      <div style={{ display:'flex', justifyContent:'flex-end', alignItems:'baseline', gap:10, marginTop:8, paddingTop:10, borderTop:`1px solid ${MAY_UI.borderSoft}` }}>
+        <span style={{ fontSize:11, color:MAY_UI.inkFaint, textTransform:'uppercase', letterSpacing:'.05em' }}>Total ref.</span>
+        <span style={{ fontFamily:'var(--mono)', fontSize:18, fontWeight:800 }}>{mayMoney(totalRef)}</span>
+      </div>
+
+      <div className="field-group" style={{ marginTop:12 }}>
+        <label className="field-label">Notas</label>
+        <textarea className="field-input" rows={2} value={form.notas} onChange={e => set('notas', e.target.value)}/>
+      </div>
+    </Cmp>
+  );
+}
+
+/* PDF del remito (jsPDF, patrón de presupuestos). */
+function remitoPDF(r, company) {
+  if (!window.jspdf || !window.jspdf.jsPDF) { alert('Librería PDF no cargada — refrescá la página'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'mm', format:'a4' });
+  const M = 14; let y = 18;
+  doc.setFont('helvetica','bold'); doc.setFontSize(16);
+  doc.text(`REMITO ${r.numero}`, M, y); y += 7;
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(80,80,80);
+  if (company) {
+    doc.text(`${company.razon_social || ''}${company.cuit ? '  ·  CUIT ' + company.cuit : ''}`, M, y); y += 4;
+    const dom = [company.domicilio, company.ciudad, company.provincia].filter(Boolean).join(', ');
+    if (dom) { doc.text(dom, M, y); y += 4; }
+    const cont = [company.telefono, company.email].filter(Boolean).join('  ·  ');
+    if (cont) { doc.text(cont, M, y); y += 4; }
+  }
+  doc.setTextColor(0,0,0); y += 2;
+  doc.text(`Emisión: ${venFecha(r.fecha_emision)}     Entrega: ${venFecha(r.fecha_entrega)}${r.transportista ? '     Transportista: ' + r.transportista : ''}`, M, y); y += 6;
+  if (r.pedido_numero) { doc.text(`Pedido: ${r.pedido_numero}`, M, y); y += 6; }
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.text('Cliente', M, y); y += 5;
+  doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  doc.text(`${r.cliente_nombre || ''}${r.cliente_cuit ? '  ·  ' + r.cliente_cuit : ''}`, M, y); y += 4;
+  if (r.cliente_localidad) { doc.text(String(r.cliente_localidad), M, y); y += 4; }
+  y += 3;
+
+  const cols = [M, M+24, M+96, M+120, M+150];
+  doc.setFillColor(240,240,240); doc.rect(M, y-4, 182, 6, 'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(8);
+  ['SKU','Producto','Cant','Precio ref','Subtotal'].forEach((h, i) => doc.text(h, cols[i], y));
+  y += 5; doc.setFont('helvetica','normal');
+  for (const it of (r.items || [])) {
+    if (y > 255) { doc.addPage(); y = 18; }
+    doc.text(String(it.sku || ''), cols[0], y);
+    doc.text(`${(it.modelo || it.sku)}${it.color && it.color !== '—' ? ' ' + it.color : ''}`.slice(0, 40), cols[1], y);
+    doc.text(String(it.cantidad_remitida || 0), cols[2], y);
+    doc.text(mayMoney(it.precio_unitario), cols[3], y);
+    doc.text(mayMoney(it.subtotal), cols[4], y);
+    y += 5;
+  }
+  y += 2; doc.setFont('helvetica','bold'); doc.setFontSize(10);
+  doc.text(`Total ref.: ${mayMoney(r.total_ref)}`, cols[3] - 6, y); y += 8;
+
+  doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(80,80,80);
+  if (r.condicion_entrega) { doc.text(`Condición de entrega: ${r.condicion_entrega}`, M, y); y += 4; }
+  if (r.notas) { doc.text(`Notas: ${String(r.notas).slice(0,120)}`, M, y); y += 4; }
+  y += 10;
+  doc.setTextColor(0,0,0);
+  doc.text('Recibí conforme: _______________________________', M, y);
+
+  doc.save(`remito-${r.numero}.pdf`);
+}
+
 window.VentasPage = VentasPage;
 window.MayoristasTab = MayoristasTab;
 window.ClientesB2BTab = ClientesB2BTab;
 window.CtaCteClientesTab = CtaCteClientesTab;
 window.BaseProductosTab = BaseProductosTab;
 window.PresupuestosTab = PresupuestosTab;
+window.RemitosTab = RemitosTab;
