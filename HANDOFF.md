@@ -80,6 +80,25 @@
 
 ---
 
+### [2026-06-10] Producción en Línea — Fase 1b (Edge Function import-skus)
+
+**Qué se hizo:** `supabase/functions/import-skus/index.ts` — Edge Function (Deno) que importa `sku para sistema.xlsx` a las tablas `prod_*`. **Escrita y pusheada, NO ejecutada todavía** (pendiente OK del Jefe para servirla/correrla).
+
+**Mapeo real del Excel (confirmado por Jefe):**
+- `INSUMOS` (SKU PADRE) → `prod_pieza`.
+- `SKU DE PLACAS DE CORTE CNC`: sección derecha (cols 6-7) → `prod_pieza` (TAPs); sección izquierda (cols 0-4) → `prod_placa` (`material`=DETALLE, `combinada` si >1 hijo) + `prod_placa_pieza_extra`.
+- `SKU DE PRODUCTOS` → `prod_producto` (tipo `simple`, patas null/0, `kit_embalaje={caja:…}`).
+- `sku x producto` → `prod_receta` (multi-fila; complementos TAP/KIT/CAJ que existan como pieza → en la práctica solo TAP).
+
+**Cómo / decisiones:**
+- **Lee el archivo del FILESYSTEM LOCAL** (`Deno.readFile`, default `./sku para sistema.xlsx`) — Storage aún no configurado. → Pensada para `supabase functions serve` desde la raíz del repo; **una función en Cloud no vería el archivo**.
+- Auth: JWT → `profiles.role` owner/admin. Upserts con service-role (bypass RLS). Upsert por SKU; fila que viola FK/CHECK se rechaza `{fila, motivo}` y sigue. Respuesta `{insertados, actualizados, rechazados, por_tabla}`.
+- piezas (2 fuentes) cargadas antes que placas/recetas (orden de FK). SheetJS vía CDN (`cdn.sheetjs.com/.../xlsx.mjs`), `@supabase/supabase-js` vía esm.sh.
+
+**⚠️ PENDIENTE:** OK del Jefe para servir/ejecutar la función (la 1ª corrida escribe datos reales en `prod_*` — no hay smoke con rollback para una Edge Function). Reusa la base de datos creada en 0071/0072.
+
+---
+
 ### [2026-06-10] Producción en Línea — Fase 1, patch RLS (0072)
 
 **Qué se hizo:** Migration 0072 — 2 correcciones de RLS sobre tablas de 0071 (solo policies nuevas, aditivas, sin tocar las existentes):
