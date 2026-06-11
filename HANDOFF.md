@@ -80,6 +80,32 @@
 
 ---
 
+### [2026-06-11] Producción en Línea — Fase 2 (RPCs de carga por sector, 0073)
+
+**Qué se hizo:** Migration 0073 — **16 RPCs `prod_rpc_*`** (`SECURITY DEFINER`, `SET search_path = public, pg_temp`, auth gate por `profiles.role`, `REVOKE anon/public` + `GRANT authenticated`). Todas reciben `p_payload jsonb` y devuelven `jsonb`. Aplicada en prod (Management API). **NO toca datos ni tablas existentes** (solo `CREATE OR REPLACE FUNCTION`).
+
+**RPCs por sector:**
+- **Jornada:** `abrir_jornada` (owner/admin/encargado; 1 por día, error si ya existe), `cerrar_jornada` (devuelve resumen de conteos), `get_jornada_hoy` (todos los roles prod).
+- **CNC:** `registrar_corte` (cnc/encargado/owner/admin; `piezas = GREATEST(hojas×rendimiento − desperdicio, 0)`; acredita `stock_pieza` de `placa.pieza_sku`; `editable_hasta = now()+24h`), `editar_corte` (cnc dentro de 24h, si no encargado/owner/admin; recalcula deltas, audita vía trigger).
+- **Melamina:** `registrar_melamina` (valida `stock_pieza ≥ terminadas+fallas`; consume `stock_pieza`, produce `stock_melamina`), `editar_melamina`.
+- **Pino:** `registrar_pino` (`tamano ∈ {chica,grande}`; suma `stock_patas.disponible/masilladas`), `editar_pino`.
+- **Embalaje:** `registrar_embalaje` (valida `stock_melamina` por receta + `stock_patas` por `patas_tipo/patas_cant`; consume ambos, produce `stock_terminado`; si `order_id` → `prod_pedido_estado` `listo_despacho`), `editar_embalaje` (solo encargado/owner/admin; deshace-viejo-aplica-nuevo).
+- **Solicitudes:** `crear_solicitud` (sectores+encargado), `gestionar_solicitud` (owner/admin/encargado; `aprobada_coord`/`recepcionada_admin`).
+- **Mantenimiento:** `reportar_mantenimiento` (todos; `urgencia ∈ {alta,media,baja}`), `gestionar_mantenimiento` (owner/admin).
+- **Stock:** `get_stock` (todos los roles prod; devuelve 4 arrays jsonb).
+
+**Cómo / decisiones (flags):**
+1. `jornada_id`: se toma de `p_payload`; si no viene, se resuelve la jornada **abierta** de hoy (error si no hay).
+2. Auditoría de `editar_*`: la genera el **trigger existente** `prod_fn_auditoria` (1 fila por campo); el RPC solo setea motivo/sector vía `set_config('prod.audit_motivo'/'prod.audit_sector', …, true)`. Sin INSERT manual (evita duplicados).
+3. Corte de placa **combinada**: acredita stock solo a la pieza primaria (`prod_placa.pieza_sku`); las de `prod_placa_pieza_extra` no se acreditan (brief: una sola).
+4. Deltas de `editar_*` aplicados crudos (pueden dejar stock negativo si ya se consumió).
+
+**Resultado — smoke BEGIN/ROLLBACK (0 datos commiteados):** maestros mínimos sembrados en la misma transacción (TAP001 / PLB001 rend 50 / MADZZ1 patas chica×4 / receta 1×TAP001), corrido como owner Noelia. Cadena verificada: corte 10 hojas → **500 piezas** → melamina 8+1 → `stock_pieza=491`, `stock_melamina=8` → pino chica 12/6 → `patas disp=12 mas=6` → embalaje 2u → `melamina=6`, `patas=4`, `terminado=2` → **`prod_v_armables=1`** (LEAST(6/1, 4/4)) → cerrar_jornada resumen 1 c/u. `RAISE EXCEPTION` forzó rollback; verificado **0 filas** en las 14 tablas `prod_*` post-rollback. Las 16 RPCs confirmadas por `pg_proc`.
+
+**⚠️ Nota:** aplicada vía Management API → **no** queda registrada en `supabase_migrations.schema_migrations` (igual que 0071/0072). El archivo `.sql` es la fuente de verdad en el repo.
+
+---
+
 ### [2026-06-10] Producción en Línea — Fase 1b (Edge Function import-skus)
 
 **Qué se hizo:** `supabase/functions/import-skus/index.ts` — Edge Function (Deno) que importa `sku para sistema.xlsx` a las tablas `prod_*`. **Escrita y pusheada, NO ejecutada todavía** (pendiente OK del Jefe para servirla/correrla).
