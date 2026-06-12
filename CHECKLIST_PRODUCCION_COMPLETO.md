@@ -185,7 +185,7 @@
 
 ## 3.1 CNC — azul #2563EB (4 tabs)
 ### Tab Inicio
-- [ ] 🔴📊 Resumen del día: Colecta+Flex unificados, espejo vivo (SKU, Modelo, Color, Total pendiente) — sin separar canal, sin prioridades *(Increment 2)*
+- [x] 🔴📊 Resumen del día: espejo de pedidos por producto (lee `prod_v_resumen_dia`, best-effort: si RLS lo bloquea, se oculta) — sin separar canal, sin prioridades
 - [x] Tabla Cortes del día: Placa | Hojas | Generadas | Netas *(lee prod_corte + prod_placa, join cliente)*
 - [x] Al pie: total de piezas netas que van a Melamina
 ### Tab Scan
@@ -194,16 +194,16 @@
 - [x] Campos: hojas cortadas + desperdicios
 - [x] ⚙️ Vista previa en vivo: piezas generadas (hojas×rend − desp), total neto para Melamina
 - [x] Botón "Agregar al reporte" → `prod_rpc_registrar_corte` → refresca Cortes del día
-### Tab Solicitud (→ aprueba coordinador → administración)
-- [ ] Fresas: Compresión (corte limpio doble cara) · Filo horario (cara superior) + cantidad + observación
-- [ ] Esponja: limpieza de guías + cantidad
-- [ ] Lubricantes: Aceite · Grasa · WD-40 + cantidad
-- [ ] Refrigerante: Agua destilada + cantidad
-- [ ] Maquinaria/Otros: texto libre
-### Tab Mantenimiento (→ aprueba coordinador → director)
-- [ ] Tipo: Mecánico · Eléctrico · Software/CNC · Temperatura · Ruido/vibración · Preventivo
-- [ ] Urgencia: Alta/Media/Baja
-- [ ] Máquina afectada + descripción libre
+### Tab Solicitud (→ aprueba coordinador → administración) ✅ `prod_rpc_crear_solicitud`
+- [x] Fresas: Compresión (doble cara) · Filo horario (cara superior) + cantidad (stepper)
+- [x] Esponja: limpieza de guías + cantidad
+- [x] Lubricantes: Aceite · Grasa · WD-40 + cantidad
+- [x] Refrigerante: Agua destilada + cantidad
+- [x] Maquinaria/Otros: texto libre
+### Tab Mantenimiento (→ aprueba coordinador → director) ✅ `prod_rpc_reportar_mantenimiento`
+- [x] Tipo: Mecánico · Eléctrico · Software/CNC · Temperatura · Ruido/vibración · Preventivo
+- [x] Urgencia: Alta/Media/Baja
+- [x] Máquina afectada + descripción libre
 
 ## 3.2 Melamina — violeta #534AB7 (4 tabs) — trabaja por TAP individual
 ### Tab Inicio
@@ -451,7 +451,7 @@
 | 0 — Cimientos + datos maestros | `[~]` | Backend ✅ · Excel pendiente de correr · 🔒 correcciones de datos pendientes |
 | 1 — Roles y accesos | `[x]` | Roles ✅ · RLS ✅ · guards frontend (router por sector) ✅ |
 | 2 — Motor de carga (RPCs) | `[x]` | 16 RPCs + cadena de stock + smoke ✅ |
-| 3 — Frontend por sector | `[~]` | CNC en curso: esqueleto + Inicio + Scan ✅ (Increment 1) · Solicitud/Mant + demanda = Increment 2 · faltan Melamina/Pino/Embalaje/Encargado |
+| 3 — Frontend por sector | `[~]` | **CNC completo** (Inicio+demanda · Scan · Solicitud · Mantenimiento) ✅ · faltan Melamina/Pino/Embalaje/Encargado (replicar patrón) |
 | 4 — Encadenamiento + Realtime | `[ ]` | — |
 | 5 — Explosión + optimizadores | `[ ]` | ⚠️ lo más complejo |
 | 6 — Stock y compras | `[ ]` | — |

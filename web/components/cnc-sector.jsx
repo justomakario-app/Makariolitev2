@@ -1,8 +1,9 @@
-/* ══ SECTOR CNC — Línea productiva (FASE 3 · Increment 1) ══════════════
+/* ══ SECTOR CNC — Línea productiva (FASE 3) ════════════════════════════
    Pantalla del operario CNC. Mobile-first ~430px, dark mode, azul #2563EB.
-   - Tab Inicio: cortes del día + total neto que va a Melamina.
-   - Tab Scan:   registrar corte (selección manual agrupada → registrar_corte).
-   - Tabs Solicitud / Mantenimiento: Increment 2.
+   - Tab Inicio:      resumen del día (demanda) + cortes del día + neto a Melamina.
+   - Tab Scan:        registrar corte (selección manual agrupada → registrar_corte).
+   - Tab Solicitud:   pedido de insumos del sector → crear_solicitud.
+   - Tab Mantenimiento: reporte de máquina → reportar_mantenimiento.
 
    Data layer aislada en window.LP_DATA (reutilizable por los otros sectores).
    Usa window.SUPA (cliente expuesto por data.js) — el JWT de sesión resuelve
@@ -34,13 +35,29 @@ window.LP_DATA = window.LP_DATA || {
     if (error) throw new Error(error.message);
     return data || [];
   },
+  async resumenDia() {
+    const { data, error } = await window.SUPA.from('prod_v_resumen_dia')
+      .select('producto_sku, nombre, color, pendiente').order('pendiente', { ascending: false });
+    if (error) throw new Error(error.message);
+    return data || [];
+  },
+  async crearSolicitud(payload) {
+    const { data, error } = await window.SUPA.rpc('prod_rpc_crear_solicitud', { p_payload: payload });
+    if (error) throw new Error(error.message);
+    return data;
+  },
+  async reportarMantenimiento(payload) {
+    const { data, error } = await window.SUPA.rpc('prod_rpc_reportar_mantenimiento', { p_payload: payload });
+    if (error) throw new Error(error.message);
+    return data;
+  },
 };
 
 /* ── Tokens dark del sector CNC ── */
 const CNC_UI = {
   accent:'#2563EB', accentSoft:'rgba(37,99,235,.14)', accentLine:'rgba(37,99,235,.32)',
   bg:'#0B0F1A', surface:'#121826', surface2:'#1A2236', border:'#232C42',
-  ink:'#F1F5F9', inkSoft:'#94A3B8', inkMuted:'#64748B', danger:'#F87171', ok:'#34D399',
+  ink:'#F1F5F9', inkSoft:'#94A3B8', inkMuted:'#64748B', danger:'#F87171', warn:'#FBBF24', ok:'#34D399',
   radius:16,
 };
 
@@ -54,6 +71,20 @@ function lpPlacaCat(sku) {
   return 'Otras';
 }
 const LP_CAT_ORDER = ['Blancas', 'Negras', 'Mármol', 'Combinadas', 'Otras'];
+
+/* Catálogos del sector (Solicitud / Mantenimiento) — brief CNC. */
+const CNC_SOLICITUD_CAT = [
+  { grupo:'Fresas',       items:['Fresa compresión (doble cara)', 'Fresa filo horario (cara superior)'] },
+  { grupo:'Esponja',      items:['Esponja limpieza de guías'] },
+  { grupo:'Lubricantes',  items:['Aceite', 'Grasa', 'WD-40'] },
+  { grupo:'Refrigerante', items:['Agua destilada'] },
+];
+const CNC_MANT_TIPOS = ['Mecánico', 'Eléctrico', 'Software/CNC', 'Temperatura', 'Ruido/vibración', 'Preventivo'];
+const LP_URGENCIAS = [
+  { id:'alta',  label:'Alta',  color:'#F87171' },
+  { id:'media', label:'Media', color:'#FBBF24' },
+  { id:'baja',  label:'Baja',  color:'#34D399' },
+];
 
 /* ── Reloj de la topbar ── */
 function LpClock() {
@@ -71,6 +102,7 @@ function CncSector() {
   const [jornada, setJornada] = useState(null);   // {jornada_id, fecha, estado} | null
   const [placas, setPlacas] = useState([]);
   const [cortes, setCortes] = useState([]);
+  const [demanda, setDemanda] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const placaMap = useMemo(() => {
@@ -84,13 +116,14 @@ function CncSector() {
     try {
       const j = await window.LP_DATA.jornadaHoy();
       setJornada(j);
-      const [pl, ct] = await Promise.all([
+      const [pl, ct, dm] = await Promise.all([
         window.LP_DATA.placas().catch(() => []),
         j && j.jornada_id ? window.LP_DATA.cortesDia(j.jornada_id).catch(() => []) : Promise.resolve([]),
+        window.LP_DATA.resumenDia().catch(() => []),
       ]);
-      setPlacas(pl); setCortes(ct);
+      setPlacas(pl); setCortes(ct); setDemanda(dm);
     } catch (err) {
-      toast.error(err?.message || 'No se pudo cargar el sector');
+      toast.error(err && err.message ? err.message : 'No se pudo cargar el sector');
     } finally { setLoading(false); }
   }, [toast]);
 
@@ -108,10 +141,10 @@ function CncSector() {
   const totalNeto = cortesView.reduce((s, c) => s + c.totales, 0);
 
   const NAV = [
-    { id:'inicio',  label:'Inicio',  icon:'home' },
-    { id:'scan',    label:'Scan',    icon:'qr' },
+    { id:'inicio',    label:'Inicio',    icon:'home' },
+    { id:'scan',      label:'Scan',      icon:'qr' },
     { id:'solicitud', label:'Solicitud', icon:'package' },
-    { id:'mant',    label:'Mant.',   icon:'tools' },
+    { id:'mant',      label:'Mant.',     icon:'tools' },
   ];
 
   return (
@@ -151,20 +184,14 @@ function CncSector() {
         {loading ? (
           <div style={{textAlign:'center', color:U.inkMuted, padding:'60px 0', fontSize:13}}>Cargando sector…</div>
         ) : tab === 'inicio' ? (
-          <CncInicio U={U} jornadaAbierta={jornadaAbierta} jornada={jornada} cortes={cortesView} totalNeto={totalNeto}/>
+          <CncInicio U={U} jornadaAbierta={jornadaAbierta} jornada={jornada} cortes={cortesView} totalNeto={totalNeto} demanda={demanda}/>
         ) : tab === 'scan' ? (
           <CncScan U={U} jornadaAbierta={jornadaAbierta} placas={placas}
                    onRegistrado={cargar} toast={toast} goInicio={() => setTab('inicio')}/>
+        ) : tab === 'solicitud' ? (
+          <CncSolicitud U={U} toast={toast}/>
         ) : (
-          <div style={{textAlign:'center', color:U.inkMuted, padding:'56px 16px'}}>
-            <Icon n={tab === 'solicitud' ? 'package' : 'tools'} s={30} c={U.inkMuted}/>
-            <h3 style={{color:U.ink, fontSize:17, fontWeight:800, margin:'14px 0 6px'}}>
-              {tab === 'solicitud' ? 'Solicitud de insumos' : 'Mantenimiento'}
-            </h3>
-            <p style={{fontSize:12.5, lineHeight:1.6, maxWidth:280, margin:'0 auto'}}>
-              En construcción — llega en el próximo incremento del sector CNC.
-            </p>
-          </div>
+          <CncMant U={U} toast={toast}/>
         )}
       </div>
 
@@ -189,7 +216,7 @@ function CncSector() {
 }
 
 /* ── Tab Inicio ── */
-function CncInicio({ U, jornadaAbierta, jornada, cortes, totalNeto }) {
+function CncInicio({ U, jornadaAbierta, jornada, cortes, totalNeto, demanda }) {
   return (
     <div>
       {!jornadaAbierta && (
@@ -199,6 +226,25 @@ function CncInicio({ U, jornadaAbierta, jornada, cortes, totalNeto }) {
           <div style={{fontSize:12.5, lineHeight:1.5, color:U.ink}}>
             {jornada ? 'La jornada de hoy está cerrada.' : 'Todavía no se abrió la jornada de hoy.'}
             <span style={{color:U.inkSoft}}> El encargado la gestiona — podés ver lo cargado pero no registrar cortes.</span>
+          </div>
+        </div>
+      )}
+
+      {/* Resumen del día (demanda viva) */}
+      {demanda && demanda.length > 0 && (
+        <div style={{marginBottom:18}}>
+          <h3 style={{fontSize:15, fontWeight:800, margin:'0 0 10px', color:U.ink}}>Resumen del día</h3>
+          <div style={{background:U.surface, border:`1px solid ${U.border}`, borderRadius:14, overflow:'hidden'}}>
+            {demanda.slice(0, 12).map((d, i) => (
+              <div key={d.producto_sku || i} style={{display:'flex', alignItems:'center', justifyContent:'space-between',
+                           padding:'10px 12px', borderBottom: i < Math.min(demanda.length, 12) - 1 ? `1px solid ${U.border}` : 'none'}}>
+                <div style={{minWidth:0, paddingRight:10}}>
+                  <div style={{fontSize:12.5, fontWeight:700, color:U.ink, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{d.nombre || d.producto_sku}</div>
+                  <div style={{fontSize:10.5, color:U.inkMuted}}>{d.producto_sku}{d.color ? ` · ${d.color}` : ''}</div>
+                </div>
+                <span style={{fontSize:15, fontWeight:800, color:U.accent, fontVariantNumeric:'tabular-nums'}}>{d.pendiente}</span>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -262,7 +308,7 @@ function CncScan({ U, jornadaAbierta, placas, onRegistrado, toast, goInicio }) {
     return LP_CAT_ORDER.filter(k => g[k]).map(k => ({ cat:k, items:g[k] }));
   }, [placas]);
 
-  const rend = Number(sel?.rendimiento) || 0;
+  const rend = Number(sel && sel.rendimiento) || 0;
   const nH = parseInt(hojas, 10); const nD = parseInt(desp, 10) || 0;
   const preview = sel && Number.isFinite(nH) && nH > 0 ? Math.max(nH * rend - nD, 0) : null;
   const puedeEnviar = jornadaAbierta && sel && Number.isFinite(nH) && nH > 0 && !saving;
@@ -278,7 +324,7 @@ function CncScan({ U, jornadaAbierta, placas, onRegistrado, toast, goInicio }) {
       await onRegistrado();
       goInicio();
     } catch (err) {
-      toast.error(err?.message || 'No se pudo registrar el corte');
+      toast.error(err && err.message ? err.message : 'No se pudo registrar el corte');
     } finally { setSaving(false); }
   };
 
@@ -322,7 +368,7 @@ function CncScan({ U, jornadaAbierta, placas, onRegistrado, toast, goInicio }) {
           <div style={{fontSize:11, fontWeight:700, color:U.inkSoft, marginBottom:7}}>{g.cat}</div>
           <div style={{display:'flex', flexWrap:'wrap', gap:8}}>
             {g.items.map(p => {
-              const on = sel?.sku === p.sku;
+              const on = sel && sel.sku === p.sku;
               return (
                 <button key={p.sku} onClick={() => setSel(p)}
                   style={{border:`1px solid ${on ? U.accent : U.border}`, background: on ? U.accentSoft : U.surface,
@@ -384,6 +430,172 @@ function CncScan({ U, jornadaAbierta, placas, onRegistrado, toast, goInicio }) {
       )}
     </div>
   );
+}
+
+/* ── Tab Solicitud (pedido de insumos del sector → crear_solicitud) ── */
+function CncSolicitud({ U, toast }) {
+  const [qty, setQty] = useState({});      // nombre -> cantidad
+  const [otros, setOtros] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const bump = (nombre, delta) => setQty(q => {
+    const nq = Object.assign({}, q);
+    const n = Math.max((nq[nombre] || 0) + delta, 0);
+    if (n === 0) delete nq[nombre]; else nq[nombre] = n;
+    return nq;
+  });
+
+  const seleccionados = Object.keys(qty);
+  const hayAlgo = seleccionados.length > 0 || otros.trim().length > 0;
+
+  const enviar = async () => {
+    if (!hayAlgo || saving) return;
+    setSaving(true);
+    try {
+      const items = seleccionados.map(n => ({ nombre: n, cantidad: qty[n] }));
+      if (otros.trim()) items.push({ nombre: 'Otros: ' + otros.trim(), cantidad: 1 });
+      await window.LP_DATA.crearSolicitud({ sector: 'cnc', items });
+      toast.success('Solicitud enviada al coordinador');
+      setQty({}); setOtros('');
+    } catch (err) {
+      toast.error(err && err.message ? err.message : 'No se pudo enviar la solicitud');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div>
+      <h3 style={{fontSize:15, fontWeight:800, margin:'0 0 4px', color:U.ink}}>Solicitud de insumos</h3>
+      <p style={{fontSize:11.5, color:U.inkMuted, margin:'0 0 16px'}}>Tocá para agregar. Va al coordinador → administración.</p>
+
+      {CNC_SOLICITUD_CAT.map(cat => (
+        <div key={cat.grupo} style={{marginBottom:14}}>
+          <div style={{fontSize:10, fontWeight:800, letterSpacing:'.1em', textTransform:'uppercase', color:U.inkMuted, marginBottom:8}}>{cat.grupo}</div>
+          <div style={{background:U.surface, border:`1px solid ${U.border}`, borderRadius:14, overflow:'hidden'}}>
+            {cat.items.map((it, i) => {
+              const n = qty[it] || 0;
+              return (
+                <div key={it} style={{display:'flex', alignItems:'center', justifyContent:'space-between',
+                             padding:'11px 12px', borderBottom: i < cat.items.length - 1 ? `1px solid ${U.border}` : 'none'}}>
+                  <span style={{fontSize:12.5, color: n > 0 ? U.ink : U.inkSoft, fontWeight: n > 0 ? 700 : 500, paddingRight:10}}>{it}</span>
+                  {n > 0 ? (
+                    <div style={{display:'flex', alignItems:'center', gap:10}}>
+                      <button onClick={() => bump(it, -1)} style={stepBtn(U)}>−</button>
+                      <span style={{minWidth:18, textAlign:'center', fontWeight:800, color:U.accent, fontVariantNumeric:'tabular-nums'}}>{n}</span>
+                      <button onClick={() => bump(it, 1)} style={stepBtn(U)}>+</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => bump(it, 1)}
+                      style={{border:`1px solid ${U.border}`, background:U.surface2, color:U.inkSoft, borderRadius:9,
+                              width:30, height:30, fontSize:18, fontWeight:700, cursor:'pointer', lineHeight:1}}>+</button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+
+      <div style={{marginBottom:16}}>
+        <div style={{fontSize:10, fontWeight:800, letterSpacing:'.1em', textTransform:'uppercase', color:U.inkMuted, marginBottom:8}}>Maquinaria / Otros</div>
+        <textarea value={otros} onChange={e => setOtros(e.target.value)} rows={2} placeholder="Detalle libre…"
+          style={{width:'100%', boxSizing:'border-box', background:U.surface2, border:`1px solid ${U.border}`,
+                  borderRadius:12, color:U.ink, fontSize:13, padding:'11px 12px', outline:'none', resize:'vertical', fontFamily:'inherit'}}/>
+      </div>
+
+      <button onClick={enviar} disabled={!hayAlgo || saving}
+        style={{width:'100%', padding:'15px', borderRadius:14, border:'none',
+                background: hayAlgo && !saving ? U.accent : U.surface2, color: hayAlgo && !saving ? '#fff' : U.inkMuted,
+                fontSize:15, fontWeight:800, cursor: hayAlgo && !saving ? 'pointer' : 'not-allowed',
+                display:'flex', alignItems:'center', justifyContent:'center', gap:8}}>
+        <Icon n="send" s={17} c={hayAlgo && !saving ? '#fff' : U.inkMuted}/>
+        {saving ? 'Enviando…' : 'Enviar solicitud'}
+      </button>
+    </div>
+  );
+}
+
+/* ── Tab Mantenimiento (reporte de máquina → reportar_mantenimiento) ── */
+function CncMant({ U, toast }) {
+  const [tipo, setTipo] = useState('');
+  const [urg, setUrg] = useState('media');
+  const [maquina, setMaquina] = useState('');
+  const [desc, setDesc] = useState('');
+  const [saving, setSaving] = useState(false);
+  const puede = tipo && desc.trim() && !saving;
+
+  const enviar = async () => {
+    if (!puede) return;
+    setSaving(true);
+    try {
+      await window.LP_DATA.reportarMantenimiento({ sector:'cnc', tipo, urgencia: urg, maquina: maquina.trim(), descripcion: desc.trim() });
+      toast.success('Reporte enviado al coordinador');
+      setTipo(''); setUrg('media'); setMaquina(''); setDesc('');
+    } catch (err) {
+      toast.error(err && err.message ? err.message : 'No se pudo enviar el reporte');
+    } finally { setSaving(false); }
+  };
+
+  const fieldLabel = { fontSize:10, fontWeight:800, letterSpacing:'.1em', textTransform:'uppercase', color:U.inkMuted, marginBottom:8 };
+  const txt = { width:'100%', boxSizing:'border-box', background:U.surface2, border:`1px solid ${U.border}`,
+                borderRadius:12, color:U.ink, fontSize:13, padding:'12px', outline:'none', fontFamily:'inherit' };
+
+  return (
+    <div>
+      <h3 style={{fontSize:15, fontWeight:800, margin:'0 0 4px', color:U.ink}}>Reporte de mantenimiento</h3>
+      <p style={{fontSize:11.5, color:U.inkMuted, margin:'0 0 16px'}}>Va al coordinador → director.</p>
+
+      <div style={fieldLabel}>Tipo</div>
+      <div style={{display:'flex', flexWrap:'wrap', gap:8, marginBottom:16}}>
+        {CNC_MANT_TIPOS.map(t => {
+          const on = tipo === t;
+          return (
+            <button key={t} onClick={() => setTipo(t)}
+              style={{border:`1px solid ${on ? U.accent : U.border}`, background: on ? U.accentSoft : U.surface,
+                      color: on ? U.ink : U.inkSoft, borderRadius:999, padding:'8px 13px', fontSize:12, fontWeight:700, cursor:'pointer'}}>
+              {t}
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={fieldLabel}>Urgencia</div>
+      <div style={{display:'flex', gap:8, marginBottom:16}}>
+        {LP_URGENCIAS.map(u => {
+          const on = urg === u.id;
+          return (
+            <button key={u.id} onClick={() => setUrg(u.id)}
+              style={{flex:1, border:`1px solid ${on ? u.color : U.border}`, background: on ? `${u.color}22` : U.surface,
+                      color: on ? u.color : U.inkSoft, borderRadius:11, padding:'10px', fontSize:12.5, fontWeight:800, cursor:'pointer'}}>
+              {u.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={fieldLabel}>Máquina afectada</div>
+      <input value={maquina} onChange={e => setMaquina(e.target.value)} placeholder="Ej. router CNC 1"
+             style={Object.assign({}, txt, { marginBottom:16 })}/>
+
+      <div style={fieldLabel}>Descripción</div>
+      <textarea value={desc} onChange={e => setDesc(e.target.value)} rows={3} placeholder="¿Qué pasó?"
+                style={Object.assign({}, txt, { resize:'vertical', marginBottom:18 })}/>
+
+      <button onClick={enviar} disabled={!puede}
+        style={{width:'100%', padding:'15px', borderRadius:14, border:'none',
+                background: puede ? U.accent : U.surface2, color: puede ? '#fff' : U.inkMuted,
+                fontSize:15, fontWeight:800, cursor: puede ? 'pointer' : 'not-allowed',
+                display:'flex', alignItems:'center', justifyContent:'center', gap:8}}>
+        <Icon n="send" s={17} c={puede ? '#fff' : U.inkMuted}/>
+        {saving ? 'Enviando…' : 'Enviar reporte'}
+      </button>
+    </div>
+  );
+}
+
+/* stepper redondo reutilizable */
+function stepBtn(U) {
+  return { border:`1px solid ${U.border}`, background:U.surface2, color:U.ink, borderRadius:8,
+           width:28, height:28, fontSize:17, fontWeight:700, cursor:'pointer', lineHeight:1 };
 }
 
 window.CncSector = CncSector;

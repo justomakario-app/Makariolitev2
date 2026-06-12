@@ -80,6 +80,23 @@
 
 ---
 
+### [2026-06-12] Producción en Línea — Fase 3 · Sector CNC (Increment 2: Solicitud + Mantenimiento + demanda)
+
+**Qué se hizo:** se completó el **Sector CNC** — se sumaron las tabs **Solicitud** y **Mantenimiento** (funcionales) y el panel **"Resumen del día"** (demanda) en Tab Inicio. Con esto el sector CNC queda entero (4 tabs).
+
+**Cómo / decisiones:**
+- **`window.LP_DATA`** ampliada: `resumenDia` (lee `prod_v_resumen_dia`), `crearSolicitud` (`prod_rpc_crear_solicitud`), `reportarMantenimiento` (`prod_rpc_reportar_mantenimiento`).
+- **Tab Solicitud:** catálogo de la brief CNC (Fresas: compresión / filo horario · Esponja · Lubricantes: aceite/grasa/WD-40 · Refrigerante: agua destilada) con stepper de cantidad por ítem + textarea "Maquinaria/Otros". Arma `items[]` y crea UNA solicitud `sector='cnc'` estado pendiente → coordinador → administración.
+- **Tab Mantenimiento:** tipo (6 chips: Mecánico/Eléctrico/Software-CNC/Temperatura/Ruido-vibración/Preventivo), urgencia (Alta/Media/Baja con color), máquina afectada + descripción → `reportar_mantenimiento` (urgencia validada `alta|media|baja` por el RPC) → coordinador → director.
+- **Panel "Resumen del día"** en Inicio: lee `prod_v_resumen_dia` (producto, color, pendiente) **best-effort** — si la RLS de la vista bloquea al rol cnc, se captura el error y el panel simplemente no se muestra (no rompe la pantalla).
+- Mantiene la disciplina anti-Babel (sin `<>`/`??`/spread; `Object.assign` para merge de estilos). Espejo web/mobile byte-idéntico (`cp`). Cache-buster `cnc-sector.jsx?v=2`.
+
+**Para qué:** el operario CNC ya tiene su herramienta completa: ve demanda + lo cortado, carga cortes, pide insumos y reporta máquinas — todo desde el celular, con la lógica en el backend.
+
+**Técnico:** reescritura de `web/components/cnc-sector.jsx` + espejo `mobile/` (componentes `CncSolicitud`, `CncMant`, helper `stepBtn`, catálogos `CNC_SOLICITUD_CAT`/`CNC_MANT_TIPOS`/`LP_URGENCIAS`). Sin cambios de backend. **Siguiente:** replicar el patrón a Melamina (violeta), Pino (verde), Embalaje (coral) y Panel del Encargado (slate).
+
+---
+
 ### [2026-06-12] Producción en Línea — Fase 3 · Sector CNC (Increment 1: esqueleto + Inicio + Scan)
 
 **Qué se hizo:** primera pantalla real de operario — **Sector CNC** (`cnc-sector.jsx`, web + mobile). Mobile-first ~430px, **dark mode**, azul `#2563EB`. Increment 1 entrega el esqueleto común + Tab Inicio + Tab Scan funcional (registrar corte de punta a punta contra las RPCs).
