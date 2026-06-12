@@ -109,8 +109,8 @@
   - [x] owner/admin: INSERT en tablas maestras
   - [x] prod_solicitud: coordinador INSERT+UPDATE propio; owner/admin aprueban *(ajuste post-Sebas)*
   - [x] prod_embalaje: coordinador embalaje puede INSERT+UPDATE+DELETE sin límite 24h *(ajuste post-Sebas, migration 0072)*
-- [ ] 🔒 Guard en frontend: usuario sin rol de producción ve la vista actual (vacía) sin cambios
-- [ ] Guard que decide qué pantalla de sector se muestra según profiles.role
+- [x] 🔒 Guard en frontend: usuario sin rol de producción ve la vista actual (vacía) sin cambios — el tab "Línea productiva" cae al `ProximamentePlaceholder` genérico para roles sin sector *(produccion-hub.jsx)*
+- [x] Guard que decide qué pantalla de sector se muestra según profiles.role — router `LineaProductivaGuard` + `SECTOR_THEME` (cnc/melamina/pino/embalaje/encargado/owner-admin) con la paleta oficial; placeholders por sector listos para llenar en Fase 3. Espejo web + mobile, cache-buster `?v=2`
 
 ---
 
@@ -449,7 +449,7 @@
 | Fase | Estado | Detalle |
 |------|--------|---------|
 | 0 — Cimientos + datos maestros | `[~]` | Backend ✅ · Excel pendiente de correr · 🔒 correcciones de datos pendientes |
-| 1 — Roles y accesos | `[~]` | RLS ✅ · guard frontend pendiente |
+| 1 — Roles y accesos | `[x]` | Roles ✅ · RLS ✅ · guards frontend (router por sector) ✅ |
 | 2 — Motor de carga (RPCs) | `[x]` | 16 RPCs + cadena de stock + smoke ✅ |
 | 3 — Frontend por sector | `[ ]` | Siguiente gran bloque |
 | 4 — Encadenamiento + Realtime | `[ ]` | — |

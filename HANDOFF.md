@@ -80,6 +80,25 @@
 
 ---
 
+### [2026-06-12] Producción en Línea — Fase 1 (guards de rol en frontend · router por sector)
+
+**Qué se hizo:** el tab **"Línea productiva"** del hub de producción dejó de ser un `Próximamente` genérico y pasó a ser un **router por rol**. Cada rol de producción ve la identidad de SU sector; los roles sin producción ven el placeholder de siempre (sin cambios). Cierra los 2 ítems de guards de la Fase 1 del checklist.
+
+**Por qué:** era el prerrequisito de la Fase 3 (frontend por sector) y un guard pedido explícitamente: "qué pantalla de sector se muestra según `profiles.role`". Sin esto, no hay punto de entrada por sector y la Fase 3 no tiene dónde colgar cada pantalla.
+
+**Cómo / decisiones:**
+- Implementado **inline en `produccion-hub.jsx`** (web + mobile) para no tocar los includes del HTML ni agregar archivos nuevos. Cambio 100% aditivo.
+- `SECTOR_THEME`: mapa rol → `{label, color, icon, desc}` con la **paleta oficial de la brief** (CNC azul `#2563EB`, Melamina violeta `#534AB7`, Pino verde `#0F6E56`, Embalaje coral `#993C1D`, Encargado/owner/admin slate `#2E4057`).
+- `LineaProductivaGuard({ role })`: si el rol está en el mapa → panel de sector (badge con color de marca + icono + nombre + "En construcción · Fase 3"); si no → `ProximamentePlaceholder` genérico (guard: rol sin producción no ve nada nuevo).
+- Los paneles por sector son **placeholders premium listos para llenar en Fase 3** (no son las pantallas finales — esas se construyen sector por sector, CNC primero).
+- Verificado: JSX balanceado, sin colisión de nombres en el scope compartido de scripts clásicos (Babel-in-browser), espejo web/mobile idéntico salvo el padding del contenedor.
+
+**Para qué:** dar el esqueleto de navegación por rol del módulo productivo, de modo que cuando se construya cada pantalla de sector (Fase 3) solo haya que reemplazar el placeholder correspondiente, sin tocar el ruteo ni los guards.
+
+**Técnico:** `web/components/produccion-hub.jsx` + `mobile/components/produccion-hub.jsx` (helper `SECTOR_THEME` + `LineaProductivaGuard`, branch `tab === 'linea-prod'`). Cache-buster `produccion-hub.jsx?v=1 → ?v=2` en `web/Macario Lite.html` y `mobile/index.html`. Sin cambios de backend.
+
+---
+
 ### [2026-06-12] Producción en Línea — Fase 0.2 (capa de normalización de datos del Excel)
 
 **Qué se hizo:** se agregó una **capa de normalización declarativa en `import-skus`** (`SKU_FIXES` + helper `fixSku`) que corrige al vuelo, durante la importación, los **SKUs duplicados del Excel** sin tocar el archivo original de Seba. Resuelve los ítems #1, #2 y #8 de la sección 0.2 del checklist.
