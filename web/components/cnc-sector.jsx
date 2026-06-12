@@ -43,6 +43,7 @@ function CncSector() {
   const [cortes, setCortes] = useState([]);
   const [demanda, setDemanda] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(null);
 
   const placaMap = useMemo(() => {
     const m = {}; for (const p of placas) m[p.sku] = p; return m;
@@ -74,12 +75,13 @@ function CncSector() {
     const generadas = (Number(c.hojas) || 0) * rend;
     const totales = Math.max(generadas - (Number(c.desperdicio) || 0), 0);
     return { id: c.id, placa_sku: c.placa_sku, hojas: c.hojas, desperdicio: c.desperdicio,
-             nombre: p.nombre || c.placa_sku, material: p.material || '', generadas, totales };
+             nombre: p.nombre || c.placa_sku, material: p.material || '', generadas, totales,
+             editable: c.editable_hasta ? (new Date(c.editable_hasta) > new Date()) : false };
   }), [cortes, placaMap]);
   const totalNeto = cortesView.reduce((s, c) => s + c.totales, 0);
 
   const NAV = [
-    { id:'inicio',    label:'Inicio',    icon:'home' },
+    { id:'inicio',    label:'Inicio',    icon:'home', badge: demanda.length },
     { id:'scan',      label:'Scan',      icon:'qr' },
     { id:'solicitud', label:'Solicitud', icon:'package' },
     { id:'mant',      label:'Mant.',     icon:'tools' },
@@ -122,7 +124,7 @@ function CncSector() {
         {loading ? (
           <div style={{textAlign:'center', color:U.inkMuted, padding:'60px 0', fontSize:13}}>Cargando sector…</div>
         ) : tab === 'inicio' ? (
-          <CncInicio U={U} jornadaAbierta={jornadaAbierta} jornada={jornada} cortes={cortesView} totalNeto={totalNeto} demanda={demanda}/>
+          <CncInicio U={U} jornadaAbierta={jornadaAbierta} jornada={jornada} cortes={cortesView} totalNeto={totalNeto} demanda={demanda} onEdit={setEditing}/>
         ) : tab === 'scan' ? (
           <CncScan U={U} jornadaAbierta={jornadaAbierta} placas={placas}
                    onRegistrado={cargar} toast={toast} goInicio={() => setTab('inicio')}/>
@@ -143,18 +145,38 @@ function CncSector() {
                       padding:'10px 4px 11px', display:'flex', flexDirection:'column', alignItems:'center', gap:4,
                       color: on ? U.accent : U.inkMuted, borderTop:`2px solid ${on ? U.accent : 'transparent'}`,
                       marginTop:-1, transition:'color .15s ease'}}>
-              <Icon n={n.icon} s={19} c={on ? U.accent : U.inkMuted}/>
+              <span style={{position:'relative', display:'flex'}}>
+                <Icon n={n.icon} s={19} c={on ? U.accent : U.inkMuted}/>
+                {n.badge ? (
+                  <span style={{position:'absolute', top:-6, right:-10, minWidth:15, height:15, padding:'0 3px',
+                                borderRadius:999, background:U.accent, color:'#fff', fontSize:9, fontWeight:800,
+                                display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1}}>{n.badge}</span>
+                ) : null}
+              </span>
               <span style={{fontSize:10, fontWeight:on ? 800 : 600, letterSpacing:'.02em'}}>{n.label}</span>
             </button>
           );
         })}
       </div>
+
+      {editing && (
+        <LpEditModal U={U} titulo="Editar corte"
+          campos={[{ key:'hojas', label:'Hojas' }, { key:'desperdicio', label:'Desperdicio' }]}
+          inicial={{ hojas: editing.hojas, desperdicio: editing.desperdicio }}
+          onCerrar={() => setEditing(null)}
+          onGuardar={async (v, motivo) => {
+            try {
+              await window.LP_DATA.editarCorte({ id: editing.id, hojas: v.hojas, desperdicio: v.desperdicio, motivo });
+              toast.success('Corte actualizado'); setEditing(null); await cargar();
+            } catch (err) { toast.error(err && err.message ? err.message : 'No se pudo editar'); }
+          }}/>
+      )}
     </div>
   );
 }
 
 /* ── Tab Inicio ── */
-function CncInicio({ U, jornadaAbierta, jornada, cortes, totalNeto, demanda }) {
+function CncInicio({ U, jornadaAbierta, jornada, cortes, totalNeto, demanda, onEdit }) {
   return (
     <div>
       {!jornadaAbierta && (
@@ -206,11 +228,13 @@ function CncInicio({ U, jornadaAbierta, jornada, cortes, totalNeto, demanda }) {
             <span style={{textAlign:'right'}}>Gener.</span><span style={{textAlign:'right'}}>Netas</span>
           </div>
           {cortes.map(c => (
-            <div key={c.id} style={{display:'grid', gridTemplateColumns:'1fr 46px 56px 56px', gap:4,
-                         padding:'11px 12px', alignItems:'center', borderBottom:`1px solid ${U.border}`, fontSize:12.5}}>
+            <div key={c.id} onClick={c.editable ? () => onEdit(c) : undefined}
+                 style={{display:'grid', gridTemplateColumns:'1fr 46px 56px 56px', gap:4,
+                         padding:'11px 12px', alignItems:'center', borderBottom:`1px solid ${U.border}`, fontSize:12.5,
+                         cursor: c.editable ? 'pointer' : 'default'}}>
               <div style={{minWidth:0}}>
                 <div style={{fontWeight:700, color:U.ink, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{c.nombre}</div>
-                <div style={{fontSize:10.5, color:U.inkMuted}}>{c.placa_sku}{c.desperdicio ? ` · ${c.desperdicio} desp.` : ''}</div>
+                <div style={{fontSize:10.5, color:U.inkMuted}}>{c.placa_sku}{c.desperdicio ? ` · ${c.desperdicio} desp.` : ''}{c.editable ? ' · ✎ editar' : ''}</div>
               </div>
               <span style={{textAlign:'right', fontVariantNumeric:'tabular-nums', color:U.inkSoft}}>{c.hojas}</span>
               <span style={{textAlign:'right', fontVariantNumeric:'tabular-nums', color:U.inkSoft}}>{c.generadas}</span>
@@ -238,6 +262,7 @@ function CncScan({ U, jornadaAbierta, placas, onRegistrado, toast, goInicio }) {
   const [hojas, setHojas] = useState('');
   const [desp, setDesp] = useState('');
   const [saving, setSaving] = useState(false);
+  const [scanning, setScanning] = useState(false);
 
   const grupos = useMemo(() => {
     const g = {};
@@ -285,10 +310,11 @@ function CncScan({ U, jornadaAbierta, placas, onRegistrado, toast, goInicio }) {
 
   return (
     <div>
-      <button disabled style={{width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:9,
-                    background:U.surface, border:`1px dashed ${U.border}`, borderRadius:14, color:U.inkMuted,
-                    padding:'13px', fontSize:12.5, fontWeight:700, cursor:'not-allowed', marginBottom:18}}>
-        <Icon n="qr" s={17} c={U.inkMuted}/> Escanear QR de placa · próximamente
+      <button onClick={() => window.QrScanner ? setScanning(true) : toast.info('El escáner no está disponible en este dispositivo')}
+              style={{width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:9,
+                    background:U.accentSoft, border:`1px solid ${U.accentLine}`, borderRadius:14, color:U.accent,
+                    padding:'13px', fontSize:12.5, fontWeight:700, cursor:'pointer', marginBottom:18}}>
+        <Icon n="qr" s={17} c={U.accent}/> Escanear QR de placa
       </button>
 
       <div style={{fontSize:10, fontWeight:800, letterSpacing:'.12em', textTransform:'uppercase', color:U.inkMuted, marginBottom:10}}>
@@ -362,6 +388,19 @@ function CncScan({ U, jornadaAbierta, placas, onRegistrado, toast, goInicio }) {
             {saving ? 'Registrando…' : 'Agregar al reporte'}
           </button>
         </div>
+      )}
+
+      {scanning && (
+        <LpQrScan U={U} onClose={() => setScanning(false)}
+          onDetect={(text) => {
+            let sku = text || '';
+            if (sku.indexOf('·') >= 0) sku = sku.split('·').pop().trim();
+            if (sku.indexOf(' ') >= 0) sku = sku.split(' ').pop().trim();
+            const p = placas.find(x => x.sku === sku);
+            setScanning(false);
+            if (p) { setSel(p); toast.success(`Placa ${sku}`); }
+            else { toast.error(`SKU no reconocido: ${sku}`); }
+          }}/>
       )}
     </div>
   );

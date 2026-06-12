@@ -176,15 +176,15 @@
 ## 3.0 Esqueleto común
 - [x] 🔒 Topbar: pill del sector (color + indicador 🔴 "en vivo"), reloj, nombre sector, estado de jornada *(CNC ✅)*
 - [x] Navegación inferior fija 4 ítems (Inicio · Scan · Solicitud · Mant.) con color del sector en activo *(CNC ✅)*
-- [ ] Badge numérico en nav cuando hay cargas pendientes
+- [x] Badge numérico en nav (Inicio) cuando hay prioridades pendientes — CNC/Melamina/Embalaje
 - [x] Banners de stock/prioridad reutilizables (color por origen) — implementados por sector
 - [x] ⚙️ Vista previa en vivo: cada carga muestra qué genera y a quién alimenta antes de confirmar
 - [x] Mensajes de confirmación al enviar *(toast)*
 - [x] 🔒 Guard de rol que decide qué sector renderiza *(Fase 1, produccion-hub)*
 - [x] Áreas táctiles grandes, botones de cantidad amplios
 - [x] 🎨 Tokens dark + colores de sector alineados al **Brief Producción §15** (paleta exacta: bg #0C0C0E, superficie #1A1A1D, éxito #00D68F, alerta #FFB020, error #FF4060; CNC #2563EB · Melamina #534AB7 · Embalaje #993C1D · Pino #0F6E56). Totales netos en verde Éxito.
-- [ ] ✏️ **Edición de la carga propia dentro de 24h desde el frontend** del sector — las RPCs `editar_*` (0073) están listas; falta la UI de "mis cargas de hoy" + modal de edición (regla §17.5)
-- [ ] 📷 Scan por cámara (QR de placa/pieza/producto) — hoy es stub "próximamente" en los 4 sectores; falta integrar lectura de QR
+- [x] ✏️ **Edición de la carga propia dentro de 24h desde el frontend** (regla §17.5) — `LpEditModal` genérico; las filas "del día" dentro de la ventana muestran "✎ editar" y llaman `editar_corte/melamina/pino`. *(Embalaje: la corrección la hace el encargado, por diseño del 0073.)*
+- [x] 📷 Scan por cámara (QR) — `LpQrScan` reusa `window.QrScanner` (lectura única) en CNC/Melamina/Embalaje; matchea el SKU y selecciona. Pino es a granel (sin QR). En web, si no hay lib, degrada con aviso.
 
 ## 3.1 CNC — azul #2563EB (4 tabs)
 ### Tab Inicio
@@ -192,7 +192,7 @@
 - [x] Tabla Cortes del día: Placa | Hojas | Generadas | Netas *(lee prod_corte + prod_placa, join cliente)*
 - [x] Al pie: total de piezas netas que van a Melamina
 ### Tab Scan
-- [ ] Cámara escanea QR del SKU de placa (trae nombre, color, rendimiento automático) *(stub "próximamente"; Increment 2)*
+- [x] Cámara escanea QR del SKU de placa → selecciona la placa (`LpQrScan` + `window.QrScanner`)
 - [x] Alternativa manual: selección agrupada (blancas / negras / mármol / combinadas)
 - [x] Campos: hojas cortadas + desperdicios
 - [x] ⚙️ Vista previa en vivo: piezas generadas (hojas×rend − desp), total neto para Melamina
@@ -216,7 +216,7 @@
 - [x] ⚙️ Solo muestra lo que falta (filtra `falta > 0`)
 - [x] Tabla Piezas terminadas: Pieza | Terminadas | Fallas | Netas + total para Embalaje
 ### Tab Scan
-- [ ] QR de pieza (TAP) — stub "próximamente" · carga manual ✅
+- [x] QR de pieza (TAP) → selecciona la pieza · carga manual ✅
 - [x] Al elegir pieza, muestra crudo disponible de CNC
 - [x] Campos: terminadas + fallas/roturas
 - [x] 🔍 Valida que no exceda stock crudo (cliente + RPC)
@@ -259,7 +259,7 @@
 - [x] 🔴 Stock "Patas · de Pino" (verde) (`stock_patas`)
 - [x] Tabla "Embalados hoy": Producto | Canal | Embalados + total listos para despacho
 ### Tab Scan (armar producto)
-- [ ] QR del producto (MAD) — stub "próximamente" · selección manual ✅
+- [x] QR del producto (MAD) → selecciona el producto · selección manual ✅
 - [x] 🔍⚙️ VERIFICACIÓN DE COMPONENTES: checklist ✓/✗ por tapa (receta) + patas + kit (con stock have/need)
 - [x] ⚙️ Armables automático (cuello de botella) desde `prod_v_armables`
 - [x] Selector de cantidad a armar (stepper, tope = armables)
@@ -457,7 +457,7 @@
 | 0 — Cimientos + datos maestros | `[~]` | Backend ✅ · Excel pendiente de correr · 🔒 correcciones de datos pendientes |
 | 1 — Roles y accesos | `[x]` | Roles ✅ · RLS ✅ · guards frontend (router por sector) ✅ |
 | 2 — Motor de carga (RPCs) | `[x]` | 16 RPCs + cadena de stock + smoke ✅ |
-| 3 — Frontend por sector | `[~]` | **4 sectores de operario ✅** (CNC · Melamina · Pino · Embalaje) · falta Panel del Encargado (Fase 7) y QR de cámara (diferido) |
+| 3 — Frontend por sector | `[x]` | **4 sectores de operario completos** (CNC · Melamina · Pino · Embalaje) + edición 24h + badges + QR cámara + tokens §15. Falta solo el Panel del Encargado (Fase 7, pantalla aparte) |
 | 4 — Encadenamiento + Realtime | `[ ]` | — |
 | 5 — Explosión + optimizadores | `[ ]` | ⚠️ lo más complejo |
 | 6 — Stock y compras | `[ ]` | — |

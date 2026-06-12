@@ -74,7 +74,7 @@ function EmbalajeSector() {
   const totalEmbalado = registros.reduce((s, r) => s + (Number(r.unidades) || 0), 0);
 
   const NAV = [
-    { id:'inicio',    label:'Inicio',    icon:'home' },
+    { id:'inicio',    label:'Inicio',    icon:'home', badge: demanda.filter(d => (Number(d.pendiente) || 0) > 0).length },
     { id:'scan',      label:'Armar',     icon:'package-check' },
     { id:'solicitud', label:'Solicitud', icon:'package' },
   ];
@@ -136,7 +136,14 @@ function EmbalajeSector() {
                       padding:'10px 4px 11px', display:'flex', flexDirection:'column', alignItems:'center', gap:4,
                       color: on ? U.accent : U.inkMuted, borderTop:`2px solid ${on ? U.accent : 'transparent'}`,
                       marginTop:-1, transition:'color .15s ease'}}>
-              <Icon n={n.icon} s={19} c={on ? U.accent : U.inkMuted}/>
+              <span style={{position:'relative', display:'flex'}}>
+                <Icon n={n.icon} s={19} c={on ? U.accent : U.inkMuted}/>
+                {n.badge ? (
+                  <span style={{position:'absolute', top:-6, right:-10, minWidth:15, height:15, padding:'0 3px',
+                                borderRadius:999, background:U.accent, color:'#fff', fontSize:9, fontWeight:800,
+                                display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1}}>{n.badge}</span>
+                ) : null}
+              </span>
               <span style={{fontSize:10, fontWeight:on ? 800 : 600, letterSpacing:'.02em'}}>{n.label}</span>
             </button>
           );
@@ -273,6 +280,7 @@ function EmbScan({ U, jornadaAbierta, productos, armMap, melMap, patasMap, onReg
   const [receta, setReceta] = useState([]);
   const [loadingRec, setLoadingRec] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [scanning, setScanning] = useState(false);
 
   const armMax = sel ? (armMap[sel.sku] || 0) : 0;
 
@@ -333,10 +341,11 @@ function EmbScan({ U, jornadaAbierta, productos, armMap, melMap, patasMap, onReg
 
   return (
     <div>
-      <button disabled style={{width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:9,
-                    background:U.surface, border:`1px dashed ${U.border}`, borderRadius:14, color:U.inkMuted,
-                    padding:'13px', fontSize:12.5, fontWeight:700, cursor:'not-allowed', marginBottom:18}}>
-        <Icon n="qr" s={17} c={U.inkMuted}/> Escanear QR de producto · próximamente
+      <button onClick={() => window.QrScanner ? setScanning(true) : toast.info('El escáner no está disponible en este dispositivo')}
+              style={{width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:9,
+                    background:U.accentSoft, border:`1px solid ${U.accentLine}`, borderRadius:14, color:U.accent,
+                    padding:'13px', fontSize:12.5, fontWeight:700, cursor:'pointer', marginBottom:18}}>
+        <Icon n="qr" s={17} c={U.accent}/> Escanear QR de producto
       </button>
 
       <div style={{fontSize:10, fontWeight:800, letterSpacing:'.12em', textTransform:'uppercase', color:U.inkMuted, marginBottom:10}}>
@@ -423,6 +432,19 @@ function EmbScan({ U, jornadaAbierta, productos, armMap, melMap, patasMap, onReg
             {saving ? 'Armando…' : 'Marcar listo para despacho'}
           </button>
         </div>
+      )}
+
+      {scanning && (
+        <LpQrScan U={U} onClose={() => setScanning(false)}
+          onDetect={(text) => {
+            let sku = text || '';
+            if (sku.indexOf('·') >= 0) sku = sku.split('·').pop().trim();
+            if (sku.indexOf(' ') >= 0) sku = sku.split(' ').pop().trim();
+            const p = productos.find(x => x.sku === sku);
+            setScanning(false);
+            if (p) { setSel(p); setUnidades(Math.min(1, armMap[p.sku] || 0) || 1); toast.success(`Producto ${sku}`); }
+            else { toast.error(`SKU no reconocido: ${sku}`); }
+          }}/>
       )}
     </div>
   );

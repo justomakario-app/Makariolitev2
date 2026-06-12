@@ -31,6 +31,7 @@ function MelaminaSector() {
   const [prioridad, setPrioridad] = useState([]);  // prod_v_prioridad_melamina
   const [registros, setRegistros] = useState([]);  // melaminaDia
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(null);
 
   const crudoMap = useMemo(() => {
     const m = {}; for (const r of crudo) m[r.pieza_sku] = Number(r.disponible) || 0; return m;
@@ -66,7 +67,7 @@ function MelaminaSector() {
   const totalTerminadas = registros.reduce((s, r) => s + (Number(r.terminadas) || 0), 0);
 
   const NAV = [
-    { id:'inicio',    label:'Inicio',    icon:'home' },
+    { id:'inicio',    label:'Inicio',    icon:'home', badge: prioridad.filter(p => (Number(p.falta) || 0) > 0).length },
     { id:'scan',      label:'Scan',      icon:'qr' },
     { id:'solicitud', label:'Solicitud', icon:'package' },
     { id:'mant',      label:'Mant.',     icon:'tools' },
@@ -110,7 +111,7 @@ function MelaminaSector() {
           <div style={{textAlign:'center', color:U.inkMuted, padding:'60px 0', fontSize:13}}>Cargando sector…</div>
         ) : tab === 'inicio' ? (
           <MelInicio U={U} jornadaAbierta={jornadaAbierta} jornada={jornada} crudo={crudo}
-                     prioridad={prioridad} registros={registros} piezaNombre={piezaNombre} totalTerminadas={totalTerminadas}/>
+                     prioridad={prioridad} registros={registros} piezaNombre={piezaNombre} totalTerminadas={totalTerminadas} onEdit={setEditing}/>
         ) : tab === 'scan' ? (
           <MelScan U={U} jornadaAbierta={jornadaAbierta} piezas={piezas} crudoMap={crudoMap}
                    onRegistrado={cargar} toast={toast} goInicio={() => setTab('inicio')}/>
@@ -131,18 +132,38 @@ function MelaminaSector() {
                       padding:'10px 4px 11px', display:'flex', flexDirection:'column', alignItems:'center', gap:4,
                       color: on ? U.accent : U.inkMuted, borderTop:`2px solid ${on ? U.accent : 'transparent'}`,
                       marginTop:-1, transition:'color .15s ease'}}>
-              <Icon n={n.icon} s={19} c={on ? U.accent : U.inkMuted}/>
+              <span style={{position:'relative', display:'flex'}}>
+                <Icon n={n.icon} s={19} c={on ? U.accent : U.inkMuted}/>
+                {n.badge ? (
+                  <span style={{position:'absolute', top:-6, right:-10, minWidth:15, height:15, padding:'0 3px',
+                                borderRadius:999, background:U.accent, color:'#fff', fontSize:9, fontWeight:800,
+                                display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1}}>{n.badge}</span>
+                ) : null}
+              </span>
               <span style={{fontSize:10, fontWeight:on ? 800 : 600, letterSpacing:'.02em'}}>{n.label}</span>
             </button>
           );
         })}
       </div>
+
+      {editing && (
+        <LpEditModal U={U} titulo="Editar pieza terminada"
+          campos={[{ key:'terminadas', label:'Terminadas' }, { key:'fallas', label:'Fallas' }]}
+          inicial={{ terminadas: editing.terminadas, fallas: editing.fallas }}
+          onCerrar={() => setEditing(null)}
+          onGuardar={async (v, motivo) => {
+            try {
+              await window.LP_DATA.editarMelamina({ id: editing.id, terminadas: v.terminadas, fallas: v.fallas, motivo });
+              toast.success('Registro actualizado'); setEditing(null); await cargar();
+            } catch (err) { toast.error(err && err.message ? err.message : 'No se pudo editar'); }
+          }}/>
+      )}
     </div>
   );
 }
 
 /* ── Tab Inicio ── */
-function MelInicio({ U, jornadaAbierta, jornada, crudo, prioridad, registros, piezaNombre, totalTerminadas }) {
+function MelInicio({ U, jornadaAbierta, jornada, crudo, prioridad, registros, piezaNombre, totalTerminadas, onEdit }) {
   const prioridadFalta = prioridad.filter(p => (Number(p.falta) || 0) > 0);
   return (
     <div>
@@ -229,18 +250,23 @@ function MelInicio({ U, jornadaAbierta, jornada, crudo, prioridad, registros, pi
             <span>Pieza</span><span style={{textAlign:'right'}}>Term.</span>
             <span style={{textAlign:'right'}}>Fallas</span><span style={{textAlign:'right'}}>Netas</span>
           </div>
-          {registros.map(r => (
-            <div key={r.id} style={{display:'grid', gridTemplateColumns:'1fr 56px 48px 56px', gap:4,
-                         padding:'11px 12px', alignItems:'center', borderBottom:`1px solid ${U.border}`, fontSize:12.5}}>
+          {registros.map(r => {
+            const ed = r.editable_hasta ? (new Date(r.editable_hasta) > new Date()) : false;
+            return (
+            <div key={r.id} onClick={ed ? () => onEdit(r) : undefined}
+                 style={{display:'grid', gridTemplateColumns:'1fr 56px 48px 56px', gap:4,
+                         padding:'11px 12px', alignItems:'center', borderBottom:`1px solid ${U.border}`, fontSize:12.5,
+                         cursor: ed ? 'pointer' : 'default'}}>
               <div style={{minWidth:0}}>
                 <div style={{fontWeight:700, color:U.ink, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{piezaNombre[r.pieza_sku] || r.pieza_sku}</div>
-                <div style={{fontSize:10.5, color:U.inkMuted}}>{r.pieza_sku}</div>
+                <div style={{fontSize:10.5, color:U.inkMuted}}>{r.pieza_sku}{ed ? ' · ✎ editar' : ''}</div>
               </div>
               <span style={{textAlign:'right', fontVariantNumeric:'tabular-nums', color:U.inkSoft}}>{r.terminadas}</span>
               <span style={{textAlign:'right', fontVariantNumeric:'tabular-nums', color: r.fallas ? U.danger : U.inkMuted}}>{r.fallas}</span>
               <span style={{textAlign:'right', fontVariantNumeric:'tabular-nums', fontWeight:800, color:U.ok}}>{r.terminadas}</span>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -262,6 +288,7 @@ function MelScan({ U, jornadaAbierta, piezas, crudoMap, onRegistrado, toast, goI
   const [term, setTerm] = useState('');
   const [fallas, setFallas] = useState('');
   const [saving, setSaving] = useState(false);
+  const [scanning, setScanning] = useState(false);
 
   const crudo = sel ? (crudoMap[sel.sku] || 0) : 0;
   const nT = parseInt(term, 10) || 0;
@@ -304,10 +331,11 @@ function MelScan({ U, jornadaAbierta, piezas, crudoMap, onRegistrado, toast, goI
 
   return (
     <div>
-      <button disabled style={{width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:9,
-                    background:U.surface, border:`1px dashed ${U.border}`, borderRadius:14, color:U.inkMuted,
-                    padding:'13px', fontSize:12.5, fontWeight:700, cursor:'not-allowed', marginBottom:18}}>
-        <Icon n="qr" s={17} c={U.inkMuted}/> Escanear QR de pieza · próximamente
+      <button onClick={() => window.QrScanner ? setScanning(true) : toast.info('El escáner no está disponible en este dispositivo')}
+              style={{width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:9,
+                    background:U.accentSoft, border:`1px solid ${U.accentLine}`, borderRadius:14, color:U.accent,
+                    padding:'13px', fontSize:12.5, fontWeight:700, cursor:'pointer', marginBottom:18}}>
+        <Icon n="qr" s={17} c={U.accent}/> Escanear QR de pieza
       </button>
 
       <div style={{fontSize:10, fontWeight:800, letterSpacing:'.12em', textTransform:'uppercase', color:U.inkMuted, marginBottom:10}}>
@@ -374,6 +402,19 @@ function MelScan({ U, jornadaAbierta, piezas, crudoMap, onRegistrado, toast, goI
             {saving ? 'Registrando…' : 'Agregar al reporte'}
           </button>
         </div>
+      )}
+
+      {scanning && (
+        <LpQrScan U={U} onClose={() => setScanning(false)}
+          onDetect={(text) => {
+            let sku = text || '';
+            if (sku.indexOf('·') >= 0) sku = sku.split('·').pop().trim();
+            if (sku.indexOf(' ') >= 0) sku = sku.split(' ').pop().trim();
+            const p = piezas.find(x => x.sku === sku);
+            setScanning(false);
+            if (p) { setSel(p); toast.success(`Pieza ${sku}`); }
+            else { toast.error(`SKU no reconocido: ${sku}`); }
+          }}/>
       )}
     </div>
   );

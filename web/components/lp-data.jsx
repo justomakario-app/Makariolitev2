@@ -42,15 +42,18 @@ window.LP_DATA = window.LP_DATA || (function () {
 
     // ── CNC ──
     registrarCorte: (p) => rpc('prod_rpc_registrar_corte', p),
-    cortesDia: (j) => sel('prod_corte', 'id, placa_sku, hojas, desperdicio, created_at', q => q.eq('jornada_id', j).order('created_at', { ascending: false })),
+    editarCorte: (p) => rpc('prod_rpc_editar_corte', p),
+    cortesDia: (j) => sel('prod_corte', 'id, placa_sku, hojas, desperdicio, created_at, editable_hasta', q => q.eq('jornada_id', j).order('created_at', { ascending: false })),
 
     // ── Melamina ──
     registrarMelamina: (p) => rpc('prod_rpc_registrar_melamina', p),
-    melaminaDia: (j) => sel('prod_melamina', 'id, pieza_sku, terminadas, fallas, created_at', q => q.eq('jornada_id', j).order('created_at', { ascending: false })),
+    editarMelamina: (p) => rpc('prod_rpc_editar_melamina', p),
+    melaminaDia: (j) => sel('prod_melamina', 'id, pieza_sku, terminadas, fallas, created_at, editable_hasta', q => q.eq('jornada_id', j).order('created_at', { ascending: false })),
 
     // ── Pino ──
     registrarPino: (p) => rpc('prod_rpc_registrar_pino', p),
-    pinoDia: (j) => sel('prod_pino', 'id, tamano, terminadas, masilladas, created_at', q => q.eq('jornada_id', j).order('created_at', { ascending: false })),
+    editarPino: (p) => rpc('prod_rpc_editar_pino', p),
+    pinoDia: (j) => sel('prod_pino', 'id, tamano, terminadas, masilladas, created_at, editable_hasta', q => q.eq('jornada_id', j).order('created_at', { ascending: false })),
 
     // ── Embalaje ──
     registrarEmbalaje: (p) => rpc('prod_rpc_registrar_embalaje', p),

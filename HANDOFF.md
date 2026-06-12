@@ -80,6 +80,26 @@
 
 ---
 
+### [2026-06-12] Producción — Cierre de Fase 3 (edición 24h + badges + QR cámara)
+
+**Qué se hizo:** se cerró Fase 3 al 100% sumando los 3 gaps que faltaban en los sectores de operario.
+
+**1. Edición de carga propia (24h) — regla §17.5:**
+- `lp-data`: `editarCorte/editarMelamina/editarPino` (wrappers de las RPCs `editar_*` de 0073) + `editable_hasta` agregado a las lecturas `*Dia`.
+- `lp-ui`: **`LpEditModal`** genérico (campos numéricos + motivo opcional, dark).
+- CNC/Melamina/Pino: las filas "del día" dentro de la ventana de 24h muestran "✎ editar" y son tappables → abren el modal → `editar_*` → refresh. Auditoría: si lo edita encargado/owner/admin la genera el trigger; el coordinador dentro de 24h no audita (por diseño).
+- **Embalaje NO tiene auto-edición**: `editar_embalaje` (0073) es solo encargado/owner/admin porque el undo/redo de stock es complejo y `prod_embalaje` no tiene `editable_hasta`. Las correcciones de embalaje las hace el encargado. *(Si se quiere auto-edición de embalaje, es un follow-up de backend: 0074 con `editable_hasta` + RPC para el coordinador.)*
+
+**2. Badge de pendientes en nav:** el ítem "Inicio" muestra un badge con la cantidad de prioridades pendientes (CNC: productos del resumen; Melamina: TAPs con falta>0; Embalaje: productos con pendiente>0). Pino no tiene vista de prioridad → sin badge.
+
+**3. Scan por QR (cámara):** `lp-ui` **`LpQrScan`** reusa `window.QrScanner` (ya cargado en el mobile) con **lectura única** (detecta, para la cámara, devuelve el SKU). CNC/Melamina/Embalaje: el botón "Escanear QR" abre el scanner; al detectar, matchea el SKU (parsing tipo ML: split por `·`/espacio) contra placas/piezas/productos y selecciona. Pino es a granel → sin QR (correcto). En **web** (que no carga la lib) el botón degrada con aviso `toast.info`.
+
+**Técnico:** `lp-data.jsx`, `lp-ui.jsx`, `cnc-sector.jsx`, `melamina-sector.jsx`, `pino-sector.jsx`, `embalaje-sector.jsx` (web + mobile), cache-busters bumpeados (lp-data v3, lp-ui v3, cnc v5, melamina/pino/embalaje v3). Sin cambios de backend (usa RPCs de 0073). Verificado: 0 sintaxis no probada, llaves/paréntesis balanceados, espejo web/mobile.
+
+**Resultado: FASE 3 cerrada.** Los 4 sectores de operario quedan completos (Inicio+prioridad, Scan+QR, registrar, editar 24h, Solicitud, Mantenimiento) con tokens §15. Lo único de "frontend de producción" que falta es el **Panel del Encargado (Fase 7)**.
+
+---
+
 ### [2026-06-12] Producción — Verificación contra los 2 briefs + fix de discrepancias
 
 **Qué se hizo:** se leyeron **completos** los dos briefs (`BRIEF_FINAL_modulo_produccion.md` y `brief_completo_logica2.md`) y se contrastó todo lo construido. Se corrigieron las discrepancias reales y se actualizó el checklist con lo que falta.

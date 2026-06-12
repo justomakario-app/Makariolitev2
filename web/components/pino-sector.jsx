@@ -33,6 +33,7 @@ function PinoSector() {
   const [patas, setPatas] = useState([]);          // stock_patas [{tamano, disponible, masilladas}]
   const [registros, setRegistros] = useState([]);  // pinoDia
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(null);
 
   const patasMap = useMemo(() => {
     const m = {}; for (const r of patas) m[r.tamano] = r; return m;
@@ -104,7 +105,7 @@ function PinoSector() {
         {loading ? (
           <div style={{textAlign:'center', color:U.inkMuted, padding:'60px 0', fontSize:13}}>Cargando sector…</div>
         ) : tab === 'inicio' ? (
-          <PinoInicio U={U} jornadaAbierta={jornadaAbierta} jornada={jornada} patasMap={patasMap} registros={registros} totalTerminadas={totalTerminadas}/>
+          <PinoInicio U={U} jornadaAbierta={jornadaAbierta} jornada={jornada} patasMap={patasMap} registros={registros} totalTerminadas={totalTerminadas} onEdit={setEditing}/>
         ) : tab === 'scan' ? (
           <PinoScan U={U} jornadaAbierta={jornadaAbierta} onRegistrado={cargar} toast={toast} goInicio={() => setTab('inicio')}/>
         ) : tab === 'solicitud' ? (
@@ -124,18 +125,38 @@ function PinoSector() {
                       padding:'10px 4px 11px', display:'flex', flexDirection:'column', alignItems:'center', gap:4,
                       color: on ? U.accent : U.inkMuted, borderTop:`2px solid ${on ? U.accent : 'transparent'}`,
                       marginTop:-1, transition:'color .15s ease'}}>
-              <Icon n={n.icon} s={19} c={on ? U.accent : U.inkMuted}/>
+              <span style={{position:'relative', display:'flex'}}>
+                <Icon n={n.icon} s={19} c={on ? U.accent : U.inkMuted}/>
+                {n.badge ? (
+                  <span style={{position:'absolute', top:-6, right:-10, minWidth:15, height:15, padding:'0 3px',
+                                borderRadius:999, background:U.accent, color:'#fff', fontSize:9, fontWeight:800,
+                                display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1}}>{n.badge}</span>
+                ) : null}
+              </span>
               <span style={{fontSize:10, fontWeight:on ? 800 : 600, letterSpacing:'.02em'}}>{n.label}</span>
             </button>
           );
         })}
       </div>
+
+      {editing && (
+        <LpEditModal U={U} titulo="Editar producción"
+          campos={[{ key:'terminadas', label:'Terminadas' }, { key:'masilladas', label:'Masilladas' }]}
+          inicial={{ terminadas: editing.terminadas, masilladas: editing.masilladas }}
+          onCerrar={() => setEditing(null)}
+          onGuardar={async (v, motivo) => {
+            try {
+              await window.LP_DATA.editarPino({ id: editing.id, terminadas: v.terminadas, masilladas: v.masilladas, motivo });
+              toast.success('Registro actualizado'); setEditing(null); await cargar();
+            } catch (err) { toast.error(err && err.message ? err.message : 'No se pudo editar'); }
+          }}/>
+      )}
     </div>
   );
 }
 
 /* ── Tab Inicio ── */
-function PinoInicio({ U, jornadaAbierta, jornada, patasMap, registros, totalTerminadas }) {
+function PinoInicio({ U, jornadaAbierta, jornada, patasMap, registros, totalTerminadas, onEdit }) {
   const chica = patasMap['chica'] || { disponible:0, masilladas:0 };
   const grande = patasMap['grande'] || { disponible:0, masilladas:0 };
   const masilladasTotal = (Number(chica.masilladas) || 0) + (Number(grande.masilladas) || 0);
@@ -195,14 +216,19 @@ function PinoInicio({ U, jornadaAbierta, jornada, patasMap, registros, totalTerm
                        color:U.inkMuted, borderBottom:`1px solid ${U.border}`}}>
             <span>Tipo</span><span style={{textAlign:'right'}}>Terminadas</span><span style={{textAlign:'right'}}>Masilladas</span>
           </div>
-          {registros.map(r => (
-            <div key={r.id} style={{display:'grid', gridTemplateColumns:'1fr 72px 72px', gap:4,
-                         padding:'11px 12px', alignItems:'center', borderBottom:`1px solid ${U.border}`, fontSize:12.5}}>
-              <span style={{fontWeight:700, color:U.ink, textTransform:'capitalize'}}>{r.tamano}</span>
+          {registros.map(r => {
+            const ed = r.editable_hasta ? (new Date(r.editable_hasta) > new Date()) : false;
+            return (
+            <div key={r.id} onClick={ed ? () => onEdit(r) : undefined}
+                 style={{display:'grid', gridTemplateColumns:'1fr 72px 72px', gap:4,
+                         padding:'11px 12px', alignItems:'center', borderBottom:`1px solid ${U.border}`, fontSize:12.5,
+                         cursor: ed ? 'pointer' : 'default'}}>
+              <span style={{fontWeight:700, color:U.ink, textTransform:'capitalize'}}>{r.tamano}{ed ? ' · ✎ editar' : ''}</span>
               <span style={{textAlign:'right', fontVariantNumeric:'tabular-nums', fontWeight:800, color:U.ok}}>{r.terminadas}</span>
               <span style={{textAlign:'right', fontVariantNumeric:'tabular-nums', color: r.masilladas ? U.warn : U.inkMuted}}>{r.masilladas}</span>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

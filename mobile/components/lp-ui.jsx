@@ -188,3 +188,133 @@ function LpMant({ U, sector, tipos, toast }) {
     </div>
   );
 }
+
+/* ── Modal de edición de carga propia (ventana 24h) — genérico ──
+   props: U, titulo, campos ([{key,label}] numéricos), inicial (obj),
+   onGuardar(valores, motivo) -> Promise, onCerrar. */
+function LpEditModal({ U, titulo, campos, inicial, onGuardar, onCerrar }) {
+  const init = {};
+  for (const c of campos) init[c.key] = String(inicial[c.key] != null ? inicial[c.key] : '');
+  const [vals, setVals] = useState(init);
+  const [motivo, setMotivo] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const setV = (k, v) => setVals(o => Object.assign({}, o, { [k]: v }));
+
+  const guardar = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const out = {};
+      for (const c of campos) out[c.key] = parseInt(vals[c.key], 10) || 0;
+      await onGuardar(out, motivo.trim());
+    } catch (e) { setSaving(false); }
+  };
+
+  const inp = { width:'100%', boxSizing:'border-box', background:U.surface2, border:`1px solid ${U.border}`,
+                borderRadius:12, color:U.ink, fontSize:20, fontWeight:800, textAlign:'center',
+                padding:'12px 10px', outline:'none', fontVariantNumeric:'tabular-nums' };
+
+  return (
+    <div onClick={onCerrar} style={{position:'fixed', inset:0, background:'rgba(0,0,0,.62)', zIndex:9999,
+                 display:'flex', alignItems:'center', justifyContent:'center', padding:18}}>
+      <div onClick={e => e.stopPropagation()} style={{width:'100%', maxWidth:360, background:U.surface,
+                   border:`1px solid ${U.border}`, borderRadius:18, padding:'18px', color:U.ink}}>
+        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16}}>
+          <h3 style={{fontSize:15, fontWeight:800, margin:0}}>{titulo}</h3>
+          <button onClick={onCerrar} style={{border:'none', background:'transparent', cursor:'pointer', padding:0}}>
+            <Icon n="x" s={18} c={U.inkMuted}/>
+          </button>
+        </div>
+        <div style={{display:'flex', gap:12, marginBottom:14}}>
+          {campos.map(c => (
+            <label key={c.key} style={{flex:1}}>
+              <span style={{display:'block', fontSize:11, color:U.inkSoft, marginBottom:6}}>{c.label}</span>
+              <input type="number" inputMode="numeric" min="0" value={vals[c.key]}
+                     onChange={e => setV(c.key, e.target.value)} style={inp}/>
+            </label>
+          ))}
+        </div>
+        <label style={{display:'block', marginBottom:16}}>
+          <span style={{display:'block', fontSize:11, color:U.inkSoft, marginBottom:6}}>Motivo (opcional)</span>
+          <input value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="¿Por qué se corrige?"
+                 style={{width:'100%', boxSizing:'border-box', background:U.surface2, border:`1px solid ${U.border}`,
+                         borderRadius:12, color:U.ink, fontSize:13, padding:'11px 12px', outline:'none', fontFamily:'inherit'}}/>
+        </label>
+        <div style={{display:'flex', gap:10}}>
+          <button onClick={onCerrar} style={{flex:1, padding:'13px', borderRadius:12, border:`1px solid ${U.border}`,
+                       background:U.surface2, color:U.inkSoft, fontSize:14, fontWeight:700, cursor:'pointer'}}>Cancelar</button>
+          <button onClick={guardar} disabled={saving} style={{flex:1, padding:'13px', borderRadius:12, border:'none',
+                       background:U.accent, color:'#fff', fontSize:14, fontWeight:800, cursor: saving ? 'wait' : 'pointer'}}>
+            {saving ? 'Guardando…' : 'Guardar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Escáner de QR por cámara — genérico (reusa window.QrScanner) ──
+   Lectura ÚNICA: detecta un código, para la cámara y devuelve el texto por
+   onDetect. props: U, onDetect(texto), onClose. Si la librería no está, avisa. */
+function LpQrScan({ U, onDetect, onClose }) {
+  const videoRef = useRef(null);
+  const scannerRef = useRef(null);
+  const handledRef = useRef(false);
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    if (!window.QrScanner) { setErr('El escáner no está disponible en este dispositivo.'); return; }
+    let cancelled = false;
+    let scanner = null;
+    const init = async () => {
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      if (cancelled || !videoRef.current) return;
+      try {
+        scanner = new window.QrScanner(
+          videoRef.current,
+          result => {
+            if (handledRef.current) return;
+            handledRef.current = true;
+            try { scanner.stop(); } catch (e) {}
+            const t = (result && result.data != null) ? result.data : (result || '');
+            onDetect(String(t).trim());
+          },
+          { highlightScanRegion: true, highlightCodeOutline: true, returnDetailedScanResult: true }
+        );
+        scannerRef.current = scanner;
+        await scanner.start();
+      } catch (e) {
+        if (!cancelled) {
+          const m = ((e && e.message) || '').toLowerCase();
+          setErr(m.includes('permission') || m.includes('denied') || m.includes('notallowed')
+            ? 'Permiso de cámara denegado.' : ((e && e.message) || 'No se pudo acceder a la cámara'));
+        }
+      }
+    };
+    init();
+    return () => { cancelled = true; try { if (scanner) { scanner.stop(); scanner.destroy(); } } catch (e) {} };
+    // eslint-disable-next-line
+  }, []);
+
+  return (
+    <div onClick={onClose} style={{position:'fixed', inset:0, background:'rgba(0,0,0,.85)', zIndex:9999,
+                 display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:18}}>
+      <div onClick={e => e.stopPropagation()} style={{width:'100%', maxWidth:360}}>
+        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12}}>
+          <span style={{fontSize:13, fontWeight:800, color:'#fff'}}>Escanear QR</span>
+          <button onClick={onClose} style={{border:'none', background:'transparent', cursor:'pointer', padding:0}}>
+            <Icon n="x" s={20} c="#fff"/>
+          </button>
+        </div>
+        <div style={{position:'relative', width:'100%', aspectRatio:'1 / 1', background:'#000',
+                     borderRadius:16, overflow:'hidden', border:`1px solid ${U.border}`}}>
+          <video ref={videoRef} playsInline muted style={{width:'100%', height:'100%', objectFit:'cover'}}/>
+        </div>
+        {err
+          ? <div style={{marginTop:12, fontSize:12.5, color:U.danger, textAlign:'center', lineHeight:1.5}}>{err}</div>
+          : <div style={{marginTop:12, fontSize:12, color:'#cbd5e1', textAlign:'center'}}>Apuntá la cámara al QR del SKU</div>}
+      </div>
+    </div>
+  );
+}
