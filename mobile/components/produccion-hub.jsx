@@ -26,6 +26,7 @@ function LineaProductivaGuard({ role }) {
   // Pantallas de sector ya construidas (Fase 3); el resto, placeholder por sector.
   if (role === 'cnc' && window.CncSector) return <window.CncSector/>;
   if (role === 'melamina' && window.MelaminaSector) return <window.MelaminaSector/>;
+  if (role === 'pino' && window.PinoSector) return <window.PinoSector/>;
   if (!t) {
     return window.ProximamentePlaceholder
       ? <window.ProximamentePlaceholder nombre="Línea productiva"/>

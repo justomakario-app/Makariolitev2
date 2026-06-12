@@ -80,6 +80,21 @@
 
 ---
 
+### [2026-06-12] Producción en Línea — Fase 3 · Sector Pino
+
+**Qué se hizo:** **Sector Pino** completo (`pino-sector.jsx`, verde, 4 tabs). Trabaja con 2 tamaños de pata (chica/grande), carga manual a granel (sin QR).
+
+**Cómo / decisiones:**
+- **Tab Inicio:** 2 contadores grandes de stock terminado (Chicas / Grandes, `stock_patas.disponible`), tarjeta ámbar "Patas masilladas · pendientes" (`stock_patas.masilladas`), tabla "Producidas hoy" (`pinoDia`) y neto terminadas → Embalaje.
+- **Tab Cargar (Scan sin QR):** 3 pasos — tamaño (chica/grande) → estado (terminada/masillada) → cantidad. Una sola llamada `prod_rpc_registrar_pino` mapeando estado→campo (`terminadas` o `masilladas`).
+- **Banner "prioridad de patas" diferido:** no existe vista de prioridad de patas (no hay `prod_v_prioridad_patas`); se priorizó mostrar los contadores de stock. Anotado en checklist.
+- Solicitud (madera/varillas, lijas, masilla, clavos, eléctrico/herrajes, herramientas) y Mantenimiento (ingletadora, cepilladora, etc.) vía genéricos `LpSolicitud`/`LpMant`.
+- **Wiring:** guard enruta `role === 'pino' → window.PinoSector`. Script registrado, `produccion-hub?v=4`. Espejo web/mobile, 0 sintaxis no probada, llaves balanceadas.
+
+**Técnico:** NUEVO `web|mobile/components/pino-sector.jsx`; edición `produccion-hub.jsx` + ambos HTML. Sin backend. **Siguiente:** Embalaje (coral, 3 tabs, armables + verificación de componentes), luego Panel del Encargado (Fase 7).
+
+---
+
 ### [2026-06-12] Producción en Línea — Fase 3 · Sector Melamina + refactor a data/UI compartida
 
 **Qué se hizo:** (1) se **centralizó** la data layer y la UI repetida de los sectores en dos archivos compartidos; (2) se construyó el **Sector Melamina** completo (violeta, 4 tabs).

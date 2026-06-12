@@ -226,27 +226,27 @@
 ### Tab Mantenimiento ✅ (genérica `LpMant`)
 - [x] Tipos: Enchapadora · Pistola de calor · Eléctrico · Molde · Ruido/vibración · Preventivo + urgencia + descripción
 
-## 3.3 Pino — verde #0F6E56 (4 tabs) — 2 tamaños, solo resultado final
+## 3.3 Pino — verde #0F6E56 (4 tabs) — 2 tamaños, solo resultado final ✅ `pino-sector.jsx`
 ### Tab Inicio
-- [ ] 🔴📊 Banner "Prioridad del día · patas" (verde): por tamaño (chicas/grandes), falta = demanda − stock propio + stock actual
-- [ ] Stock de patas terminadas: 2 contadores grandes (Chicas / Grandes)
-- [ ] Tarjeta ámbar separada "Patas masilladas · pendientes" (reparadas, requieren otro proceso antes de servir)
-- [ ] Tabla Producidas hoy: Tipo de pata | Terminadas | Masilladas + total terminadas → Embalaje
+- [ ] 🔴📊 Banner "Prioridad del día · patas" — diferido (no hay vista de prioridad de patas; se muestran los 2 contadores de stock)
+- [x] Stock de patas terminadas: 2 contadores grandes (Chicas / Grandes) — `stock_patas.disponible`
+- [x] Tarjeta ámbar "Patas masilladas · pendientes" (`stock_patas.masilladas`, total)
+- [x] Tabla Producidas hoy: Tipo | Terminadas | Masilladas + total terminadas → Embalaje
 ### Tab Scan (carga manual, sin QR — son a granel)
-- [ ] Paso 1: tamaño chica/grande
-- [ ] Paso 2: estado terminada/masillada
-- [ ] Paso 3: cantidad (botones grandes o tecleado)
-- [ ] ⚙️ Terminadas → stock para Embalaje; masilladas → contador pendientes
-### Tab Solicitud
-- [ ] Madera/varillas: Listón 2×1 · 2×2 · Varilla 25mm · 14mm
-- [ ] Lijas: velcro · tambor · banda
-- [ ] Masilla/terminación: Masilla · Enduido
-- [ ] Clavos: 25 · 30 · 40 · 50mm
-- [ ] Eléctrico/herrajes: Cable blanco/negro · Portalámpara blanco/negro · Rosca · Tuercas · Base 3D · Mecha
-- [ ] Herramientas: Amoladora · Atornilladora · Clavadora
-- [ ] Otro: texto libre + cantidad
-### Tab Mantenimiento
-- [ ] Máquinas: Ingletadora · Cepilladora · Caladora · Lijadora de tambor · Lijadora de banda · Compresor · Atornilladora · Amoladora + urgencia + descripción
+- [x] Paso 1: tamaño chica/grande
+- [x] Paso 2: estado terminada/masillada
+- [x] Paso 3: cantidad (tecleado grande)
+- [x] ⚙️ `prod_rpc_registrar_pino`: terminadas → stock Embalaje; masilladas → contador pendientes
+### Tab Solicitud ✅ (genérica `LpSolicitud`)
+- [x] Madera/varillas: Listón 2×1 · 2×2 · Varilla 25mm · 14mm
+- [x] Lijas: velcro · tambor · banda
+- [x] Masilla/terminación: Masilla · Enduido
+- [x] Clavos: 25 · 30 · 40 · 50mm
+- [x] Eléctrico/herrajes: Cable blanco/negro · Portalámpara blanco/negro · Rosca · Tuercas · Base 3D · Mecha
+- [x] Herramientas: Amoladora · Atornilladora · Clavadora
+- [x] Otro: texto libre
+### Tab Mantenimiento ✅ (genérica `LpMant`)
+- [x] Máquinas: Ingletadora · Cepilladora · Caladora · Lijadora de tambor · Lijadora de banda · Compresor · Atornilladora · Amoladora + urgencia + descripción
 
 ## 3.4 Embalaje — coral #993C1D (3 tabs, SIN Mantenimiento) — por producto MAD
 ### Tab Inicio
@@ -451,7 +451,7 @@
 | 0 — Cimientos + datos maestros | `[~]` | Backend ✅ · Excel pendiente de correr · 🔒 correcciones de datos pendientes |
 | 1 — Roles y accesos | `[x]` | Roles ✅ · RLS ✅ · guards frontend (router por sector) ✅ |
 | 2 — Motor de carga (RPCs) | `[x]` | 16 RPCs + cadena de stock + smoke ✅ |
-| 3 — Frontend por sector | `[~]` | **CNC ✅ · Melamina ✅** (+ data layer compartida `lp-data`/`lp-ui` con Solicitud/Mant genéricas) · faltan Pino · Embalaje · Panel Encargado |
+| 3 — Frontend por sector | `[~]` | **CNC ✅ · Melamina ✅ · Pino ✅** · falta Embalaje (coral, armables) · Panel Encargado (Fase 7) |
 | 4 — Encadenamiento + Realtime | `[ ]` | — |
 | 5 — Explosión + optimizadores | `[ ]` | ⚠️ lo más complejo |
 | 6 — Stock y compras | `[ ]` | — |
