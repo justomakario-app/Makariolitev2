@@ -80,6 +80,26 @@
 
 ---
 
+### [2026-06-12] Producción — Verificación completa (frontend + backend + lógica) + hardening
+
+**Qué se hizo:** auditoría integral del módulo de producción y resolución de lo accionable.
+
+**Frontend:**
+- **Contrato frontend↔data layer:** cada `window.LP_DATA.x` de los 5 archivos de pantalla usa un método existente — **0 referencias colgadas**.
+- **Sin código muerto:** los únicos "placeholder" son atributos `placeholder=""` de inputs y los stubs intencionales ("De fábrica", roles sin producción). No hay TODO/FIXME/dummy.
+- **Paridad web/mobile:** los 7 archivos autocontenidos son **byte-idénticos**; `produccion-hub` difiere solo en padding (32px/16px) + comentario — el guard (routing por rol) es idéntico. Sin drift.
+
+**Backend (introspección + advisors de Supabase):**
+- **Contrato:** las 19 tablas/vistas que lee el frontend existen y `authenticated` tiene SELECT; las 12 RPCs existen (1 c/u). Sin typos ni faltantes. Las vistas `prod_v_*` corren como owner → los roles de sector pueden leer demanda/prioridad/armables sin bloqueo de RLS.
+- **Advisors (141 lints):** la gran mayoría (128) son el **patrón deliberado** de RPCs `SECURITY DEFINER` con gate interno por rol (exigido por las reglas). Las 5 `security_definer_view` son intencionales (exponen demanda agregada, no datos crudos). Las 4 policies UPDATE con `WITH CHECK true` **no son hueco**: su `USING` ya restringe por rol + ventana 24h (el `WITH CHECK true` solo permite valores nuevos en filas que ya podés tocar).
+- **Hardening real aplicado → migration 0075 (escrita, pendiente de aplicar):** `prod_fn_alerta_stock` y `prod_fn_auditoria` (trigger functions SECURITY DEFINER) estaban ejecutables por `anon`/`public` sin necesidad → `REVOKE EXECUTE`. Los triggers siguen funcionando igual.
+
+**Lógica:** el motor de explosión (0074) y la cadena de stock (0073) están smoke-validados. Refinamientos honestos anotados en checklist (avance por canal, `prod_v_armables` con producto sin receta→0, nombre del coordinador, Realtime Fase 4).
+
+**Conclusión:** el módulo de producción está **consistente y profesional**; lo pendiente es funcional/de-datos (no hay genéricos rotos). **Pendiente: OK del Jefe para aplicar 0074 + 0075 en prod + push.**
+
+---
+
 ### [2026-06-12] Producción — Fase 5a (BOM recursivo + motor de explosión) · Brief Lógica 2
 
 **Qué se hizo:** el **corazón de la Lógica 2** — el árbol de despiece recursivo y el motor de explosión que convierte ventas pendientes en demanda de cada pieza/material a todos los niveles.
