@@ -7,9 +7,9 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 const PINO_UI = {
-  accent:'#2BB48A', accentSoft:'rgba(15,110,86,.24)', accentLine:'rgba(43,180,138,.42)',
-  bg:'#0B0F1A', surface:'#121826', surface2:'#1A2236', border:'#232C42',
-  ink:'#F1F5F9', inkSoft:'#94A3B8', inkMuted:'#64748B', danger:'#F87171', warn:'#FBBF24', ok:'#34D399',
+  accent:'#0F6E56', accentSoft:'rgba(15,110,86,.24)', accentLine:'rgba(15,110,86,.46)',
+  bg:'#0C0C0E', surface:'#1A1A1D', surface2:'#222226', border:'#28282E',
+  ink:'#EFEFEF', inkSoft:'#9898A6', inkMuted:'#55555F', danger:'#FF4060', warn:'#FFB020', ok:'#00D68F',
   radius:16,
 };
 
@@ -83,7 +83,7 @@ function PinoSector() {
           <div>
             <div style={{fontSize:14, fontWeight:800, letterSpacing:'.02em', lineHeight:1.1}}>Pino</div>
             <div style={{display:'flex', alignItems:'center', gap:5, marginTop:2}}>
-              <span style={{width:6, height:6, borderRadius:999, background:U.ok, boxShadow:`0 0 0 3px rgba(52,211,153,.18)`}}/>
+              <span style={{width:6, height:6, borderRadius:999, background:U.ok, boxShadow:`0 0 0 3px rgba(0,214,143,.18)`}}/>
               <span style={{fontSize:9.5, fontWeight:700, letterSpacing:'.14em', color:U.inkSoft, textTransform:'uppercase'}}>En vivo</span>
             </div>
           </div>
@@ -92,7 +92,7 @@ function PinoSector() {
           <div style={{fontSize:15, fontWeight:800, fontVariantNumeric:'tabular-nums'}}><LpClock/></div>
           <span style={{display:'inline-block', marginTop:3, fontSize:9.5, fontWeight:800, letterSpacing:'.06em',
                         textTransform:'uppercase', padding:'2px 8px', borderRadius:999,
-                        background: jornadaAbierta ? 'rgba(52,211,153,.14)' : 'rgba(248,113,113,.14)',
+                        background: jornadaAbierta ? 'rgba(0,214,143,.14)' : 'rgba(255,64,96,.14)',
                         color: jornadaAbierta ? U.ok : U.danger}}>
             {jornada ? (jornadaAbierta ? 'Jornada abierta' : 'Jornada cerrada') : 'Sin jornada'}
           </span>
@@ -142,7 +142,7 @@ function PinoInicio({ U, jornadaAbierta, jornada, patasMap, registros, totalTerm
 
   const counter = (label, val) => (
     <div style={{flex:1, background:U.surface, border:`1px solid ${U.border}`, borderRadius:14, padding:'16px 14px', textAlign:'center'}}>
-      <div style={{fontSize:34, fontWeight:800, color:U.accent, fontVariantNumeric:'tabular-nums', lineHeight:1}}>{Number(val) || 0}</div>
+      <div style={{fontSize:34, fontWeight:800, color:U.ink, fontVariantNumeric:'tabular-nums', lineHeight:1}}>{Number(val) || 0}</div>
       <div style={{fontSize:11, color:U.inkSoft, marginTop:6, fontWeight:700, textTransform:'uppercase', letterSpacing:'.06em'}}>{label}</div>
     </div>
   );
@@ -150,7 +150,7 @@ function PinoInicio({ U, jornadaAbierta, jornada, patasMap, registros, totalTerm
   return (
     <div>
       {!jornadaAbierta && (
-        <div style={{background:'rgba(248,113,113,.10)', border:`1px solid rgba(248,113,113,.28)`,
+        <div style={{background:'rgba(255,64,96,.10)', border:`1px solid rgba(255,64,96,.28)`,
                      borderRadius:12, padding:'12px 14px', marginBottom:16, display:'flex', gap:10, alignItems:'flex-start'}}>
           <Icon n="alert" s={17} c={U.danger}/>
           <div style={{fontSize:12.5, lineHeight:1.5, color:U.ink}}>
@@ -166,7 +166,7 @@ function PinoInicio({ U, jornadaAbierta, jornada, patasMap, registros, totalTerm
         {counter('Grandes', grande.disponible)}
       </div>
 
-      <div style={{background:'rgba(251,191,36,.10)', border:`1px solid rgba(251,191,36,.30)`, borderRadius:14,
+      <div style={{background:'rgba(255,176,32,.10)', border:`1px solid rgba(255,176,32,.30)`, borderRadius:14,
                    padding:'13px 16px', marginBottom:18, display:'flex', alignItems:'center', justifyContent:'space-between'}}>
         <div style={{display:'flex', alignItems:'center', gap:10}}>
           <Icon n="alert" s={16} c={U.warn}/>
@@ -199,7 +199,7 @@ function PinoInicio({ U, jornadaAbierta, jornada, patasMap, registros, totalTerm
             <div key={r.id} style={{display:'grid', gridTemplateColumns:'1fr 72px 72px', gap:4,
                          padding:'11px 12px', alignItems:'center', borderBottom:`1px solid ${U.border}`, fontSize:12.5}}>
               <span style={{fontWeight:700, color:U.ink, textTransform:'capitalize'}}>{r.tamano}</span>
-              <span style={{textAlign:'right', fontVariantNumeric:'tabular-nums', fontWeight:800, color:U.accent}}>{r.terminadas}</span>
+              <span style={{textAlign:'right', fontVariantNumeric:'tabular-nums', fontWeight:800, color:U.ok}}>{r.terminadas}</span>
               <span style={{textAlign:'right', fontVariantNumeric:'tabular-nums', color: r.masilladas ? U.warn : U.inkMuted}}>{r.masilladas}</span>
             </div>
           ))}
@@ -212,7 +212,7 @@ function PinoInicio({ U, jornadaAbierta, jornada, patasMap, registros, totalTerm
           <Icon n="arrow-right" s={18} c={U.accent}/>
           <span style={{fontSize:12.5, fontWeight:700, color:U.ink}}>Patas terminadas → Embalaje</span>
         </div>
-        <span style={{fontSize:22, fontWeight:800, color:U.accent, fontVariantNumeric:'tabular-nums'}}>{totalTerminadas}</span>
+        <span style={{fontSize:22, fontWeight:800, color:U.ok, fontVariantNumeric:'tabular-nums'}}>{totalTerminadas}</span>
       </div>
     </div>
   );

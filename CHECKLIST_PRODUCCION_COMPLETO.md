@@ -177,11 +177,14 @@
 - [x] 🔒 Topbar: pill del sector (color + indicador 🔴 "en vivo"), reloj, nombre sector, estado de jornada *(CNC ✅)*
 - [x] Navegación inferior fija 4 ítems (Inicio · Scan · Solicitud · Mant.) con color del sector en activo *(CNC ✅)*
 - [ ] Badge numérico en nav cuando hay cargas pendientes
-- [ ] Banners de stock/prioridad reutilizables (color por origen: azul CNC, violeta Melamina, coral Embalaje, verde Pino)
-- [x] ⚙️ Vista previa en vivo: cada carga muestra qué genera y a quién alimenta antes de confirmar *(Scan CNC ✅)*
+- [x] Banners de stock/prioridad reutilizables (color por origen) — implementados por sector
+- [x] ⚙️ Vista previa en vivo: cada carga muestra qué genera y a quién alimenta antes de confirmar
 - [x] Mensajes de confirmación al enviar *(toast)*
 - [x] 🔒 Guard de rol que decide qué sector renderiza *(Fase 1, produccion-hub)*
 - [x] Áreas táctiles grandes, botones de cantidad amplios
+- [x] 🎨 Tokens dark + colores de sector alineados al **Brief Producción §15** (paleta exacta: bg #0C0C0E, superficie #1A1A1D, éxito #00D68F, alerta #FFB020, error #FF4060; CNC #2563EB · Melamina #534AB7 · Embalaje #993C1D · Pino #0F6E56). Totales netos en verde Éxito.
+- [ ] ✏️ **Edición de la carga propia dentro de 24h desde el frontend** del sector — las RPCs `editar_*` (0073) están listas; falta la UI de "mis cargas de hoy" + modal de edición (regla §17.5)
+- [ ] 📷 Scan por cámara (QR de placa/pieza/producto) — hoy es stub "próximamente" en los 4 sectores; falta integrar lectura de QR
 
 ## 3.1 CNC — azul #2563EB (4 tabs)
 ### Tab Inicio
@@ -290,12 +293,16 @@
 
 ---
 
-# FASE 5 — MOTOR DE EXPLOSIÓN Y OPTIMIZACIÓN (Brief 1 · secciones 5 y 7) ⚠️
+# FASE 5 — MOTOR DE EXPLOSIÓN Y OPTIMIZACIÓN (**Brief Lógica 2** · secciones 4-7) ⚠️
 
-> Lo más sofisticado. El cálculo que convierte ventas en demanda de piezas, y los 2 optimizadores de corte.
+> Lo más sofisticado y **el grueso del Brief Lógica 2**. El cálculo que convierte ventas en demanda de piezas/materiales, y los 2 optimizadores de corte. Hoy NO existe: las pantallas usan vistas simples (`prod_v_resumen_dia`, `prod_v_armables`) como primera aproximación; este motor las enriquece sin romperlas.
+
+## 5.0 Enriquecer el catálogo (Brief Lógica 2 · §4.1, §8.1) — 🔒 prerequisito del motor
+- [ ] 🔒 Atributos nuevos de SKU: **Naturaleza** (fabricado/reventa/corte/insumo), **vendible** (bool), **unidad de compra**, **contenido de compra**, **largo**. Hoy `prod_pieza`/`prod_producto` no los tienen → ampliar schema (aditivo).
+- [ ] 🔒 **Cargar el árbol de despiece recursivo desde el Excel:** la hoja `INSUMOS` ya trae la estructura `TIPO PRODUCTO / CANTIDAD / SKU HIJO` (COMPUESTO→hijos), pero `import-skus` hoy **solo carga SKU+nombre** a `prod_pieza`. Falta una tabla `prod_componente (padre_sku, hijo_sku, cantidad)` y extender `import-skus` para poblarla.
 
 ## 5.1 Árbol de despiece recursivo (BOM)
-- [ ] 🔒 Estructura recursiva padre→hijo con cantidad, a cualquier profundidad
+- [ ] 🔒 Estructura recursiva padre→hijo con cantidad, a cualquier profundidad *(tabla `prod_componente`)*
 - [ ] ⚙️ Motor de explosión: toma ventas pendientes → baja por el árbol multiplicando → demanda de cada pieza/material
 - [ ] ⚙️ Suma demanda de cada pieza a través de TODAS las ventas pendientes
 - [ ] ⚙️ Clasifica por naturaleza: fabricado / reventa / corte / insumo

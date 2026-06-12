@@ -8,11 +8,11 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 const EMB_UI = {
-  accent:'#E0673C', accentSoft:'rgba(153,60,29,.26)', accentLine:'rgba(224,103,60,.42)',
-  mel:'#8B80E8', melSoft:'rgba(83,74,183,.18)', melLine:'rgba(124,111,224,.34)',
-  pino:'#2BB48A', pinoSoft:'rgba(15,110,86,.20)', pinoLine:'rgba(43,180,138,.34)',
-  bg:'#0B0F1A', surface:'#121826', surface2:'#1A2236', border:'#232C42',
-  ink:'#F1F5F9', inkSoft:'#94A3B8', inkMuted:'#64748B', danger:'#F87171', warn:'#FBBF24', ok:'#34D399',
+  accent:'#993C1D', accentSoft:'rgba(153,60,29,.28)', accentLine:'rgba(153,60,29,.48)',
+  mel:'#534AB7', melSoft:'rgba(83,74,183,.18)', melLine:'rgba(83,74,183,.34)',
+  pino:'#0F6E56', pinoSoft:'rgba(15,110,86,.20)', pinoLine:'rgba(15,110,86,.36)',
+  bg:'#0C0C0E', surface:'#1A1A1D', surface2:'#222226', border:'#28282E',
+  ink:'#EFEFEF', inkSoft:'#9898A6', inkMuted:'#55555F', danger:'#FF4060', warn:'#FFB020', ok:'#00D68F',
   radius:16,
 };
 
@@ -95,7 +95,7 @@ function EmbalajeSector() {
           <div>
             <div style={{fontSize:14, fontWeight:800, letterSpacing:'.02em', lineHeight:1.1}}>Embalaje</div>
             <div style={{display:'flex', alignItems:'center', gap:5, marginTop:2}}>
-              <span style={{width:6, height:6, borderRadius:999, background:U.ok, boxShadow:`0 0 0 3px rgba(52,211,153,.18)`}}/>
+              <span style={{width:6, height:6, borderRadius:999, background:U.ok, boxShadow:`0 0 0 3px rgba(0,214,143,.18)`}}/>
               <span style={{fontSize:9.5, fontWeight:700, letterSpacing:'.14em', color:U.inkSoft, textTransform:'uppercase'}}>En vivo</span>
             </div>
           </div>
@@ -104,7 +104,7 @@ function EmbalajeSector() {
           <div style={{fontSize:15, fontWeight:800, fontVariantNumeric:'tabular-nums'}}><LpClock/></div>
           <span style={{display:'inline-block', marginTop:3, fontSize:9.5, fontWeight:800, letterSpacing:'.06em',
                         textTransform:'uppercase', padding:'2px 8px', borderRadius:999,
-                        background: jornadaAbierta ? 'rgba(52,211,153,.14)' : 'rgba(248,113,113,.14)',
+                        background: jornadaAbierta ? 'rgba(0,214,143,.14)' : 'rgba(255,64,96,.14)',
                         color: jornadaAbierta ? U.ok : U.danger}}>
             {jornada ? (jornadaAbierta ? 'Jornada abierta' : 'Jornada cerrada') : 'Sin jornada'}
           </span>
@@ -152,7 +152,7 @@ function EmbInicio({ U, jornadaAbierta, jornada, demanda, armMap, stockMel, stoc
   return (
     <div>
       {!jornadaAbierta && (
-        <div style={{background:'rgba(248,113,113,.10)', border:`1px solid rgba(248,113,113,.28)`,
+        <div style={{background:'rgba(255,64,96,.10)', border:`1px solid rgba(255,64,96,.28)`,
                      borderRadius:12, padding:'12px 14px', marginBottom:16, display:'flex', gap:10, alignItems:'flex-start'}}>
           <Icon n="alert" s={17} c={U.danger}/>
           <div style={{fontSize:12.5, lineHeight:1.5, color:U.ink}}>
@@ -171,8 +171,8 @@ function EmbInicio({ U, jornadaAbierta, jornada, demanda, armMap, stockMel, stoc
               const falta = Number(d.pendiente) || 0;
               const arm = armMap[d.producto_sku] || 0;
               const listo = arm > 0;
-              const colSoft = listo ? U.accentSoft : 'rgba(251,191,36,.12)';
-              const colLine = listo ? U.accentLine : 'rgba(251,191,36,.30)';
+              const colSoft = listo ? U.accentSoft : 'rgba(255,176,32,.12)';
+              const colLine = listo ? U.accentLine : 'rgba(255,176,32,.30)';
               const col = listo ? U.accent : U.warn;
               return (
                 <div key={d.producto_sku} style={{background:colSoft, border:`1px solid ${colLine}`, borderRadius:12,
@@ -248,7 +248,7 @@ function EmbInicio({ U, jornadaAbierta, jornada, demanda, armMap, stockMel, stoc
                 <div style={{fontWeight:700, color:U.ink}}>{r.producto_sku}</div>
                 <div style={{fontSize:10.5, color:U.inkMuted}}>{r.canal ? r.canal : 'sin canal'}</div>
               </div>
-              <span style={{fontSize:15, fontWeight:800, color:U.accent, fontVariantNumeric:'tabular-nums'}}>{r.unidades}</span>
+              <span style={{fontSize:15, fontWeight:800, color:U.ok, fontVariantNumeric:'tabular-nums'}}>{r.unidades}</span>
             </div>
           ))}
         </div>
@@ -260,7 +260,7 @@ function EmbInicio({ U, jornadaAbierta, jornada, demanda, armMap, stockMel, stoc
           <Icon n="check-circle" s={18} c={U.accent}/>
           <span style={{fontSize:12.5, fontWeight:700, color:U.ink}}>Listos para despacho</span>
         </div>
-        <span style={{fontSize:22, fontWeight:800, color:U.accent, fontVariantNumeric:'tabular-nums'}}>{totalEmbalado}</span>
+        <span style={{fontSize:22, fontWeight:800, color:U.ok, fontVariantNumeric:'tabular-nums'}}>{totalEmbalado}</span>
       </div>
     </div>
   );

@@ -7,10 +7,10 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 const MEL_UI = {
-  accent:'#8B80E8', accentSoft:'rgba(83,74,183,.20)', accentLine:'rgba(124,111,224,.42)',
-  cnc:'#5B8DEF', cncSoft:'rgba(37,99,235,.14)', cncLine:'rgba(37,99,235,.32)',
-  bg:'#0B0F1A', surface:'#121826', surface2:'#1A2236', border:'#232C42',
-  ink:'#F1F5F9', inkSoft:'#94A3B8', inkMuted:'#64748B', danger:'#F87171', warn:'#FBBF24', ok:'#34D399',
+  accent:'#534AB7', accentSoft:'rgba(83,74,183,.20)', accentLine:'rgba(83,74,183,.40)',
+  cnc:'#2563EB', cncSoft:'rgba(37,99,235,.14)', cncLine:'rgba(37,99,235,.32)',
+  bg:'#0C0C0E', surface:'#1A1A1D', surface2:'#222226', border:'#28282E',
+  ink:'#EFEFEF', inkSoft:'#9898A6', inkMuted:'#55555F', danger:'#FF4060', warn:'#FFB020', ok:'#00D68F',
   radius:16,
 };
 
@@ -88,7 +88,7 @@ function MelaminaSector() {
           <div>
             <div style={{fontSize:14, fontWeight:800, letterSpacing:'.02em', lineHeight:1.1}}>Melamina</div>
             <div style={{display:'flex', alignItems:'center', gap:5, marginTop:2}}>
-              <span style={{width:6, height:6, borderRadius:999, background:U.ok, boxShadow:`0 0 0 3px rgba(52,211,153,.18)`}}/>
+              <span style={{width:6, height:6, borderRadius:999, background:U.ok, boxShadow:`0 0 0 3px rgba(0,214,143,.18)`}}/>
               <span style={{fontSize:9.5, fontWeight:700, letterSpacing:'.14em', color:U.inkSoft, textTransform:'uppercase'}}>En vivo</span>
             </div>
           </div>
@@ -97,7 +97,7 @@ function MelaminaSector() {
           <div style={{fontSize:15, fontWeight:800, fontVariantNumeric:'tabular-nums'}}><LpClock/></div>
           <span style={{display:'inline-block', marginTop:3, fontSize:9.5, fontWeight:800, letterSpacing:'.06em',
                         textTransform:'uppercase', padding:'2px 8px', borderRadius:999,
-                        background: jornadaAbierta ? 'rgba(52,211,153,.14)' : 'rgba(248,113,113,.14)',
+                        background: jornadaAbierta ? 'rgba(0,214,143,.14)' : 'rgba(255,64,96,.14)',
                         color: jornadaAbierta ? U.ok : U.danger}}>
             {jornada ? (jornadaAbierta ? 'Jornada abierta' : 'Jornada cerrada') : 'Sin jornada'}
           </span>
@@ -147,7 +147,7 @@ function MelInicio({ U, jornadaAbierta, jornada, crudo, prioridad, registros, pi
   return (
     <div>
       {!jornadaAbierta && (
-        <div style={{background:'rgba(248,113,113,.10)', border:`1px solid rgba(248,113,113,.28)`,
+        <div style={{background:'rgba(255,64,96,.10)', border:`1px solid rgba(255,64,96,.28)`,
                      borderRadius:12, padding:'12px 14px', marginBottom:16, display:'flex', gap:10, alignItems:'flex-start'}}>
           <Icon n="alert" s={17} c={U.danger}/>
           <div style={{fontSize:12.5, lineHeight:1.5, color:U.ink}}>
@@ -188,8 +188,8 @@ function MelInicio({ U, jornadaAbierta, jornada, crudo, prioridad, registros, pi
               const cnc = Number(p.crudo_cnc) || 0;
               const listo = cnc >= falta;
               const col = listo ? U.accent : U.warn;
-              const colSoft = listo ? U.accentSoft : 'rgba(251,191,36,.12)';
-              const colLine = listo ? U.accentLine : 'rgba(251,191,36,.30)';
+              const colSoft = listo ? U.accentSoft : 'rgba(255,176,32,.12)';
+              const colLine = listo ? U.accentLine : 'rgba(255,176,32,.30)';
               return (
                 <div key={p.pieza_sku} style={{background:colSoft, border:`1px solid ${colLine}`, borderRadius:12,
                              padding:'11px 14px', display:'flex', alignItems:'center', justifyContent:'space-between'}}>
@@ -238,7 +238,7 @@ function MelInicio({ U, jornadaAbierta, jornada, crudo, prioridad, registros, pi
               </div>
               <span style={{textAlign:'right', fontVariantNumeric:'tabular-nums', color:U.inkSoft}}>{r.terminadas}</span>
               <span style={{textAlign:'right', fontVariantNumeric:'tabular-nums', color: r.fallas ? U.danger : U.inkMuted}}>{r.fallas}</span>
-              <span style={{textAlign:'right', fontVariantNumeric:'tabular-nums', fontWeight:800, color:U.accent}}>{r.terminadas}</span>
+              <span style={{textAlign:'right', fontVariantNumeric:'tabular-nums', fontWeight:800, color:U.ok}}>{r.terminadas}</span>
             </div>
           ))}
         </div>
@@ -250,7 +250,7 @@ function MelInicio({ U, jornadaAbierta, jornada, crudo, prioridad, registros, pi
           <Icon n="arrow-right" s={18} c={U.accent}/>
           <span style={{fontSize:12.5, fontWeight:700, color:U.ink}}>Piezas netas → Embalaje</span>
         </div>
-        <span style={{fontSize:22, fontWeight:800, color:U.accent, fontVariantNumeric:'tabular-nums'}}>{totalTerminadas}</span>
+        <span style={{fontSize:22, fontWeight:800, color:U.ok, fontVariantNumeric:'tabular-nums'}}>{totalTerminadas}</span>
       </div>
     </div>
   );
@@ -360,7 +360,7 @@ function MelScan({ U, jornadaAbierta, piezas, crudoMap, onRegistrado, toast, goI
             </div>
             <div style={{display:'flex', alignItems:'baseline', justifyContent:'space-between', marginTop:6}}>
               <span style={{fontSize:12.5, color:U.inkSoft}}>Netas → Embalaje</span>
-              <span style={{fontSize:22, fontWeight:800, color:U.accent, fontVariantNumeric:'tabular-nums'}}>{nT}</span>
+              <span style={{fontSize:22, fontWeight:800, color:U.ok, fontVariantNumeric:'tabular-nums'}}>{nT}</span>
             </div>
             {excede && <div style={{fontSize:11, color:U.danger, marginTop:8}}>Supera el crudo disponible de CNC.</div>}
           </div>

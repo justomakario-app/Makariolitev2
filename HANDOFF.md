@@ -80,6 +80,30 @@
 
 ---
 
+### [2026-06-12] Producción — Verificación contra los 2 briefs + fix de discrepancias
+
+**Qué se hizo:** se leyeron **completos** los dos briefs (`BRIEF_FINAL_modulo_produccion.md` y `brief_completo_logica2.md`) y se contrastó todo lo construido. Se corrigieron las discrepancias reales y se actualizó el checklist con lo que falta.
+
+**Resultado de la verificación:** la capa operativa (Brief Producción: 4 sectores + cadena de stock + RPCs) **respeta los briefs**. La corrección 0.2 (TOR009/010/011) coincide textual con Brief Lógica §12.1.
+
+**Discrepancia corregida (la única que era una desviación propia):**
+- **Design tokens → alineados al Brief Producción §15 exacto** en los 4 sectores + `lp-ui`:
+  - Base dark: bg `#0C0C0E`, superficie `#1A1A1D`, superficie2 `#222226`, borde `#28282E`, texto `#EFEFEF`/`#9898A6`/`#55555F`.
+  - Semánticos: éxito `#00D68F`, alerta `#FFB020`, error `#FF4060` (urgencias y rgbas hardcodeados también actualizados).
+  - Colores de sector EXACTOS: CNC `#2563EB` · Melamina `#534AB7` · Pino `#0F6E56` · Embalaje `#993C1D`. (Antes los había aclarado por contraste.)
+  - Para legibilidad sobre fondo casi negro, los **totales netos** pasan a verde Éxito (`#00D68F`) como indica §15 ("Éxito = totales netos"), y los contadores grandes de Pino a texto primario.
+  - `SECTOR_THEME` (produccion-hub) ya tenía los hexes exactos. Cache-busters bumpeados (cnc v4, melamina/pino/embalaje/lp-ui v2).
+
+**Gaps agregados al checklist (a trabajar por el checklist, NO se construyen ahora):**
+- FASE 3.0: **edición de carga propia 24h en el frontend** (RPCs `editar_*` listas, falta UI) y **Scan por cámara/QR** (hoy stub).
+- FASE 4: Realtime (ya estaba) — los sectores hoy cargan al montar + refrescan tras cada acción, sin suscripción en vivo.
+- FASE 5 (Brief Lógica 2): nueva **§5.0** — enriquecer catálogo (Naturaleza/vendible/unidad de compra/largo) + **cargar el árbol de despiece recursivo** (la hoja INSUMOS ya lo trae; `import-skus` hoy no lo carga → falta tabla `prod_componente` + extender el parser).
+- FASE 3.4 Embalaje: orden por canal (la vista agrega por producto, sin canal) — limitación anotada.
+
+**Decisión metodológica (Jefe):** primero arreglar discrepancias (hecho), lo grande/lo que falta queda en el checklist y se trabaja desde ahí. Roles `profiles.role` vs `app_metadata` = adaptación justificada (no romper login), no es defecto.
+
+---
+
 ### [2026-06-12] Producción en Línea — Fase 3 · Sector Embalaje (cierra los 4 operarios)
 
 **Qué se hizo:** **Sector Embalaje** completo (`embalaje-sector.jsx`, coral, **3 tabs sin Mantenimiento**). Es donde convergen las 2 líneas (Melamina + Pino) y se produce el producto "listo para despacho".

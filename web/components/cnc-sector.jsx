@@ -8,9 +8,9 @@
 
 /* ── Tokens dark del sector CNC ── */
 const CNC_UI = {
-  accent:'#2563EB', accentSoft:'rgba(37,99,235,.14)', accentLine:'rgba(37,99,235,.32)',
-  bg:'#0B0F1A', surface:'#121826', surface2:'#1A2236', border:'#232C42',
-  ink:'#F1F5F9', inkSoft:'#94A3B8', inkMuted:'#64748B', danger:'#F87171', ok:'#34D399',
+  accent:'#2563EB', accentSoft:'rgba(37,99,235,.16)', accentLine:'rgba(37,99,235,.34)',
+  bg:'#0C0C0E', surface:'#1A1A1D', surface2:'#222226', border:'#28282E',
+  ink:'#EFEFEF', inkSoft:'#9898A6', inkMuted:'#55555F', danger:'#FF4060', warn:'#FFB020', ok:'#00D68F',
   radius:16,
 };
 
@@ -101,7 +101,7 @@ function CncSector() {
           <div>
             <div style={{fontSize:14, fontWeight:800, letterSpacing:'.02em', lineHeight:1.1}}>CNC</div>
             <div style={{display:'flex', alignItems:'center', gap:5, marginTop:2}}>
-              <span style={{width:6, height:6, borderRadius:999, background:U.ok, boxShadow:`0 0 0 3px rgba(52,211,153,.18)`}}/>
+              <span style={{width:6, height:6, borderRadius:999, background:U.ok, boxShadow:`0 0 0 3px rgba(0,214,143,.18)`}}/>
               <span style={{fontSize:9.5, fontWeight:700, letterSpacing:'.14em', color:U.inkSoft, textTransform:'uppercase'}}>En vivo</span>
             </div>
           </div>
@@ -110,7 +110,7 @@ function CncSector() {
           <div style={{fontSize:15, fontWeight:800, fontVariantNumeric:'tabular-nums'}}><LpClock/></div>
           <span style={{display:'inline-block', marginTop:3, fontSize:9.5, fontWeight:800, letterSpacing:'.06em',
                         textTransform:'uppercase', padding:'2px 8px', borderRadius:999,
-                        background: jornadaAbierta ? 'rgba(52,211,153,.14)' : 'rgba(248,113,113,.14)',
+                        background: jornadaAbierta ? 'rgba(0,214,143,.14)' : 'rgba(255,64,96,.14)',
                         color: jornadaAbierta ? U.ok : U.danger}}>
             {jornada ? (jornadaAbierta ? 'Jornada abierta' : 'Jornada cerrada') : 'Sin jornada'}
           </span>
@@ -158,7 +158,7 @@ function CncInicio({ U, jornadaAbierta, jornada, cortes, totalNeto, demanda }) {
   return (
     <div>
       {!jornadaAbierta && (
-        <div style={{background:'rgba(248,113,113,.10)', border:`1px solid rgba(248,113,113,.28)`,
+        <div style={{background:'rgba(255,64,96,.10)', border:`1px solid rgba(255,64,96,.28)`,
                      borderRadius:12, padding:'12px 14px', marginBottom:16, display:'flex', gap:10, alignItems:'flex-start'}}>
           <Icon n="alert" s={17} c={U.danger}/>
           <div style={{fontSize:12.5, lineHeight:1.5, color:U.ink}}>
@@ -226,7 +226,7 @@ function CncInicio({ U, jornadaAbierta, jornada, cortes, totalNeto, demanda }) {
           <Icon n="arrow-right" s={18} c={U.accent}/>
           <span style={{fontSize:12.5, fontWeight:700, color:U.ink}}>Piezas netas → Melamina</span>
         </div>
-        <span style={{fontSize:22, fontWeight:800, color:U.accent, fontVariantNumeric:'tabular-nums'}}>{totalNeto}</span>
+        <span style={{fontSize:22, fontWeight:800, color:U.ok, fontVariantNumeric:'tabular-nums'}}>{totalNeto}</span>
       </div>
     </div>
   );
@@ -346,7 +346,7 @@ function CncScan({ U, jornadaAbierta, placas, onRegistrado, toast, goInicio }) {
               <span style={{fontSize:12.5, color:U.inkSoft}}>
                 {nH > 0 ? `${nH} hojas × ${rend} − ${nD} desp.` : 'Ingresá las hojas'}
               </span>
-              <span style={{fontSize:26, fontWeight:800, color:U.accent, fontVariantNumeric:'tabular-nums'}}>
+              <span style={{fontSize:26, fontWeight:800, color:U.ok, fontVariantNumeric:'tabular-nums'}}>
                 {preview != null ? preview : '—'}
               </span>
             </div>

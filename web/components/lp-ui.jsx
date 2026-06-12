@@ -15,9 +15,9 @@ function LpClock() {
 
 /* Niveles de urgencia (Mantenimiento) — color por nivel. */
 const LP_URGENCIAS = [
-  { id:'alta',  label:'Alta',  color:'#F87171' },
-  { id:'media', label:'Media', color:'#FBBF24' },
-  { id:'baja',  label:'Baja',  color:'#34D399' },
+  { id:'alta',  label:'Alta',  color:'#FF4060' },
+  { id:'media', label:'Media', color:'#FFB020' },
+  { id:'baja',  label:'Baja',  color:'#00D68F' },
 ];
 
 /* Estilo del botón redondo de stepper (−/+), tematizado por sector (U = tokens). */
