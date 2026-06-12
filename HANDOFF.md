@@ -80,6 +80,27 @@
 
 ---
 
+### [2026-06-12] Producción en Línea — Fase 0.2 (capa de normalización de datos del Excel)
+
+**Qué se hizo:** se agregó una **capa de normalización declarativa en `import-skus`** (`SKU_FIXES` + helper `fixSku`) que corrige al vuelo, durante la importación, los **SKUs duplicados del Excel** sin tocar el archivo original de Seba. Resuelve los ítems #1, #2 y #8 de la sección 0.2 del checklist.
+
+**Por qué:** en la hoja `INSUMOS`, los códigos **TOR005/TOR006/TOR007 estaban definidos dos veces** (filas 43-49): una vez como herrajes rectangulares/set y otra como tornillos de Yori/Hikari. Como `import-skus` hace upsert por SKU, la 2ª definición pisaba a la 1ª → se **perdían 3 piezas** (los tornillos rectangulares desaparecían como pieza y los KIT que los referencian quedaban ambiguos). Esto rompe la futura explosión de BOM (Fase 5).
+
+**Cómo / decisiones (Jefe, 2026-06-12):**
+- **Dónde corregir:** capa de normalización en `import-skus` (no editar el .xlsx de Seba) → versionado, reversible, auditable en git. La fuente queda intacta.
+- **Códigos nuevos** (elegidos siguiendo la secuencia existente, último real = TOR008): variante **Yori → TOR009**, **Hikari → TOR010**, **Hikari x2 → TOR011**. Las rectangulares/set conservan TOR005/006/007.
+- `fixSku(sku, nombre)` reasigna solo cuando el SKU coincide **y** el nombre contiene `YORI`/`HIKARI` (identifica la 2ª definición sin ambigüedad). Se aplica únicamente en el loader de INSUMOS (es la única hoja con la colisión).
+- Ítem #2 (cantidades como texto): ya cubierto por `toIntOrNull` del parser, sin cambios.
+- Ítem #8 (tornillos Hikari): la pieza "Hikari x2" ahora existe única (TOR011); el re-cableado de KIT007 al sub-ensamble se difiere a Fase 5 (el árbol BOM `TIPO/CANTIDAD/HIJO` todavía no se carga — `import-skus` carga solo SKU+nombre).
+
+**Para qué:** dejar el catálogo de piezas consistente y único **antes** de poblar datos, para que el motor de explosión (Fase 5) y la cadena de stock no calculen sobre piezas perdidas o ambiguas.
+
+**Resultado — validación en memoria (SOLO LECTURA, sin tocar BD ni Excel):** réplica de `fixSku` corrida sobre el INSUMOS real → **0 colisiones remanentes**, 50 piezas distintas, TOR005/006/007 conservan las rectangulares/set y aparecen TOR009=Yori, TOR010=Hikari, TOR011=Hikari x2.
+
+**⚠️ Pendiente de Seba (no ejecutable sin su input):** ítems #3 filo (metros por modelo), #4 varilla, #5 patas como pieza de corte (falta `patas_cant`), #6 tapatornillos color huérfanos, #7 caja del Hikari (¿N°2 correcto?). Anotados en el checklist 0.2 con su motivo. `import-skus` sigue **sin ejecutarse** (espera OK del Jefe + cierre de las decisiones de Seba antes de poblar).
+
+---
+
 ### [2026-06-11] Producción en Línea — Fase 2 (RPCs de carga por sector, 0073)
 
 **Qué se hizo:** Migration 0073 — **16 RPCs `prod_rpc_*`** (`SECURITY DEFINER`, `SET search_path = public, pg_temp`, auth gate por `profiles.role`, `REVOKE anon/public` + `GRANT authenticated`). Todas reciben `p_payload jsonb` y devuelven `jsonb`. Aplicada en prod (Management API). **NO toca datos ni tablas existentes** (solo `CREATE OR REPLACE FUNCTION`).

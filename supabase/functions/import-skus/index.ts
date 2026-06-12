@@ -19,6 +19,9 @@
 //
 // Upsert por SKU (nunca duplica). Una fila que viola FK/CHECK se rechaza y
 // se reporta {fila, motivo}, sin abortar el resto.
+//
+// Normalización (Brief 1 · sección 12): correcciones de datos del Excel se
+// aplican en código (ver SKU_FIXES más abajo), sin tocar el .xlsx original.
 // ════════════════════════════════════════════════════════════════════
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -37,6 +40,26 @@ const cell = (row: any[], i: number) => String(row?.[i] ?? "").trim();
 const toIntOrNull = (s: string) => {
   const n = parseInt(String(s).replace(/[^\d-]/g, ""), 10);
   return Number.isFinite(n) ? n : null;
+};
+
+// ── Normalización de datos del Excel (Brief 1 · sección 12) ──────────
+// Correcciones declarativas y VERSIONADAS — el .xlsx original de Seba NO se toca.
+// #1/#8: en la hoja INSUMOS, TOR005/006/007 están definidos DOS veces (una vez
+//   como herrajes rectangulares/set y otra como tornillos de Yori/Hikari). Como
+//   el upsert es por SKU, la 2ª fila pisaría a la 1ª y se perdería una pieza.
+//   Se reasigna un código único a la variante Yori/Hikari (identificada por su
+//   nombre); las rectangulares/set conservan el SKU original.
+//     TOR005 + "YORI"   → TOR009     TOR006 + "HIKARI" → TOR010
+//     TOR007 + "HIKARI" → TOR011 (Hikari x2)
+const SKU_FIXES: { sku: string; nombreIncluye: string; nuevoSku: string }[] = [
+  { sku: "TOR005", nombreIncluye: "YORI",   nuevoSku: "TOR009" },
+  { sku: "TOR006", nombreIncluye: "HIKARI", nuevoSku: "TOR010" },
+  { sku: "TOR007", nombreIncluye: "HIKARI", nuevoSku: "TOR011" },
+];
+const fixSku = (sku: string, nombre: string): string => {
+  const up = String(nombre).toUpperCase();
+  const f = SKU_FIXES.find((x) => x.sku === sku && up.includes(x.nombreIncluye));
+  return f ? f.nuevoSku : sku;
 };
 
 Deno.serve(async (req) => {
@@ -129,9 +152,11 @@ Deno.serve(async (req) => {
     const rows = sheetRows("INSUMOS");
     if (rows.length === 0) reject("INSUMOS", "Pestaña no encontrada");
     for (let i = 1; i < rows.length; i++) {
-      const sku = cell(rows[i], 0);
-      if (!sku) continue; // fila de continuación (más hijos del padre anterior)
-      await upsert("prod_pieza", { sku, nombre: cell(rows[i], 1) || null },
+      const rawSku = cell(rows[i], 0);
+      if (!rawSku) continue; // fila de continuación (más hijos del padre anterior)
+      const nombre = cell(rows[i], 1);
+      const sku = fixSku(rawSku, nombre); // normalización #1/#8 (duplicados Yori/Hikari)
+      await upsert("prod_pieza", { sku, nombre: nombre || null },
         "sku", sku, piezaSet, `INSUMOS:${i + 1}`);
     }
   }
