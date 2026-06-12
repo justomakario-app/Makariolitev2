@@ -248,24 +248,23 @@
 ### Tab Mantenimiento ✅ (genérica `LpMant`)
 - [x] Máquinas: Ingletadora · Cepilladora · Caladora · Lijadora de tambor · Lijadora de banda · Compresor · Atornilladora · Amoladora + urgencia + descripción
 
-## 3.4 Embalaje — coral #993C1D (3 tabs, SIN Mantenimiento) — por producto MAD
+## 3.4 Embalaje — coral #993C1D (3 tabs, SIN Mantenimiento) — por producto MAD ✅ `embalaje-sector.jsx`
 ### Tab Inicio
-- [ ] 🔴📊 Banner "Prioridad del día · productos a embalar" (coral): ordenados por canal (Colecta→Flex→resto), falta + armables ahora
-- [ ] ⚙️ Si faltan piezas/patas → "esperando piezas/patas" en ámbar
-- [ ] 🔴 Stock "Piezas terminadas · de Melamina" (violeta) por TAP
-- [ ] 🔴 Stock "Patas · de Pino" (verde)
-- [ ] Tabla "Embalados hoy · listos para despacho": SKU | Producto | Canal | Embalados + total
+- [x] 🔴📊 Banner "Prioridad · productos a embalar" (coral): falta (`prod_v_resumen_dia.pendiente`) + armables ahora *(sin separar canal — la vista agrega por producto)*
+- [x] ⚙️ Si no hay armables → "esperando piezas / patas" en ámbar
+- [x] 🔴 Stock "Piezas · de Melamina" (violeta) por TAP (`stock_melamina`)
+- [x] 🔴 Stock "Patas · de Pino" (verde) (`stock_patas`)
+- [x] Tabla "Embalados hoy": Producto | Canal | Embalados + total listos para despacho
 ### Tab Scan (armar producto)
-- [ ] QR del producto (MAD) o selección manual
-- [ ] 🔍⚙️ VERIFICACIÓN DE COMPONENTES: checklist ✓/✗ por cada tapa + patas + kit
-- [ ] ⚙️ Calcula armables automático (cuello de botella — ej. MAD301 arma 14 porque las patas limitan)
-- [ ] Selector de cantidad a armar
-- [ ] ⚙️ Al confirmar: descuenta piezas (Melamina) + patas (Pino) + insumos del kit, marca "listo para despacho"
-- [ ] NO registra fallas
-### Tab Solicitud
-- [ ] Kit (checklist): Cajas (varios tamaños) · Film burbuja · Tornillos · Soportes · Bolsas
-- [ ] Otros (checklist): Cinta · Etiquetas/stickers · Fleje/precinto · Esquineros de cartón · Marcador/fibrón
-- [ ] Otro: texto libre + cantidad
+- [ ] QR del producto (MAD) — stub "próximamente" · selección manual ✅
+- [x] 🔍⚙️ VERIFICACIÓN DE COMPONENTES: checklist ✓/✗ por tapa (receta) + patas + kit (con stock have/need)
+- [x] ⚙️ Armables automático (cuello de botella) desde `prod_v_armables`
+- [x] Selector de cantidad a armar (stepper, tope = armables)
+- [x] ⚙️ Al confirmar: `prod_rpc_registrar_embalaje` descuenta piezas + patas, marca "listo para despacho" (+ `prod_pedido_estado` si hay order_id)
+- [x] NO registra fallas
+### Tab Solicitud ✅ (genérica `LpSolicitud`)
+- [x] Kit: Cajas · Film burbuja · Tornillos · Soportes · Bolsas
+- [x] Otros: Cinta · Etiquetas/stickers · Fleje/precinto · Esquineros de cartón · Marcador/fibrón
 
 ---
 
@@ -451,7 +450,7 @@
 | 0 — Cimientos + datos maestros | `[~]` | Backend ✅ · Excel pendiente de correr · 🔒 correcciones de datos pendientes |
 | 1 — Roles y accesos | `[x]` | Roles ✅ · RLS ✅ · guards frontend (router por sector) ✅ |
 | 2 — Motor de carga (RPCs) | `[x]` | 16 RPCs + cadena de stock + smoke ✅ |
-| 3 — Frontend por sector | `[~]` | **CNC ✅ · Melamina ✅ · Pino ✅** · falta Embalaje (coral, armables) · Panel Encargado (Fase 7) |
+| 3 — Frontend por sector | `[~]` | **4 sectores de operario ✅** (CNC · Melamina · Pino · Embalaje) · falta Panel del Encargado (Fase 7) y QR de cámara (diferido) |
 | 4 — Encadenamiento + Realtime | `[ ]` | — |
 | 5 — Explosión + optimizadores | `[ ]` | ⚠️ lo más complejo |
 | 6 — Stock y compras | `[ ]` | — |

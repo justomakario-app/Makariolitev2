@@ -30,7 +30,8 @@ window.LP_DATA = window.LP_DATA || (function () {
     // ── Maestros ──
     placas:    () => sel('prod_placa', 'sku, nombre, material, rendimiento, pieza_sku, combinada', q => q.order('sku')),
     piezas:    () => sel('prod_pieza', 'sku, nombre', q => q.order('sku')),
-    productos: () => sel('prod_producto', 'sku, nombre, color, patas_tipo, patas_cant, activo', q => q.eq('activo', true).order('sku')),
+    productos: () => sel('prod_producto', 'sku, nombre, color, patas_tipo, patas_cant, kit_embalaje, activo', q => q.eq('activo', true).order('sku')),
+    recetaProducto: (sku) => sel('prod_receta', 'pieza_sku, cantidad', q => q.eq('producto_sku', sku)),
 
     // ── Stock y vistas de cálculo ──
     stock:             () => rpc('prod_rpc_get_stock'),                 // {stock_pieza, stock_melamina, stock_patas, stock_terminado}

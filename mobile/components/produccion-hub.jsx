@@ -27,6 +27,7 @@ function LineaProductivaGuard({ role }) {
   if (role === 'cnc' && window.CncSector) return <window.CncSector/>;
   if (role === 'melamina' && window.MelaminaSector) return <window.MelaminaSector/>;
   if (role === 'pino' && window.PinoSector) return <window.PinoSector/>;
+  if (role === 'embalaje' && window.EmbalajeSector) return <window.EmbalajeSector/>;
   if (!t) {
     return window.ProximamentePlaceholder
       ? <window.ProximamentePlaceholder nombre="Línea productiva"/>

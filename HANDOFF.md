@@ -80,6 +80,23 @@
 
 ---
 
+### [2026-06-12] Producción en Línea — Fase 3 · Sector Embalaje (cierra los 4 operarios)
+
+**Qué se hizo:** **Sector Embalaje** completo (`embalaje-sector.jsx`, coral, **3 tabs sin Mantenimiento**). Es donde convergen las 2 líneas (Melamina + Pino) y se produce el producto "listo para despacho".
+
+**Cómo / decisiones:**
+- **Data:** se amplió `lp-data.jsx` — `productos()` ahora trae `kit_embalaje`, y se agregó `recetaProducto(sku)` (lee `prod_receta`). `lp-data?v=2`.
+- **Tab Inicio:** banner "Prioridad · productos a embalar" (coral) desde `prod_v_resumen_dia` (pendiente) cruzado con `prod_v_armables`; si no hay armables → "esperando piezas/patas" en ámbar. Stocks de origen lado a lado: "Piezas · Melamina" (violeta, `stock_melamina`) y "Patas · Pino" (verde, `stock_patas`). Tabla "Embalados hoy" + total listos para despacho.
+- **Tab Armar (Scan):** picker de producto con "arma N" (armables); al elegir, carga la receta y muestra la **verificación de componentes** ✓/✗ (cada tapa de la receta + patas, con `have/need` según unidades; kit informativo desde `kit_embalaje`). Selector de cantidad con tope = armables (cuello de botella del backend). Confirmar → `prod_rpc_registrar_embalaje` (descuenta melamina+patas, produce terminado, marca pedido si hay order_id). **No registra fallas** (por diseño).
+- **Solicitud** (kit + otros) vía `LpSolicitud`. Sin tab Mantenimiento (3 ítems de nav).
+- **Wiring:** guard enruta `role === 'embalaje' → window.EmbalajeSector`. `produccion-hub?v=5`. Espejo web/mobile, 0 sintaxis no probada, llaves balanceadas.
+
+**Resultado:** **los 4 sectores de operario quedan completos** (CNC azul · Melamina violeta · Pino verde · Embalaje coral), todos sobre la data/UI compartida (`lp-data`/`lp-ui`). La cadena de stock completa es operable desde el celular.
+
+**Técnico:** NUEVO `web|mobile/components/embalaje-sector.jsx`; edición `lp-data.jsx`, `produccion-hub.jsx` + ambos HTML. Sin backend. **Falta de Fase 3:** QR de cámara (diferido en los 4) y el **Panel del Encargado (Fase 7, slate)**.
+
+---
+
 ### [2026-06-12] Producción en Línea — Fase 3 · Sector Pino
 
 **Qué se hizo:** **Sector Pino** completo (`pino-sector.jsx`, verde, 4 tabs). Trabaja con 2 tamaños de pata (chica/grande), carga manual a granel (sin QR).
