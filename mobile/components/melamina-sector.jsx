@@ -1,0 +1,382 @@
+/* ══ SECTOR MELAMINA — Línea productiva (FASE 3) ═══════════════════════
+   Pantalla del operario Melamina. Mobile-first ~430px, dark, violeta.
+   Trabaja por TAP individual: consume crudo de CNC (stock_pieza) y produce
+   piezas terminadas (stock_melamina) que alimentan Embalaje.
+   4 tabs: Inicio (crudo CNC + prioridad + terminadas) · Scan (registrar) ·
+   Solicitud · Mantenimiento. Data: window.LP_DATA. UI: lp-ui.jsx.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+const MEL_UI = {
+  accent:'#8B80E8', accentSoft:'rgba(83,74,183,.20)', accentLine:'rgba(124,111,224,.42)',
+  cnc:'#5B8DEF', cncSoft:'rgba(37,99,235,.14)', cncLine:'rgba(37,99,235,.32)',
+  bg:'#0B0F1A', surface:'#121826', surface2:'#1A2236', border:'#232C42',
+  ink:'#F1F5F9', inkSoft:'#94A3B8', inkMuted:'#64748B', danger:'#F87171', warn:'#FBBF24', ok:'#34D399',
+  radius:16,
+};
+
+const MEL_SOLICITUD_CAT = [
+  { grupo:'Filo (colores)', items:['Filo Blanco', 'Filo Negro', 'Filo Teka Ártico', 'Filo Kiri', 'Filo Paraíso', 'Filo Lino Chiaro', 'Filo Seda Giorno'] },
+  { grupo:'Herramientas / consumibles', items:['Tiza', 'Espátula', 'Pistola de calor', 'Lijas', 'Mecha', 'Fibrón negro'] },
+  { grupo:'Moldes', items:['Molde / detalle'] },
+];
+const MEL_MANT_TIPOS = ['Enchapadora', 'Pistola de calor', 'Eléctrico', 'Molde', 'Ruido/vibración', 'Preventivo'];
+
+function MelaminaSector() {
+  const U = MEL_UI;
+  const toast = useToast();
+  const [tab, setTab] = useState('inicio');
+  const [jornada, setJornada] = useState(null);
+  const [piezas, setPiezas] = useState([]);       // TAP
+  const [crudo, setCrudo] = useState([]);          // stock_pieza [{pieza_sku, disponible}]
+  const [prioridad, setPrioridad] = useState([]);  // prod_v_prioridad_melamina
+  const [registros, setRegistros] = useState([]);  // melaminaDia
+  const [loading, setLoading] = useState(true);
+
+  const crudoMap = useMemo(() => {
+    const m = {}; for (const r of crudo) m[r.pieza_sku] = Number(r.disponible) || 0; return m;
+  }, [crudo]);
+  const piezaNombre = useMemo(() => {
+    const m = {}; for (const p of piezas) m[p.sku] = p.nombre || p.sku; return m;
+  }, [piezas]);
+
+  const jornadaAbierta = jornada && jornada.estado === 'abierta';
+
+  const cargar = useCallback(async () => {
+    setLoading(true);
+    try {
+      const j = await window.LP_DATA.jornadaHoy();
+      setJornada(j);
+      const [pz, st, pr, rg] = await Promise.all([
+        window.LP_DATA.piezas().catch(() => []),
+        window.LP_DATA.stock().catch(() => null),
+        window.LP_DATA.prioridadMelamina().catch(() => []),
+        j && j.jornada_id ? window.LP_DATA.melaminaDia(j.jornada_id).catch(() => []) : Promise.resolve([]),
+      ]);
+      setPiezas((pz || []).filter(p => String(p.sku).startsWith('TAP')));
+      setCrudo(st && st.stock_pieza ? st.stock_pieza : []);
+      setPrioridad(pr || []);
+      setRegistros(rg || []);
+    } catch (err) {
+      toast.error(err && err.message ? err.message : 'No se pudo cargar el sector');
+    } finally { setLoading(false); }
+  }, [toast]);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  const totalTerminadas = registros.reduce((s, r) => s + (Number(r.terminadas) || 0), 0);
+
+  const NAV = [
+    { id:'inicio',    label:'Inicio',    icon:'home' },
+    { id:'scan',      label:'Scan',      icon:'qr' },
+    { id:'solicitud', label:'Solicitud', icon:'package' },
+    { id:'mant',      label:'Mant.',     icon:'tools' },
+  ];
+
+  return (
+    <div style={{maxWidth:430, margin:'0 auto', minHeight:600, background:U.bg, color:U.ink,
+                 borderRadius:U.radius, overflow:'hidden', display:'flex', flexDirection:'column',
+                 boxShadow:'0 10px 40px rgba(0,0,0,.25)', fontSize:14}}>
+
+      {/* Topbar */}
+      <div style={{padding:'16px 18px', background:U.surface, borderBottom:`1px solid ${U.border}`,
+                   display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+        <div style={{display:'flex', alignItems:'center', gap:9}}>
+          <span style={{width:34, height:34, borderRadius:10, background:U.accentSoft,
+                        border:`1px solid ${U.accentLine}`, display:'flex', alignItems:'center', justifyContent:'center'}}>
+            <Icon n="flame" s={18} c={U.accent}/>
+          </span>
+          <div>
+            <div style={{fontSize:14, fontWeight:800, letterSpacing:'.02em', lineHeight:1.1}}>Melamina</div>
+            <div style={{display:'flex', alignItems:'center', gap:5, marginTop:2}}>
+              <span style={{width:6, height:6, borderRadius:999, background:U.ok, boxShadow:`0 0 0 3px rgba(52,211,153,.18)`}}/>
+              <span style={{fontSize:9.5, fontWeight:700, letterSpacing:'.14em', color:U.inkSoft, textTransform:'uppercase'}}>En vivo</span>
+            </div>
+          </div>
+        </div>
+        <div style={{textAlign:'right'}}>
+          <div style={{fontSize:15, fontWeight:800, fontVariantNumeric:'tabular-nums'}}><LpClock/></div>
+          <span style={{display:'inline-block', marginTop:3, fontSize:9.5, fontWeight:800, letterSpacing:'.06em',
+                        textTransform:'uppercase', padding:'2px 8px', borderRadius:999,
+                        background: jornadaAbierta ? 'rgba(52,211,153,.14)' : 'rgba(248,113,113,.14)',
+                        color: jornadaAbierta ? U.ok : U.danger}}>
+            {jornada ? (jornadaAbierta ? 'Jornada abierta' : 'Jornada cerrada') : 'Sin jornada'}
+          </span>
+        </div>
+      </div>
+
+      {/* Contenido */}
+      <div style={{flex:1, padding:'18px', overflowY:'auto'}}>
+        {loading ? (
+          <div style={{textAlign:'center', color:U.inkMuted, padding:'60px 0', fontSize:13}}>Cargando sector…</div>
+        ) : tab === 'inicio' ? (
+          <MelInicio U={U} jornadaAbierta={jornadaAbierta} jornada={jornada} crudo={crudo}
+                     prioridad={prioridad} registros={registros} piezaNombre={piezaNombre} totalTerminadas={totalTerminadas}/>
+        ) : tab === 'scan' ? (
+          <MelScan U={U} jornadaAbierta={jornadaAbierta} piezas={piezas} crudoMap={crudoMap}
+                   onRegistrado={cargar} toast={toast} goInicio={() => setTab('inicio')}/>
+        ) : tab === 'solicitud' ? (
+          <LpSolicitud U={U} sector="melamina" catalogo={MEL_SOLICITUD_CAT} toast={toast}/>
+        ) : (
+          <LpMant U={U} sector="melamina" tipos={MEL_MANT_TIPOS} toast={toast}/>
+        )}
+      </div>
+
+      {/* Bottom nav */}
+      <div style={{display:'flex', background:U.surface, borderTop:`1px solid ${U.border}`}}>
+        {NAV.map(n => {
+          const on = tab === n.id;
+          return (
+            <button key={n.id} onClick={() => setTab(n.id)}
+              style={{flex:1, border:'none', background:'transparent', cursor:'pointer',
+                      padding:'10px 4px 11px', display:'flex', flexDirection:'column', alignItems:'center', gap:4,
+                      color: on ? U.accent : U.inkMuted, borderTop:`2px solid ${on ? U.accent : 'transparent'}`,
+                      marginTop:-1, transition:'color .15s ease'}}>
+              <Icon n={n.icon} s={19} c={on ? U.accent : U.inkMuted}/>
+              <span style={{fontSize:10, fontWeight:on ? 800 : 600, letterSpacing:'.02em'}}>{n.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ── Tab Inicio ── */
+function MelInicio({ U, jornadaAbierta, jornada, crudo, prioridad, registros, piezaNombre, totalTerminadas }) {
+  const prioridadFalta = prioridad.filter(p => (Number(p.falta) || 0) > 0);
+  return (
+    <div>
+      {!jornadaAbierta && (
+        <div style={{background:'rgba(248,113,113,.10)', border:`1px solid rgba(248,113,113,.28)`,
+                     borderRadius:12, padding:'12px 14px', marginBottom:16, display:'flex', gap:10, alignItems:'flex-start'}}>
+          <Icon n="alert" s={17} c={U.danger}/>
+          <div style={{fontSize:12.5, lineHeight:1.5, color:U.ink}}>
+            {jornada ? 'La jornada de hoy está cerrada.' : 'Todavía no se abrió la jornada de hoy.'}
+            <span style={{color:U.inkSoft}}> Podés ver el stock pero no registrar.</span>
+          </div>
+        </div>
+      )}
+
+      {/* Crudo de CNC */}
+      <div style={{marginBottom:18}}>
+        <div style={{display:'flex', alignItems:'center', gap:7, marginBottom:10}}>
+          <span style={{width:8, height:8, borderRadius:2, background:U.cnc}}/>
+          <h3 style={{fontSize:13.5, fontWeight:800, margin:0, color:U.ink}}>Piezas crudas · de CNC</h3>
+        </div>
+        {crudo.length === 0 ? (
+          <div style={{background:U.cncSoft, border:`1px solid ${U.cncLine}`, borderRadius:12, padding:'14px',
+                       fontSize:12.5, color:U.inkSoft, textAlign:'center'}}>Esperando cortes de CNC…</div>
+        ) : (
+          <div style={{display:'flex', flexWrap:'wrap', gap:8}}>
+            {crudo.map(r => (
+              <div key={r.pieza_sku} style={{background:U.cncSoft, border:`1px solid ${U.cncLine}`, borderRadius:11, padding:'8px 12px'}}>
+                <div style={{fontSize:11, color:U.inkSoft, fontWeight:600}}>{r.pieza_sku}</div>
+                <div style={{fontSize:17, fontWeight:800, color:U.cnc, fontVariantNumeric:'tabular-nums'}}>{r.disponible}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Prioridad del día por TAP */}
+      {prioridadFalta.length > 0 && (
+        <div style={{marginBottom:18}}>
+          <h3 style={{fontSize:13.5, fontWeight:800, margin:'0 0 10px', color:U.ink}}>Prioridad del día · por TAP</h3>
+          <div style={{display:'flex', flexDirection:'column', gap:8}}>
+            {prioridadFalta.map(p => {
+              const falta = Number(p.falta) || 0;
+              const cnc = Number(p.crudo_cnc) || 0;
+              const listo = cnc >= falta;
+              const col = listo ? U.accent : U.warn;
+              const colSoft = listo ? U.accentSoft : 'rgba(251,191,36,.12)';
+              const colLine = listo ? U.accentLine : 'rgba(251,191,36,.30)';
+              return (
+                <div key={p.pieza_sku} style={{background:colSoft, border:`1px solid ${colLine}`, borderRadius:12,
+                             padding:'11px 14px', display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+                  <div>
+                    <div style={{fontSize:12.5, fontWeight:800, color:U.ink}}>{p.pieza_sku}</div>
+                    <div style={{fontSize:10.5, color:U.inkSoft, marginTop:1}}>
+                      {listo ? `crudo ${cnc} disponible` : `esperando CNC · crudo ${cnc}/${falta}`}
+                    </div>
+                  </div>
+                  <div style={{textAlign:'right'}}>
+                    <div style={{fontSize:18, fontWeight:800, color:col, fontVariantNumeric:'tabular-nums'}}>{falta}</div>
+                    <div style={{fontSize:9, color:U.inkMuted, textTransform:'uppercase', letterSpacing:'.08em'}}>falta</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Terminadas hoy */}
+      <div style={{display:'flex', alignItems:'baseline', justifyContent:'space-between', marginBottom:12}}>
+        <h3 style={{fontSize:15, fontWeight:800, margin:0, color:U.ink}}>Piezas terminadas hoy</h3>
+        <span style={{fontSize:11, color:U.inkMuted}}>{registros.length} {registros.length === 1 ? 'registro' : 'registros'}</span>
+      </div>
+      {registros.length === 0 ? (
+        <div style={{textAlign:'center', color:U.inkMuted, padding:'40px 12px', background:U.surface,
+                     border:`1px solid ${U.border}`, borderRadius:14}}>
+          <Icon n="flame" s={26} c={U.inkMuted}/>
+          <p style={{fontSize:12.5, margin:'12px 0 0'}}>Sin piezas terminadas hoy.</p>
+        </div>
+      ) : (
+        <div style={{background:U.surface, border:`1px solid ${U.border}`, borderRadius:14, overflow:'hidden'}}>
+          <div style={{display:'grid', gridTemplateColumns:'1fr 56px 48px 56px', gap:4, padding:'10px 12px',
+                       fontSize:9.5, fontWeight:800, letterSpacing:'.06em', textTransform:'uppercase',
+                       color:U.inkMuted, borderBottom:`1px solid ${U.border}`}}>
+            <span>Pieza</span><span style={{textAlign:'right'}}>Term.</span>
+            <span style={{textAlign:'right'}}>Fallas</span><span style={{textAlign:'right'}}>Netas</span>
+          </div>
+          {registros.map(r => (
+            <div key={r.id} style={{display:'grid', gridTemplateColumns:'1fr 56px 48px 56px', gap:4,
+                         padding:'11px 12px', alignItems:'center', borderBottom:`1px solid ${U.border}`, fontSize:12.5}}>
+              <div style={{minWidth:0}}>
+                <div style={{fontWeight:700, color:U.ink, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{piezaNombre[r.pieza_sku] || r.pieza_sku}</div>
+                <div style={{fontSize:10.5, color:U.inkMuted}}>{r.pieza_sku}</div>
+              </div>
+              <span style={{textAlign:'right', fontVariantNumeric:'tabular-nums', color:U.inkSoft}}>{r.terminadas}</span>
+              <span style={{textAlign:'right', fontVariantNumeric:'tabular-nums', color: r.fallas ? U.danger : U.inkMuted}}>{r.fallas}</span>
+              <span style={{textAlign:'right', fontVariantNumeric:'tabular-nums', fontWeight:800, color:U.accent}}>{r.terminadas}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{marginTop:16, background:U.accentSoft, border:`1px solid ${U.accentLine}`, borderRadius:14,
+                   padding:'14px 16px', display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+        <div style={{display:'flex', alignItems:'center', gap:10}}>
+          <Icon n="arrow-right" s={18} c={U.accent}/>
+          <span style={{fontSize:12.5, fontWeight:700, color:U.ink}}>Piezas netas → Embalaje</span>
+        </div>
+        <span style={{fontSize:22, fontWeight:800, color:U.accent, fontVariantNumeric:'tabular-nums'}}>{totalTerminadas}</span>
+      </div>
+    </div>
+  );
+}
+
+/* ── Tab Scan ── */
+function MelScan({ U, jornadaAbierta, piezas, crudoMap, onRegistrado, toast, goInicio }) {
+  const [sel, setSel] = useState(null);
+  const [term, setTerm] = useState('');
+  const [fallas, setFallas] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const crudo = sel ? (crudoMap[sel.sku] || 0) : 0;
+  const nT = parseInt(term, 10) || 0;
+  const nF = parseInt(fallas, 10) || 0;
+  const consumo = nT + nF;
+  const excede = sel && consumo > crudo;
+  const puedeEnviar = jornadaAbierta && sel && consumo > 0 && !excede && !saving;
+
+  const enviar = async () => {
+    if (!puedeEnviar) return;
+    setSaving(true);
+    try {
+      await window.LP_DATA.registrarMelamina({ pieza_sku: sel.sku, terminadas: nT, fallas: nF });
+      toast.success(`+${nT} piezas → Embalaje`);
+      setSel(null); setTerm(''); setFallas('');
+      await onRegistrado();
+      goInicio();
+    } catch (err) {
+      toast.error(err && err.message ? err.message : 'No se pudo registrar');
+    } finally { setSaving(false); }
+  };
+
+  const inputStyle = {
+    width:'100%', boxSizing:'border-box', background:U.surface2, border:`1px solid ${U.border}`,
+    borderRadius:12, color:U.ink, fontSize:20, fontWeight:800, textAlign:'center',
+    padding:'14px 10px', outline:'none', fontVariantNumeric:'tabular-nums',
+  };
+
+  if (!jornadaAbierta) {
+    return (
+      <div style={{textAlign:'center', color:U.inkMuted, padding:'56px 16px'}}>
+        <Icon n="lock" s={28} c={U.inkMuted}/>
+        <h3 style={{color:U.ink, fontSize:16, fontWeight:800, margin:'14px 0 6px'}}>Jornada no abierta</h3>
+        <p style={{fontSize:12.5, lineHeight:1.6, maxWidth:280, margin:'0 auto'}}>
+          No se puede registrar hasta que el encargado abra la jornada de hoy.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <button disabled style={{width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:9,
+                    background:U.surface, border:`1px dashed ${U.border}`, borderRadius:14, color:U.inkMuted,
+                    padding:'13px', fontSize:12.5, fontWeight:700, cursor:'not-allowed', marginBottom:18}}>
+        <Icon n="qr" s={17} c={U.inkMuted}/> Escanear QR de pieza · próximamente
+      </button>
+
+      <div style={{fontSize:10, fontWeight:800, letterSpacing:'.12em', textTransform:'uppercase', color:U.inkMuted, marginBottom:10}}>
+        1 · Elegí la pieza (TAP)
+      </div>
+      {piezas.length === 0 ? (
+        <div style={{textAlign:'center', color:U.inkMuted, padding:'30px 12px', background:U.surface,
+                     border:`1px solid ${U.border}`, borderRadius:12, fontSize:12.5, marginBottom:18}}>
+          No hay piezas cargadas todavía (se cargan al importar el catálogo).
+        </div>
+      ) : (
+        <div style={{display:'flex', flexWrap:'wrap', gap:8, marginBottom:8}}>
+          {piezas.map(p => {
+            const on = sel && sel.sku === p.sku;
+            const cr = crudoMap[p.sku] || 0;
+            return (
+              <button key={p.sku} onClick={() => setSel(p)}
+                style={{border:`1px solid ${on ? U.accent : U.border}`, background: on ? U.accentSoft : U.surface,
+                        borderRadius:11, padding:'9px 12px', cursor:'pointer', textAlign:'left', minWidth:104}}>
+                <div style={{fontSize:12.5, fontWeight:700, color:on ? U.ink : U.inkSoft, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:150}}>{p.nombre || p.sku}</div>
+                <div style={{fontSize:10, color: cr > 0 ? U.cnc : U.inkMuted, marginTop:1}}>{p.sku} · crudo {cr}</div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {sel && (
+        <div>
+          <div style={{fontSize:12, color:U.inkSoft, margin:'16px 0 10px'}}>
+            Crudo disponible de <b style={{color:U.cnc}}>{sel.sku}</b>: <b style={{color:U.cnc}}>{crudo}</b>
+          </div>
+          <div style={{display:'flex', gap:12}}>
+            <label style={{flex:1}}>
+              <span style={{display:'block', fontSize:11, color:U.inkSoft, marginBottom:6}}>Terminadas</span>
+              <input type="number" inputMode="numeric" min="0" value={term} placeholder="0"
+                     onChange={e => setTerm(e.target.value)} style={inputStyle}/>
+            </label>
+            <label style={{flex:1}}>
+              <span style={{display:'block', fontSize:11, color:U.inkSoft, marginBottom:6}}>Fallas / roturas</span>
+              <input type="number" inputMode="numeric" min="0" value={fallas} placeholder="0"
+                     onChange={e => setFallas(e.target.value)} style={inputStyle}/>
+            </label>
+          </div>
+
+          <div style={{marginTop:16, background:U.accentSoft, border:`1px solid ${U.accentLine}`, borderRadius:14, padding:'14px 16px'}}>
+            <div style={{display:'flex', alignItems:'baseline', justifyContent:'space-between'}}>
+              <span style={{fontSize:12.5, color:U.inkSoft}}>Consume crudo</span>
+              <span style={{fontSize:18, fontWeight:800, color: excede ? U.danger : U.ink, fontVariantNumeric:'tabular-nums'}}>{consumo} / {crudo}</span>
+            </div>
+            <div style={{display:'flex', alignItems:'baseline', justifyContent:'space-between', marginTop:6}}>
+              <span style={{fontSize:12.5, color:U.inkSoft}}>Netas → Embalaje</span>
+              <span style={{fontSize:22, fontWeight:800, color:U.accent, fontVariantNumeric:'tabular-nums'}}>{nT}</span>
+            </div>
+            {excede && <div style={{fontSize:11, color:U.danger, marginTop:8}}>Supera el crudo disponible de CNC.</div>}
+          </div>
+
+          <button onClick={enviar} disabled={!puedeEnviar}
+            style={{width:'100%', marginTop:16, padding:'15px', borderRadius:14, border:'none',
+                    background: puedeEnviar ? U.accent : U.surface2, color: puedeEnviar ? '#fff' : U.inkMuted,
+                    fontSize:15, fontWeight:800, cursor: puedeEnviar ? 'pointer' : 'not-allowed',
+                    display:'flex', alignItems:'center', justifyContent:'center', gap:8}}>
+            <Icon n="plus" s={18} c={puedeEnviar ? '#fff' : U.inkMuted}/>
+            {saving ? 'Registrando…' : 'Agregar al reporte'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+window.MelaminaSector = MelaminaSector;

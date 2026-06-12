@@ -10,48 +10,7 @@
    auth.uid() en el backend. NO toca data.js ni el store del resto de la app.
    ═══════════════════════════════════════════════════════════════════════ */
 
-/* ── Data layer de Línea productiva (definida una vez, compartida) ── */
-window.LP_DATA = window.LP_DATA || {
-  async jornadaHoy() {
-    const { data, error } = await window.SUPA.rpc('prod_rpc_get_jornada_hoy', { p_payload: {} });
-    if (error) throw new Error(error.message);
-    return data; // {jornada_id, fecha, estado} | null
-  },
-  async placas() {
-    const { data, error } = await window.SUPA.from('prod_placa')
-      .select('sku, nombre, material, rendimiento, pieza_sku, combinada').order('sku');
-    if (error) throw new Error(error.message);
-    return data || [];
-  },
-  async registrarCorte(payload) {
-    const { data, error } = await window.SUPA.rpc('prod_rpc_registrar_corte', { p_payload: payload });
-    if (error) throw new Error(error.message);
-    return data; // {ok, corte_id, piezas_generadas}
-  },
-  async cortesDia(jornadaId) {
-    const { data, error } = await window.SUPA.from('prod_corte')
-      .select('id, placa_sku, hojas, desperdicio, created_at')
-      .eq('jornada_id', jornadaId).order('created_at', { ascending: false });
-    if (error) throw new Error(error.message);
-    return data || [];
-  },
-  async resumenDia() {
-    const { data, error } = await window.SUPA.from('prod_v_resumen_dia')
-      .select('producto_sku, nombre, color, pendiente').order('pendiente', { ascending: false });
-    if (error) throw new Error(error.message);
-    return data || [];
-  },
-  async crearSolicitud(payload) {
-    const { data, error } = await window.SUPA.rpc('prod_rpc_crear_solicitud', { p_payload: payload });
-    if (error) throw new Error(error.message);
-    return data;
-  },
-  async reportarMantenimiento(payload) {
-    const { data, error } = await window.SUPA.rpc('prod_rpc_reportar_mantenimiento', { p_payload: payload });
-    if (error) throw new Error(error.message);
-    return data;
-  },
-};
+/* La data layer vive en lp-data.jsx (window.LP_DATA), cargada antes que este archivo. */
 
 /* ── Tokens dark del sector CNC ── */
 const CNC_UI = {
@@ -80,20 +39,7 @@ const CNC_SOLICITUD_CAT = [
   { grupo:'Refrigerante', items:['Agua destilada'] },
 ];
 const CNC_MANT_TIPOS = ['Mecánico', 'Eléctrico', 'Software/CNC', 'Temperatura', 'Ruido/vibración', 'Preventivo'];
-const LP_URGENCIAS = [
-  { id:'alta',  label:'Alta',  color:'#F87171' },
-  { id:'media', label:'Media', color:'#FBBF24' },
-  { id:'baja',  label:'Baja',  color:'#34D399' },
-];
-
-/* ── Reloj de la topbar ── */
-function LpClock() {
-  const [now, setNow] = useState(new Date());
-  useEffect(() => { const id = setInterval(() => setNow(new Date()), 30000); return () => clearInterval(id); }, []);
-  const hh = String(now.getHours()).padStart(2, '0');
-  const mm = String(now.getMinutes()).padStart(2, '0');
-  return <span>{hh}:{mm}</span>;
-}
+/* LpClock, LP_URGENCIAS y lpStepBtn vienen de lp-ui.jsx (compartidos). */
 
 function CncSector() {
   const U = CNC_UI;
@@ -479,9 +425,9 @@ function CncSolicitud({ U, toast }) {
                   <span style={{fontSize:12.5, color: n > 0 ? U.ink : U.inkSoft, fontWeight: n > 0 ? 700 : 500, paddingRight:10}}>{it}</span>
                   {n > 0 ? (
                     <div style={{display:'flex', alignItems:'center', gap:10}}>
-                      <button onClick={() => bump(it, -1)} style={stepBtn(U)}>−</button>
+                      <button onClick={() => bump(it, -1)} style={lpStepBtn(U)}>−</button>
                       <span style={{minWidth:18, textAlign:'center', fontWeight:800, color:U.accent, fontVariantNumeric:'tabular-nums'}}>{n}</span>
-                      <button onClick={() => bump(it, 1)} style={stepBtn(U)}>+</button>
+                      <button onClick={() => bump(it, 1)} style={lpStepBtn(U)}>+</button>
                     </div>
                   ) : (
                     <button onClick={() => bump(it, 1)}
@@ -590,12 +536,6 @@ function CncMant({ U, toast }) {
       </button>
     </div>
   );
-}
-
-/* stepper redondo reutilizable */
-function stepBtn(U) {
-  return { border:`1px solid ${U.border}`, background:U.surface2, color:U.ink, borderRadius:8,
-           width:28, height:28, fontSize:17, fontWeight:700, cursor:'pointer', lineHeight:1 };
 }
 
 window.CncSector = CncSector;

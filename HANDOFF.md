@@ -80,6 +80,26 @@
 
 ---
 
+### [2026-06-12] Producción en Línea — Fase 3 · Sector Melamina + refactor a data/UI compartida
+
+**Qué se hizo:** (1) se **centralizó** la data layer y la UI repetida de los sectores en dos archivos compartidos; (2) se construyó el **Sector Melamina** completo (violeta, 4 tabs).
+
+**Por qué:** antes de replicar CNC ×4 sectores, factorizar lo común evita 4 copias divergentes y reduce el rework. La data layer (`window.LP_DATA`) y las tabs Solicitud/Mantenimiento son idénticas entre sectores salvo catálogo/color.
+
+**Cómo / decisiones:**
+- **`lp-data.jsx`** (nuevo): `window.LP_DATA` completo para los 4 sectores (jornada, maestros, stock/vistas, registrar+leer de cada sector, solicitud, mantenimiento). Se quitó el bloque LP_DATA que estaba inline en cnc-sector.
+- **`lp-ui.jsx`** (nuevo): primitivas compartidas `LpClock`, `LP_URGENCIAS`, `lpStepBtn`, y **`LpSolicitud`/`LpMant` genéricos** (parametrizados por `sector`, `catalogo`/`tipos`, `U`). Se cargan antes de los `*-sector.jsx`.
+- **`cnc-sector.jsx`** refactorizado: usa `LpSolicitud`/`LpMant` y la data compartida (se eliminaron `CncSolicitud`/`CncMant` locales). Sin cambios funcionales para el usuario. Cache-buster `?v=3`.
+- **`melamina-sector.jsx`** (nuevo): Inicio (banner crudo de CNC en azul desde `stock_pieza`; banner prioridad por TAP desde `prod_v_prioridad_melamina` con violeta/ámbar según crudo alcance; tabla terminadas + neto a Embalaje), Scan (picker TAP con crudo disponible, terminadas+fallas, validación cliente de no exceder crudo, `prod_rpc_registrar_melamina`), Solicitud (filo 7 colores + herramientas + moldes) y Mantenimiento (enchapadora/pistola/etc.) vía genéricos.
+- **Colisiones de scope** (Babel-in-browser, script scope compartido): cada sector usa nombres únicos (`MEL_UI`, `MelaminaSector`, …) y reusa los helpers de `lp-ui` sin redeclararlos. Verificado: 0 sintaxis no probada, llaves balanceadas.
+- **Wiring:** `LineaProductivaGuard` ahora enruta `role === 'melamina' → window.MelaminaSector`. Scripts nuevos registrados en ambos HTML (orden: lp-data, lp-ui, antes de los sectores). `produccion-hub?v=3`.
+
+**Para qué:** dejar listo el patrón replicable (Pino/Embalaje quedan chicos) y entregar la segunda pantalla de operario funcional.
+
+**Técnico:** NUEVOS `web|mobile/components/lp-data.jsx`, `lp-ui.jsx`, `melamina-sector.jsx`; refactor `cnc-sector.jsx`; edición `produccion-hub.jsx` + ambos HTML. Sin cambios de backend. **Siguiente:** Pino (verde, sin QR, 2 tamaños) y Embalaje (coral, 3 tabs, armables + verificación de componentes).
+
+---
+
 ### [2026-06-12] Producción en Línea — Fase 3 · Sector CNC (Increment 2: Solicitud + Mantenimiento + demanda)
 
 **Qué se hizo:** se completó el **Sector CNC** — se sumaron las tabs **Solicitud** y **Mantenimiento** (funcionales) y el panel **"Resumen del día"** (demanda) en Tab Inicio. Con esto el sector CNC queda entero (4 tabs).

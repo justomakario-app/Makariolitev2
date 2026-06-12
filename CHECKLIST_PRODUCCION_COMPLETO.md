@@ -205,26 +205,26 @@
 - [x] Urgencia: Alta/Media/Baja
 - [x] Máquina afectada + descripción libre
 
-## 3.2 Melamina — violeta #534AB7 (4 tabs) — trabaja por TAP individual
+## 3.2 Melamina — violeta #534AB7 (4 tabs) — trabaja por TAP individual ✅ `melamina-sector.jsx`
 ### Tab Inicio
-- [ ] 🔴 Banner "Piezas crudas disponibles · de CNC" (azul): stock vivo por TAP, se descuenta al procesar
-- [ ] 🔴📊 Banner "Prioridad del día · por TAP" (violeta): pieza, falta (demanda − stock propio melamina), crudo disponible CNC
-- [ ] ⚙️ Si crudo alcanza → violeta; si no → "esperando CNC" en ámbar
-- [ ] ⚙️ Solo muestra lo que falta; cuando se cubre, desaparece
-- [ ] Tabla Piezas terminadas: SKU | Pieza | Color | Terminadas | Fallas | Netas + total para Embalaje
+- [x] 🔴 Banner "Piezas crudas · de CNC" (azul): stock vivo por TAP (`prod_rpc_get_stock.stock_pieza`), "Esperando CNC" si vacío
+- [x] 🔴📊 Banner "Prioridad del día · por TAP" (violeta): pieza, falta, crudo CNC (`prod_v_prioridad_melamina`)
+- [x] ⚙️ Si crudo alcanza → violeta; si no → "esperando CNC" en ámbar
+- [x] ⚙️ Solo muestra lo que falta (filtra `falta > 0`)
+- [x] Tabla Piezas terminadas: Pieza | Terminadas | Fallas | Netas + total para Embalaje
 ### Tab Scan
-- [ ] QR de pieza (TAP) o carga manual
-- [ ] Al elegir pieza, muestra crudo disponible de CNC
-- [ ] Campos: terminadas + fallas/roturas
-- [ ] 🔍 Valida que no exceda stock crudo
-- [ ] ⚙️ Al confirmar: descuenta crudo CNC, suma netas a Embalaje
-- [ ] Nota: 4 sub-procesos internos (Con filo→Desbaste→Terminación→Refilado) pero solo se registra el resultado final
-### Tab Solicitud
-- [ ] Filo 7 colores: Blanco · Negro · Teka Ártico · Kiri · Paraíso · Lino Chiaro · Seda Giorno (+ rollos)
-- [ ] Herramientas/consumibles (checklist): Tiza · Espátula · Pistola de calor · Lijas · Mecha · Fibrón negro
-- [ ] Moldes: molde/detalle + cantidad
-### Tab Mantenimiento
-- [ ] Tipos: Enchapadora · Pistola de calor · Eléctrico · Molde · Ruido/vibración · Preventivo + urgencia + descripción
+- [ ] QR de pieza (TAP) — stub "próximamente" · carga manual ✅
+- [x] Al elegir pieza, muestra crudo disponible de CNC
+- [x] Campos: terminadas + fallas/roturas
+- [x] 🔍 Valida que no exceda stock crudo (cliente + RPC)
+- [x] ⚙️ Al confirmar: `prod_rpc_registrar_melamina` descuenta crudo CNC, suma netas a Embalaje
+- [ ] Nota: 4 sub-procesos internos (Con filo→Desbaste→Terminación→Refilado) — solo se registra el resultado final *(diseño: 1 registro, ok)*
+### Tab Solicitud ✅ (genérica `LpSolicitud`)
+- [x] Filo 7 colores: Blanco · Negro · Teka Ártico · Kiri · Paraíso · Lino Chiaro · Seda Giorno
+- [x] Herramientas/consumibles: Tiza · Espátula · Pistola de calor · Lijas · Mecha · Fibrón negro
+- [x] Moldes: molde/detalle
+### Tab Mantenimiento ✅ (genérica `LpMant`)
+- [x] Tipos: Enchapadora · Pistola de calor · Eléctrico · Molde · Ruido/vibración · Preventivo + urgencia + descripción
 
 ## 3.3 Pino — verde #0F6E56 (4 tabs) — 2 tamaños, solo resultado final
 ### Tab Inicio
@@ -451,7 +451,7 @@
 | 0 — Cimientos + datos maestros | `[~]` | Backend ✅ · Excel pendiente de correr · 🔒 correcciones de datos pendientes |
 | 1 — Roles y accesos | `[x]` | Roles ✅ · RLS ✅ · guards frontend (router por sector) ✅ |
 | 2 — Motor de carga (RPCs) | `[x]` | 16 RPCs + cadena de stock + smoke ✅ |
-| 3 — Frontend por sector | `[~]` | **CNC completo** (Inicio+demanda · Scan · Solicitud · Mantenimiento) ✅ · faltan Melamina/Pino/Embalaje/Encargado (replicar patrón) |
+| 3 — Frontend por sector | `[~]` | **CNC ✅ · Melamina ✅** (+ data layer compartida `lp-data`/`lp-ui` con Solicitud/Mant genéricas) · faltan Pino · Embalaje · Panel Encargado |
 | 4 — Encadenamiento + Realtime | `[ ]` | — |
 | 5 — Explosión + optimizadores | `[ ]` | ⚠️ lo más complejo |
 | 6 — Stock y compras | `[ ]` | — |
