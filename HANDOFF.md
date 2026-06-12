@@ -80,6 +80,29 @@
 
 ---
 
+### [2026-06-12] Producción en Línea — Fase 3 · Sector CNC (Increment 1: esqueleto + Inicio + Scan)
+
+**Qué se hizo:** primera pantalla real de operario — **Sector CNC** (`cnc-sector.jsx`, web + mobile). Mobile-first ~430px, **dark mode**, azul `#2563EB`. Increment 1 entrega el esqueleto común + Tab Inicio + Tab Scan funcional (registrar corte de punta a punta contra las RPCs).
+
+**Por qué:** es el primer sector de la Fase 3 y el que **valida el patrón** a replicar en Melamina/Pino/Embalaje/Encargado. Se eligió partir CNC en 2 incrementos para validar el diseño antes de replicarlo ×5.
+
+**Cómo / decisiones:**
+- **Data layer aislada** en `window.LP_DATA` (definida en el archivo del sector, reutilizable por los demás): `jornadaHoy`, `placas`, `registrarCorte`, `cortesDia`. Usa `window.SUPA` (cliente que ya expone data.js). El JWT de sesión resuelve `auth.uid()` en el backend → no se pasa user id. **No toca `data.js` ni el store del resto de la app** (respeta el aislamiento del módulo prod_).
+- **Topbar:** pill CNC (icono + "EN VIVO"), reloj vivo (intervalo 30s), chip de estado de jornada (abierta/cerrada/sin jornada).
+- **Bottom nav** 4 ítems (Inicio/Scan/Solicitud/Mant), activo en azul. Solicitud/Mant = placeholder interno (Increment 2).
+- **Tab Inicio:** tabla "Cortes del día" (lee `prod_corte` + join cliente con `prod_placa` para nombre/rendimiento), columnas Placa/Hojas/Generadas/Netas, y card al pie "Piezas netas → Melamina" (suma de netas = hojas×rend−desp). Banner si la jornada no está abierta.
+- **Tab Scan:** selección **manual agrupada** de placa (Blancas/Negras/Mármol/Combinadas por prefijo de SKU PLB/PLN/PMB-PMN/COM), campos hojas+desperdicio, **vista previa en vivo** (piezas = hojas×rend−desp), botón "Agregar al reporte" → `prod_rpc_registrar_corte` → toast + refresh + vuelve a Inicio. QR de cámara = stub "próximamente". Gating: si la jornada no está abierta, no deja registrar (coincide con el RPC).
+- **Wiring:** `produccion-hub.jsx` (`LineaProductivaGuard`) renderiza `window.CncSector` cuando `role === 'cnc'`; el resto de roles siguen con su placeholder de sector. Script `cnc-sector.jsx?v=1` agregado a `web/Macario Lite.html` y `mobile/index.html` después de produccion-hub.
+- **Compatibilidad Babel-in-browser:** se evitaron features que el codebase no usa (fragmentos `<>`, `??`, object-spread `{...}`) y se reemplazaron por equivalentes seguros (`?.` sí está probado). Verificado: 0 ocurrencias residuales, JSX balanceado, sin colisión de nombres en el scope compartido, espejo web/mobile idéntico.
+
+**Para qué:** que el operario CNC pueda, desde su celular, ver lo cortado del día y cargar cortes que alimentan el stock de piezas (cadena → Melamina), con el cálculo en el backend (el frontend solo muestra y captura). Es el molde de los demás sectores.
+
+**Técnico:** `web/components/cnc-sector.jsx` + `mobile/components/cnc-sector.jsx` (NUEVOS), edición de `produccion-hub.jsx` (web+mobile) y de ambos HTML (script tag). Sin cambios de backend (usa las RPCs de 0073). Datos reales aparecen recién cuando se corra `import-skus` y se abra una jornada; hasta entonces, empty states.
+
+**⚠️ Pendiente Increment 2:** Tab Solicitud (catálogo fresas/esponja/lubricantes/refrigerante → `prod_rpc_crear_solicitud`), Tab Mantenimiento (tipo/urgencia/máquina → `prod_rpc_reportar_mantenimiento`), panel "Resumen del día / demanda", badge de nav. Después: replicar a Melamina/Pino/Embalaje/Encargado.
+
+---
+
 ### [2026-06-12] Producción en Línea — Fase 1 (guards de rol en frontend · router por sector)
 
 **Qué se hizo:** el tab **"Línea productiva"** del hub de producción dejó de ser un `Próximamente` genérico y pasó a ser un **router por rol**. Cada rol de producción ve la identidad de SU sector; los roles sin producción ven el placeholder de siempre (sin cambios). Cierra los 2 ítems de guards de la Fase 1 del checklist.

@@ -174,26 +174,26 @@
 > - **"De fábrica"** → ⚠️ stub sin definir. Pendiente: decidir con el negocio QUÉ va adentro (¿vista consolidada de lo fabricado/despachado? ¿pedidos de fábrica?) antes de construir. Anotado en CABOS ABIERTOS.
 
 ## 3.0 Esqueleto común
-- [ ] 🔒 Topbar: pill del sector (color + indicador 🔴 "en vivo"), reloj, nombre sector, estado de jornada
-- [ ] Navegación inferior fija 4-5 ítems (Inicio · Scan · Solicitud · [Mant.] · Perfil) con color del sector en activo
+- [x] 🔒 Topbar: pill del sector (color + indicador 🔴 "en vivo"), reloj, nombre sector, estado de jornada *(CNC ✅)*
+- [x] Navegación inferior fija 4 ítems (Inicio · Scan · Solicitud · Mant.) con color del sector en activo *(CNC ✅)*
 - [ ] Badge numérico en nav cuando hay cargas pendientes
 - [ ] Banners de stock/prioridad reutilizables (color por origen: azul CNC, violeta Melamina, coral Embalaje, verde Pino)
-- [ ] ⚙️ Vista previa en vivo: cada carga muestra qué genera y a quién alimenta antes de confirmar
-- [ ] Mensajes de confirmación al enviar
-- [ ] 🔒 Guard de rol que decide qué sector renderiza
-- [ ] Áreas táctiles grandes, botones de cantidad amplios
+- [x] ⚙️ Vista previa en vivo: cada carga muestra qué genera y a quién alimenta antes de confirmar *(Scan CNC ✅)*
+- [x] Mensajes de confirmación al enviar *(toast)*
+- [x] 🔒 Guard de rol que decide qué sector renderiza *(Fase 1, produccion-hub)*
+- [x] Áreas táctiles grandes, botones de cantidad amplios
 
 ## 3.1 CNC — azul #2563EB (4 tabs)
 ### Tab Inicio
-- [ ] 🔴📊 Resumen del día: Colecta+Flex unificados, espejo vivo (SKU, Modelo, Color, Total pendiente) — sin separar canal, sin prioridades
-- [ ] Tabla Cortes del día: SKU | Modelo | Color | Hojas | Generadas | Desperdicio | Totales
-- [ ] Al pie: total de piezas netas que van a Melamina
+- [ ] 🔴📊 Resumen del día: Colecta+Flex unificados, espejo vivo (SKU, Modelo, Color, Total pendiente) — sin separar canal, sin prioridades *(Increment 2)*
+- [x] Tabla Cortes del día: Placa | Hojas | Generadas | Netas *(lee prod_corte + prod_placa, join cliente)*
+- [x] Al pie: total de piezas netas que van a Melamina
 ### Tab Scan
-- [ ] Cámara escanea QR del SKU de placa (trae nombre, color, rendimiento automático)
-- [ ] Alternativa manual: selección agrupada (blancas / negras / mármol / combinadas)
-- [ ] Campos: hojas cortadas + desperdicios
-- [ ] ⚙️ Vista previa en vivo: piezas generadas (hojas×rend), desperdicio, total neto para Melamina
-- [ ] Botón "Agregar al reporte" → alimenta Cortes del día
+- [ ] Cámara escanea QR del SKU de placa (trae nombre, color, rendimiento automático) *(stub "próximamente"; Increment 2)*
+- [x] Alternativa manual: selección agrupada (blancas / negras / mármol / combinadas)
+- [x] Campos: hojas cortadas + desperdicios
+- [x] ⚙️ Vista previa en vivo: piezas generadas (hojas×rend − desp), total neto para Melamina
+- [x] Botón "Agregar al reporte" → `prod_rpc_registrar_corte` → refresca Cortes del día
 ### Tab Solicitud (→ aprueba coordinador → administración)
 - [ ] Fresas: Compresión (corte limpio doble cara) · Filo horario (cara superior) + cantidad + observación
 - [ ] Esponja: limpieza de guías + cantidad
@@ -451,7 +451,7 @@
 | 0 — Cimientos + datos maestros | `[~]` | Backend ✅ · Excel pendiente de correr · 🔒 correcciones de datos pendientes |
 | 1 — Roles y accesos | `[x]` | Roles ✅ · RLS ✅ · guards frontend (router por sector) ✅ |
 | 2 — Motor de carga (RPCs) | `[x]` | 16 RPCs + cadena de stock + smoke ✅ |
-| 3 — Frontend por sector | `[ ]` | Siguiente gran bloque |
+| 3 — Frontend por sector | `[~]` | CNC en curso: esqueleto + Inicio + Scan ✅ (Increment 1) · Solicitud/Mant + demanda = Increment 2 · faltan Melamina/Pino/Embalaje/Encargado |
 | 4 — Encadenamiento + Realtime | `[ ]` | — |
 | 5 — Explosión + optimizadores | `[ ]` | ⚠️ lo más complejo |
 | 6 — Stock y compras | `[ ]` | — |
