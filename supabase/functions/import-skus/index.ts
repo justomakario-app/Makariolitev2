@@ -10,6 +10,8 @@
 //   Hoja "SKU DE PRODUCTOS"         → prod_producto
 //   Hoja "sku x producto"          → prod_receta (complementos TAP/KIT/CAJ
 //                                     que existan como pieza)
+//   INSUMOS + "sku x producto"     → prod_componente (BOM recursivo · Fase 5):
+//                                     padre→hijo×cantidad, todo el árbol.
 //
 // IMPORTANTE: lee el .xlsx del FILESYSTEM LOCAL (Storage aún no configurado).
 // Pensada para correr con `supabase functions serve` desde la raíz del repo:
@@ -136,6 +138,7 @@ Deno.serve(async (req) => {
   const placaExtraSet = await loadKeys("prod_placa_pieza_extra", ["placa_sku", "pieza_sku"]);
   const productoSet = await loadKeys("prod_producto", ["sku"]);
   const recetaSet   = await loadKeys("prod_receta", ["producto_sku", "pieza_sku"]);
+  const componenteSet = await loadKeys("prod_componente", ["padre_sku", "hijo_sku"]);
 
   const upsert = async (
     tabla: string, row: Record<string, unknown>, onConflict: string, key: string,
@@ -147,17 +150,30 @@ Deno.serve(async (req) => {
     set.add(key);
   };
 
-  // ── 4. HOJA "INSUMOS" → prod_pieza (SKU PADRE; header fila 0) ────────
+  // ── 4. HOJA "INSUMOS" → prod_pieza (SKU PADRE) + prod_componente (BOM) ─
+  // Cada fila padre (col0) define una pieza; las filas COMPUESTO + sus
+  // continuaciones (col4=SKU HIJO, col3=CANTIDAD) arman el árbol recursivo.
   {
     const rows = sheetRows("INSUMOS");
     if (rows.length === 0) reject("INSUMOS", "Pestaña no encontrada");
+    let padreActual = "";
     for (let i = 1; i < rows.length; i++) {
       const rawSku = cell(rows[i], 0);
-      if (!rawSku) continue; // fila de continuación (más hijos del padre anterior)
       const nombre = cell(rows[i], 1);
-      const sku = fixSku(rawSku, nombre); // normalización #1/#8 (duplicados Yori/Hikari)
-      await upsert("prod_pieza", { sku, nombre: nombre || null },
-        "sku", sku, piezaSet, `INSUMOS:${i + 1}`);
+      if (rawSku) {
+        padreActual = fixSku(rawSku, nombre); // normalización #1/#8 (duplicados Yori/Hikari)
+        await upsert("prod_pieza", { sku: padreActual, nombre: nombre || null },
+          "sku", padreActual, piezaSet, `INSUMOS:${i + 1}`);
+      }
+      // BOM: hijo del padre vigente (Brief Lógica 2 §4.2). Nota: las refs de
+      // KIT Yori/Hikari a TOR005/006/007 dependen de la corrección 0.2 #8.
+      const hijoRaw = cell(rows[i], 4);
+      if (hijoRaw && padreActual) {
+        const hijo = fixSku(hijoRaw, "");
+        const cant = toIntOrNull(cell(rows[i], 3)) ?? 1;
+        await upsert("prod_componente", { padre_sku: padreActual, hijo_sku: hijo, cantidad: cant },
+          "padre_sku,hijo_sku", `${padreActual}|${hijo}`, componenteSet, `INSUMOS(BOM):${i + 1}`);
+      }
     }
   }
 
@@ -236,11 +252,13 @@ Deno.serve(async (req) => {
       if (!prodActual) continue;
       const comp = cell(rows[i], 4).toUpperCase();
       if (!comp) continue;
-      // Solo complementos TAP/KIT/CAJ…
-      if (!/^(TAP|KIT|CAJ)/.test(comp)) continue;
-      // …y que existan como pieza (ignora KIT/CAJ que no son piezas)
-      if (!piezaSet.has(comp)) continue;
       const cant = toIntOrNull(cell(rows[i], 3)) ?? 1;
+      // BOM completo: producto → CUALQUIER complemento (Brief Lógica 2 §4.2).
+      await upsert("prod_componente", { padre_sku: prodActual, hijo_sku: comp, cantidad: cant },
+        "padre_sku,hijo_sku", `${prodActual}|${comp}`, componenteSet, `sku x producto(BOM):${i + 1}`);
+      // Receta (capa simple existente): solo TAP/KIT/CAJ que existan como pieza.
+      if (!/^(TAP|KIT|CAJ)/.test(comp)) continue;
+      if (!piezaSet.has(comp)) continue;
       const key = `${prodActual}|${comp}`;
       await upsert("prod_receta", { producto_sku: prodActual, pieza_sku: comp, cantidad: cant },
         "producto_sku,pieza_sku", key, recetaSet, `sku x producto:${i + 1}`);

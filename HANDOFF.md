@@ -80,6 +80,29 @@
 
 ---
 
+### [2026-06-12] Producción — Fase 5a (BOM recursivo + motor de explosión) · Brief Lógica 2
+
+**Qué se hizo:** el **corazón de la Lógica 2** — el árbol de despiece recursivo y el motor de explosión que convierte ventas pendientes en demanda de cada pieza/material a todos los niveles.
+
+**Migration 0074** (escrita + **smoke BEGIN/ROLLBACK validado**, NO aplicada aún — espera OK):
+- **`prod_componente (padre_sku, hijo_sku, cantidad)`** + RLS — el BOM unificado padre→hijo a cualquier profundidad (reemplaza las 4 hojas del Excel por una estructura recursiva, §4.2).
+- **`prod_v_explosion`** — vista RECURSIVA: demanda neta por producto (pedidos no despachados − producido, igual base que `prod_v_demanda_tap`) explotada por `prod_componente` multiplicando cantidades. **Guarda de profundidad <20** anti-ciclos. Devuelve `sku, demanda, nivel_max, es_hoja`.
+- **`prod_v_demanda_corte`** (TAP + patas hoja) y **`prod_v_materia_prima`** (insumos hoja vs `prod_insumo` → falta) — las dos salidas de la explosión (§6.2).
+
+**Smoke (rolled back, 0 datos):** mini-BOM MADTEST→TAP/KIT/SET, base ×5 → TAP=5, KIT=5, TOR=20 (5×4), PAT=30 (5×6) ✅ exacto; la vista compila contra `orders`/`carrier_state` reales (18 productos pendientes hoy).
+
+**`import-skus` extendido:** ahora puebla `prod_componente` desde **INSUMOS** (padre COMPUESTO → hijos×cantidad, con `fixSku`) y desde **"sku x producto"** (producto → cualquier complemento). Así la explosión tiene el árbol completo cuando se corra. *(Gated: import-skus sigue sin ejecutarse hasta el OK + cierre de 0.2 con Seba.)*
+
+**Cómo / decisiones:**
+- Naturaleza (corte/insumo/producto) se deriva por prefijo + `es_hoja` en las vistas. Los atributos formales de SKU (Naturaleza/vendible/unidad de compra/largo, §5.0) y las **unidades de compra** son Fase 6.
+- ⚠️ **Refs de KIT Yori/Hikari → TOR005/006/007**: la explosión será exacta cuando se cierre la corrección **0.2 #8** con Seba (hoy las refs quedan crudas).
+
+**Fase 5b (pendiente, comunicado):** los **2 optimizadores de corte** (placas con combos §7.2 / lineal cutting-stock §7.3) y la **pantalla "Optimización"** — son algoritmos dedicados (Edge Functions) que necesitan el catálogo real cargado para validarse; no se construyen a ciegas.
+
+**Técnico:** NUEVO `supabase/migrations/0074_prod_fase5_bom_explosion.sql`; `supabase/functions/import-skus/index.ts` (+`prod_componente`). Sin frontend en este paso. **Pendiente: OK del Jefe para aplicar 0074 en prod + push.**
+
+---
+
 ### [2026-06-12] Producción — Fase 7: Panel del Encargado
 
 **Qué se hizo:** **`encargado-panel.jsx`** (slate `#2E4057`, 4 tabs: Inicio · Sectores · Stock · Avisos). Centro de control: el encargado NO carga, ve los 4 sectores en vivo y corrige con auditoría. Ruteado en el guard: `encargado/owner/admin → EncargadoPanel`.

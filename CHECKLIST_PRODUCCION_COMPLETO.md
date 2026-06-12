@@ -301,18 +301,19 @@
 - [ ] 🔒 Atributos nuevos de SKU: **Naturaleza** (fabricado/reventa/corte/insumo), **vendible** (bool), **unidad de compra**, **contenido de compra**, **largo**. Hoy `prod_pieza`/`prod_producto` no los tienen → ampliar schema (aditivo).
 - [ ] 🔒 **Cargar el árbol de despiece recursivo desde el Excel:** la hoja `INSUMOS` ya trae la estructura `TIPO PRODUCTO / CANTIDAD / SKU HIJO` (COMPUESTO→hijos), pero `import-skus` hoy **solo carga SKU+nombre** a `prod_pieza`. Falta una tabla `prod_componente (padre_sku, hijo_sku, cantidad)` y extender `import-skus` para poblarla.
 
-## 5.1 Árbol de despiece recursivo (BOM)
-- [ ] 🔒 Estructura recursiva padre→hijo con cantidad, a cualquier profundidad *(tabla `prod_componente`)*
-- [ ] ⚙️ Motor de explosión: toma ventas pendientes → baja por el árbol multiplicando → demanda de cada pieza/material
-- [ ] ⚙️ Suma demanda de cada pieza a través de TODAS las ventas pendientes
-- [ ] ⚙️ Clasifica por naturaleza: fabricado / reventa / corte / insumo
-- [ ] ⚙️ Se recalcula al abrir/recalcular jornada o cuando entran ventas nuevas (no en tiempo real — foto de la jornada)
-- [ ] El corte va aparte del despiece (relación inversa: el material rinde piezas, no las contiene)
+## 5.1 Árbol de despiece recursivo (BOM) — **Fase 5a (migration 0074)**
+- [x] 🔒 Estructura recursiva padre→hijo con cantidad, a cualquier profundidad → tabla **`prod_componente`** (+ RLS) · `import-skus` la puebla desde INSUMOS + "sku x producto"
+- [x] ⚙️ Motor de explosión: ventas pendientes → baja por el árbol multiplicando → **`prod_v_explosion`** (recursiva, guarda de profundidad <20). Smoke validado (MAD×5 → TAP 5, KIT 5, TOR 20, PAT 30).
+- [x] ⚙️ Suma demanda de cada SKU a través de TODAS las ventas pendientes (GROUP BY sku)
+- [~] ⚙️ Clasifica por naturaleza (corte / insumo / producto) — derivada por prefijo + es_hoja en las vistas; atributos formales de SKU (Naturaleza/vendible/unidad compra) = **§5.0 pendiente**
+- [ ] ⚙️ Se recalcula al abrir/recalcular jornada o cuando entran ventas nuevas (hoy es vista en vivo; el "foto de jornada" se decide en Fase 4)
+- [x] El corte va aparte del despiece — `prod_v_demanda_corte` (TAP+patas) separado de `prod_v_materia_prima` (insumos a comprar)
+- [ ] ⚠️ **Refs de KIT Yori/Hikari a TOR005/006/007** dependen de la corrección 0.2 #8 (Seba) para que la explosión dé exacto
 
 ## 5.2 Las dos salidas de la explosión
-- [ ] 📊 Producto final: cola de producción por modelo y canal *(ya existe el primer paso hoy)*
-- [ ] 📊 Materia prima: rollup de insumos vs stock → qué falta
-- [ ] ⚙️ Las piezas de corte (tapas + patas) se desvían a los optimizadores, no se tratan como compra
+- [~] 📊 Producto final: cola de producción por modelo *(hoy `prod_v_resumen_dia`; por canal = refinamiento)*
+- [x] 📊 Materia prima: rollup de insumos vs stock → qué falta → **`prod_v_materia_prima`** (0074)
+- [x] ⚙️ Las piezas de corte (tapas + patas) se desvían a `prod_v_demanda_corte`, no se tratan como compra
 
 ## 5.3 Optimizador de placas (CNC)
 - [ ] Rendimiento fijo por placa (ej. placa blanca rinde 18 redondas de 50)
@@ -330,12 +331,12 @@
 - [ ] ⚙️ Al confirmar el corte, el material se descuenta del stock
 
 ## 5.5 Las vistas/consultas que el sistema necesita (📊)
-- [ ] 📊 Cola de producción (producto final por canal)
-- [ ] 📊 Demanda explotada completa (todos los niveles del árbol)
-- [ ] 📊 Demanda de piezas de corte (tapas + patas)
-- [ ] 📊 Materia prima a reponer (insumos vs stock)
-- [ ] 📊 Compras (materia prima convertida a unidades de compra)
-- [ ] 📊 Orden por sector (demanda repartida en colas de cada sector)
+- [~] 📊 Cola de producción (producto final) — `prod_v_resumen_dia` (por canal = refinamiento)
+- [x] 📊 Demanda explotada completa (todos los niveles del árbol) — **`prod_v_explosion`**
+- [x] 📊 Demanda de piezas de corte (tapas + patas) — **`prod_v_demanda_corte`**
+- [x] 📊 Materia prima a reponer (insumos vs stock) — **`prod_v_materia_prima`**
+- [ ] 📊 Compras (materia prima convertida a unidades de compra) → **Fase 6** (unidad de compra)
+- [ ] 📊 Orden por sector (demanda repartida en colas de cada sector) → derivable de la explosión (pendiente)
 
 ---
 
@@ -459,7 +460,7 @@
 | 2 — Motor de carga (RPCs) | `[x]` | 16 RPCs + cadena de stock + smoke ✅ |
 | 3 — Frontend por sector | `[x]` | **4 sectores de operario completos** (CNC · Melamina · Pino · Embalaje) + edición 24h + badges + QR cámara + tokens §15 |
 | 4 — Encadenamiento + Realtime | `[ ]` | — |
-| 5 — Explosión + optimizadores | `[ ]` | ⚠️ lo más complejo |
+| 5 — Explosión + optimizadores | `[~]` | **5a ✅** BOM recursivo (`prod_componente`) + explosión (`prod_v_explosion`) + corte/materia prima (0074, smoke ok, import-skus extendido) · **5b ⏳** 2 optimizadores de corte (combos / cutting-stock) + atributos SKU §5.0 + pantalla Optimización |
 | 6 — Stock y compras | `[ ]` | — |
 | 7 — Panel del encargado | `[~]` | Inicio (KPIs + cadena en vivo + alertas) ✅ · Sectores (detalle + edición auditada) ✅ · Stock/remitos = pendiente Fase 6 · avance por canal = refinamiento |
 | 8 — Flujos de aprobación | `[ ]` | — |
