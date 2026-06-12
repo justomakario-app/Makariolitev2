@@ -358,37 +358,37 @@
 
 ---
 
-# FASE 7 — PANEL DEL ENCARGADO — slate #2E4057 (4 tabs)
+# FASE 7 — PANEL DEL ENCARGADO — slate #2E4057 (4 tabs) ✅ `encargado-panel.jsx`
 
-> El encargado NO carga producción: es el centro de control que ve todo en vivo.
+> El encargado NO carga producción: es el centro de control que ve todo en vivo. Ruteado `encargado/owner/admin → EncargadoPanel`.
 
 ## Tab Inicio (estado general)
-- [ ] 🔴 KPIs (4 tarjetas): Producido hoy (total 4 sectores) · Listos para despacho · Falta despachar (de N pedidos) · Alertas de stock activas
-- [ ] 🔴 Avance de pedidos del día: barra global (ej. 47/119) + desglose por canal (Colecta, Flex) con barra y horario de retiro
-- [ ] 🔴 Cadena productiva en vivo: 2 líneas (L1 CNC→Melamina→Embalaje, L2 Pino→Embalaje) con cantidades actuales de cada nodo
-- [ ] 🔴 Alertas activas: insumos bajo mínimo ordenados por criticidad
+- [x] 🔴 KPIs (4 tarjetas): Producido hoy (4 sectores) · Listos para despacho (`stock_terminado`) · Falta despachar (de N productos) · Alertas activas
+- [~] 🔴 Avance de pedidos del día — muestra "Pendiente por producto" (`prod_v_resumen_dia`); el desglose **por canal + horario** falta (la vista agrega sin canal) → refinamiento
+- [x] 🔴 Cadena productiva en vivo: 2 líneas (L1 CNC→Melamina→Terminado, L2 Pino→Embalaje) con el stock actual de cada nodo
+- [x] 🔴 Alertas activas: bajo mínimo ordenadas por criticidad (`prod_alerta`)
 
 ## Tab Sectores (detalle de cada uno)
-- [ ] Tarjeta por sector: estado (Cerrado/En curso) + nombre coordinador + hora cierre/última carga
-- [ ] Mini-métricas (CNC: Piezas/Placas/Desperdicio; Pino: Chicas/Grandes/Masilladas; etc.)
-- [ ] 🔍⚙️ Botón ✎ Editar → modal con AUDITORÍA OBLIGATORIA (campo + motivo; registra usuario, fecha, hora, valor anterior y nuevo)
+- [x] Tarjeta por sector: estado (En curso/Cerrado) + hora última carga *(nombre del coordinador: pendiente — no se carga el perfil)*
+- [x] Mini-métricas (CNC: Hojas/Piezas/Desperdicio · Melamina: Terminadas/Fallas · Pino: Chicas/Grandes/Masilladas · Embalaje: Embalados)
+- [x] 🔍⚙️ Tocar cualquier carga → `LpEditModal` con **AUDITORÍA OBLIGATORIA** (motivo requerido) → `editar_*`; el trigger registra usuario/fecha/valor ant/nuevo
 
 ## Tab Stock
-- [ ] Botón ＋ Cargar remito → modal (proveedor, N° remito, insumo, cantidad) → ⚙️ suma al stock
-- [ ] 🔴 Bajo mínimo: insumos críticos/bajos con barra de nivel y mínimo
-- [ ] Stock general: materia prima e insumos, nivel actual vs mínimo
-- [ ] Últimos remitos cargados
+- [~] Botón ＋ Cargar remito — UI presente; el alta + suma de stock se habilita con **Fase 6** (no hay RPC de remito ni insumos cargados)
+- [x] 🔴 Bajo mínimo: insumos críticos/bajos con barra de nivel (vacío hasta cargar insumos)
+- [x] Stock general: nivel actual vs mínimo (estado vacío honesto hasta Fase 6)
+- [ ] Últimos remitos cargados → **Fase 6**
 
 ## Tab Avisos
-- [ ] 🔴 Notificaciones en vivo: alertas stock crítico/bajo
-- [ ] 🔴 Jornadas cerradas por sector (con lo que pasó al siguiente)
-- [ ] Aviso informativo de mantenimiento aprobado y derivado al director
-- [ ] Recordatorio del ruteo al pie
+- [x] 🔴 Notificaciones en vivo: alertas stock crítico/bajo (`prod_alerta`)
+- [~] 🔴 Jornadas cerradas por sector — hoy muestra el estado global de la jornada (no hay cierre por-sector individual en el modelo)
+- [x] Aviso informativo de mantenimiento aprobado/derivado al director (`prod_mantenimiento`)
+- [x] Recordatorio del ruteo al pie
 
 ## Capacidades transversales
-- [ ] ⚙️ Editar con registro: modifica cualquier cantidad, cada cambio exige motivo y queda auditado
-- [ ] Cargar remitos (encargado + administración)
-- [ ] NO gestiona solicitudes de insumos (van a admin) ni recibe mantenimiento final (va al director)
+- [x] ⚙️ Editar con registro: corrige cualquier carga de los 4 sectores, motivo obligatorio, queda auditado
+- [~] Cargar remitos (encargado + administración) → **Fase 6**
+- [x] NO gestiona solicitudes (van a admin) ni recibe el mantenimiento final (va al director) — solo informativo
 
 ---
 
@@ -457,11 +457,11 @@
 | 0 — Cimientos + datos maestros | `[~]` | Backend ✅ · Excel pendiente de correr · 🔒 correcciones de datos pendientes |
 | 1 — Roles y accesos | `[x]` | Roles ✅ · RLS ✅ · guards frontend (router por sector) ✅ |
 | 2 — Motor de carga (RPCs) | `[x]` | 16 RPCs + cadena de stock + smoke ✅ |
-| 3 — Frontend por sector | `[x]` | **4 sectores de operario completos** (CNC · Melamina · Pino · Embalaje) + edición 24h + badges + QR cámara + tokens §15. Falta solo el Panel del Encargado (Fase 7, pantalla aparte) |
+| 3 — Frontend por sector | `[x]` | **4 sectores de operario completos** (CNC · Melamina · Pino · Embalaje) + edición 24h + badges + QR cámara + tokens §15 |
 | 4 — Encadenamiento + Realtime | `[ ]` | — |
 | 5 — Explosión + optimizadores | `[ ]` | ⚠️ lo más complejo |
 | 6 — Stock y compras | `[ ]` | — |
-| 7 — Panel del encargado | `[ ]` | — |
+| 7 — Panel del encargado | `[~]` | Inicio (KPIs + cadena en vivo + alertas) ✅ · Sectores (detalle + edición auditada) ✅ · Stock/remitos = pendiente Fase 6 · avance por canal = refinamiento |
 | 8 — Flujos de aprobación | `[ ]` | — |
 | 9 — Histórico y director | `[ ]` | — |
 

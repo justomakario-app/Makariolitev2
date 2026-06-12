@@ -192,7 +192,7 @@ function LpMant({ U, sector, tipos, toast }) {
 /* ── Modal de edición de carga propia (ventana 24h) — genérico ──
    props: U, titulo, campos ([{key,label}] numéricos), inicial (obj),
    onGuardar(valores, motivo) -> Promise, onCerrar. */
-function LpEditModal({ U, titulo, campos, inicial, onGuardar, onCerrar }) {
+function LpEditModal({ U, titulo, campos, inicial, onGuardar, onCerrar, motivoRequerido }) {
   const init = {};
   for (const c of campos) init[c.key] = String(inicial[c.key] != null ? inicial[c.key] : '');
   const [vals, setVals] = useState(init);
@@ -200,9 +200,10 @@ function LpEditModal({ U, titulo, campos, inicial, onGuardar, onCerrar }) {
   const [saving, setSaving] = useState(false);
 
   const setV = (k, v) => setVals(o => Object.assign({}, o, { [k]: v }));
+  const faltaMotivo = motivoRequerido && !motivo.trim();
 
   const guardar = async () => {
-    if (saving) return;
+    if (saving || faltaMotivo) return;
     setSaving(true);
     try {
       const out = {};
@@ -236,7 +237,7 @@ function LpEditModal({ U, titulo, campos, inicial, onGuardar, onCerrar }) {
           ))}
         </div>
         <label style={{display:'block', marginBottom:16}}>
-          <span style={{display:'block', fontSize:11, color:U.inkSoft, marginBottom:6}}>Motivo (opcional)</span>
+          <span style={{display:'block', fontSize:11, color: faltaMotivo ? U.warn : U.inkSoft, marginBottom:6}}>{motivoRequerido ? 'Motivo (obligatorio)' : 'Motivo (opcional)'}</span>
           <input value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="¿Por qué se corrige?"
                  style={{width:'100%', boxSizing:'border-box', background:U.surface2, border:`1px solid ${U.border}`,
                          borderRadius:12, color:U.ink, fontSize:13, padding:'11px 12px', outline:'none', fontFamily:'inherit'}}/>
@@ -244,8 +245,9 @@ function LpEditModal({ U, titulo, campos, inicial, onGuardar, onCerrar }) {
         <div style={{display:'flex', gap:10}}>
           <button onClick={onCerrar} style={{flex:1, padding:'13px', borderRadius:12, border:`1px solid ${U.border}`,
                        background:U.surface2, color:U.inkSoft, fontSize:14, fontWeight:700, cursor:'pointer'}}>Cancelar</button>
-          <button onClick={guardar} disabled={saving} style={{flex:1, padding:'13px', borderRadius:12, border:'none',
-                       background:U.accent, color:'#fff', fontSize:14, fontWeight:800, cursor: saving ? 'wait' : 'pointer'}}>
+          <button onClick={guardar} disabled={saving || faltaMotivo} style={{flex:1, padding:'13px', borderRadius:12, border:'none',
+                       background: faltaMotivo ? U.surface2 : U.accent, color: faltaMotivo ? U.inkMuted : '#fff', fontSize:14, fontWeight:800,
+                       cursor: (saving || faltaMotivo) ? 'not-allowed' : 'pointer'}}>
             {saving ? 'Guardando…' : 'Guardar'}
           </button>
         </div>

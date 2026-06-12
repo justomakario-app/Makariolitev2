@@ -80,6 +80,24 @@
 
 ---
 
+### [2026-06-12] Producción — Fase 7: Panel del Encargado
+
+**Qué se hizo:** **`encargado-panel.jsx`** (slate `#2E4057`, 4 tabs: Inicio · Sectores · Stock · Avisos). Centro de control: el encargado NO carga, ve los 4 sectores en vivo y corrige con auditoría. Ruteado en el guard: `encargado/owner/admin → EncargadoPanel`.
+
+**Cómo / decisiones:**
+- **Tab Inicio:** 4 KPIs (producido hoy = cortes netas+melamina+pino+embalaje; listos = `stock_terminado`; falta despachar = `prod_v_resumen_dia`; alertas = `prod_alerta`), **cadena productiva en vivo** (2 líneas con el stock de cada nodo: CNC→Melamina→Terminado y Pino→Embalaje), alertas activas y pendiente por producto.
+- **Tab Sectores:** una tarjeta por sector con estado de jornada + última carga + mini-métricas, y **cada carga es tappable → `LpEditModal` con `motivoRequerido=true`** → `editar_corte/melamina/pino/embalaje`. La auditoría la genera el trigger existente porque el editor es encargado/owner/admin. (Embalaje sí se edita acá porque `editar_embalaje` es encargado-only.)
+- **Tab Stock:** botón cargar remito + bajo mínimo + stock general — **estructura lista pero depende de insumos/remitos de la Fase 6** (estado vacío honesto; el botón avisa que se habilita en Fase 6). No se inventó alta de remito sin la lógica de stock.
+- **Tab Avisos:** alertas, mantenimiento derivado al director (`prod_mantenimiento` estados aprobado_coord/recibido_director) y el recordatorio del ruteo (insumos→admin, mantenimiento→director).
+- **`lp-data`:** +`alertas`, `mantenimientos`, `insumos`, `editarEmbalaje`. **`lp-ui` `LpEditModal`:** +`motivoRequerido` (deshabilita guardar sin motivo; label en ámbar).
+- **Tokens:** slate `#2E4057` como identidad (fills/bordes); para texto/íconos sobre fondo casi negro se usa un slate claro `#9FB0C9` y los números en blanco/verde (legibilidad, igual criterio que los sectores).
+
+**Pendiente (anotado en checklist):** desglose de avance **por canal + horario** (la vista agrega sin canal), **Stock/remitos reales** (Fase 6), y nombre del coordinador por sector (no se carga el perfil). Realtime sigue siendo Fase 4 (hoy refresca al montar/editar).
+
+**Técnico:** NUEVO `web|mobile/components/encargado-panel.jsx`; `lp-data.jsx` (+métodos), `lp-ui.jsx` (LpEditModal), `produccion-hub.jsx` (guard) + ambos HTML. Cache-busters: lp-data v4, lp-ui v4, produccion-hub v6, encargado-panel v1. Sin migraciones (usa RPCs 0073 + vistas 0071). **Con esto el frontend de producción queda completo** (4 sectores + panel del encargado); falta el motor de Lógica 2 (Fase 5) y Fase 6/8/9.
+
+---
+
 ### [2026-06-12] Producción — Cierre de Fase 3 (edición 24h + badges + QR cámara)
 
 **Qué se hizo:** se cerró Fase 3 al 100% sumando los 3 gaps que faltaban en los sectores de operario.

@@ -57,7 +57,13 @@ window.LP_DATA = window.LP_DATA || (function () {
 
     // ── Embalaje ──
     registrarEmbalaje: (p) => rpc('prod_rpc_registrar_embalaje', p),
+    editarEmbalaje: (p) => rpc('prod_rpc_editar_embalaje', p),
     embalajeDia: (j) => sel('prod_embalaje', 'id, producto_sku, unidades, canal, created_at', q => q.eq('jornada_id', j).order('created_at', { ascending: false })),
+
+    // ── Encargado (panel de control) ──
+    alertas: () => sel('prod_alerta', 'id, insumo_sku, nivel, stock_actual, stock_minimo, vista, created_at', q => q.eq('vista', false).order('created_at', { ascending: false })),
+    mantenimientos: () => sel('prod_mantenimiento', 'id, sector, tipo, urgencia, maquina, estado, created_at', q => q.order('created_at', { ascending: false })),
+    insumos: () => sel('prod_insumo', 'sku, nombre, categoria, sector, stock_actual, stock_minimo, unidad', q => q.order('nombre')),
 
     // ── Soporte (todas las pantallas) ──
     crearSolicitud:        (p) => rpc('prod_rpc_crear_solicitud', p),
