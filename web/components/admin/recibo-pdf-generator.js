@@ -142,7 +142,7 @@
     content.push({
       columns: [
         { text: [{ text: 'Empleado: ', bold: true }, String(recibo.empleado_nombre || '—')] },
-        { text: [{ text: 'CUIL: ', bold: true }, String(recibo.empleado_cuil || '—')], alignment: 'right' },
+        { text: [{ text: 'DNI: ', bold: true }, String(recibo.empleado_dni || '—')], alignment: 'right' },
       ],
       margin: [0, 0, 0, 3],
     });

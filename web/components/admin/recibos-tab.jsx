@@ -50,9 +50,9 @@ function RecibosTab() {
   const empleadosDisponibles = useMemo(() => {
     const map = new Map();
     items.forEach(it => {
-      const key = it.employee_id || `__snapshot_${it.empleado_cuil || it.empleado_nombre}`;
+      const key = it.employee_id || `__snapshot_${it.empleado_dni || it.empleado_nombre}`;
       if (!map.has(key)) {
-        map.set(key, { id: key, nombre: it.empleado_nombre || '—', cuil: it.empleado_cuil || '' });
+        map.set(key, { id: key, nombre: it.empleado_nombre || '—', dni: it.empleado_dni || '' });
       }
     });
     return Array.from(map.values()).sort((a, b) => a.nombre.localeCompare(b.nombre));
@@ -64,7 +64,7 @@ function RecibosTab() {
     return items.filter(it => {
       if (tipoFilter !== 'todos' && it.tipo !== tipoFilter) return false;
       if (employeeFilter !== 'todos') {
-        const key = it.employee_id || `__snapshot_${it.empleado_cuil || it.empleado_nombre}`;
+        const key = it.employee_id || `__snapshot_${it.empleado_dni || it.empleado_nombre}`;
         if (key !== employeeFilter) return false;
       }
       if (mesYear) {
@@ -72,7 +72,7 @@ function RecibosTab() {
         if (fp !== mesYear) return false;
       }
       if (q) {
-        const blob = `${it.empleado_nombre || ''} ${it.empleado_cuil || ''}`.toLowerCase();
+        const blob = `${it.empleado_nombre || ''} ${it.empleado_dni || ''}`.toLowerCase();
         if (!blob.includes(q)) return false;
       }
       return true;
@@ -163,7 +163,7 @@ function RecibosTab() {
         <div className="admin-search">
           <Icon n="search" s={14} c="var(--ink-muted)"/>
           <input className="filter-input admin-search-input"
-                 placeholder="Buscar empleado, CUIL…"
+                 placeholder="Buscar empleado, DNI…"
                  value={searchQuery}
                  onChange={e => setSearchQuery(e.target.value)}/>
         </div>
@@ -175,7 +175,7 @@ function RecibosTab() {
                 onChange={e => setEmployeeFilter(e.target.value)}>
           <option value="todos">Empleado: todos</option>
           {empleadosDisponibles.map(e => (
-            <option key={e.id} value={e.id}>{e.nombre}{e.cuil ? ` · ${e.cuil}` : ''}</option>
+            <option key={e.id} value={e.id}>{e.nombre}{e.dni ? ` · ${e.dni}` : ''}</option>
           ))}
         </select>
         <input type="month" className="filter-input"
@@ -221,7 +221,7 @@ function RecibosTab() {
               <thead>
                 <tr>
                   <th>Empleado</th>
-                  <th>CUIL</th>
+                  <th>DNI</th>
                   <th>Tipo</th>
                   <th>Período</th>
                   <th>F. pago</th>

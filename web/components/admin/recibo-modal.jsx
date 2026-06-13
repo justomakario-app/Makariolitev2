@@ -5,7 +5,7 @@
    items dinámicos con cálculo en vivo del subtotal y total.
 
    Snapshot empleado: al seleccionar un empleado en el dropdown, se
-   autocompletan CUIL, categoría, fecha ingreso y sueldo básico (este
+   autocompletan DNI, categoría, fecha ingreso y sueldo básico (este
    último editable). Los snapshots quedan congelados en BD al crear.
 
    En modo edit: bloquea empleado, tipo, período, sueldo básico
@@ -293,7 +293,7 @@ function ReciboModal({ mode, initial, onClose, onSuccess, onAfterCreatePdf }) {
                 <option value="">— Seleccionar empleado activo —</option>
                 {employees.map(emp => (
                   <option key={emp.id} value={emp.id}>
-                    {emp.nombre} {emp.cuil ? `· ${emp.cuil}` : ''}
+                    {emp.nombre} {emp.dni ? `· ${emp.dni}` : ''}
                   </option>
                 ))}
               </select>
@@ -301,7 +301,7 @@ function ReciboModal({ mode, initial, onClose, onSuccess, onAfterCreatePdf }) {
             {errors.employeeId && <div className="field-error">{errors.employeeId}</div>}
             {empleadoSelected && (
               <div className="recibo-empleado-snapshot">
-                <span><strong>CUIL:</strong> {empleadoSelected.cuil || '—'}</span>
+                <span><strong>DNI:</strong> {empleadoSelected.dni || '—'}</span>
                 <span><strong>Categoría:</strong> {empleadoSelected.categoria || '—'}</span>
                 <span><strong>F. ingreso:</strong> {A.formatDate(empleadoSelected.fecha_ingreso)}</span>
               </div>
@@ -312,7 +312,7 @@ function ReciboModal({ mode, initial, onClose, onSuccess, onAfterCreatePdf }) {
         {isEdit && (
           <div className="recibo-empleado-snapshot is-locked">
             <div><strong>Empleado:</strong> {initial.empleado_nombre || '—'}</div>
-            <div><strong>CUIL:</strong> {initial.empleado_cuil || '—'}</div>
+            <div><strong>DNI:</strong> {initial.empleado_dni || '—'}</div>
             <div><strong>Categoría:</strong> {initial.empleado_categoria || '—'}</div>
             <div><strong>F. ingreso:</strong> {A.formatDate(initial.empleado_fecha_ingreso)}</div>
             <div className="field-help">Snapshot inmutable post-alta.</div>

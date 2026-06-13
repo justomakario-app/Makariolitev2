@@ -39,7 +39,7 @@ function BulkImportEmployeeRow({ row, action, onActionChange }) {
         <span className={`bulk-pill ${pillClass}`}>{pillText}</span>
       </td>
       <td>
-        <span className="order-num">{n.cuil || '—'}</span>
+        <span className="order-num">{n.dni || '—'}</span>
       </td>
       <td className="bulk-cell-nombre">
         <div>{trunc(n.nombre, 30)}</div>

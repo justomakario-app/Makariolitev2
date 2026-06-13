@@ -1,6 +1,6 @@
 /* ══ RECIBO ROW (S2.12)
    Subcomponente fila de un recibo en recibos-tab. Renderiza:
-   nombre empleado · CUIL · badge tipo · período · fecha pago ·
+   nombre empleado · DNI · badge tipo · período · fecha pago ·
    total (en rojo si negativo) · estado (badge anulado si aplica) ·
    acciones (PDF, editar, anular, eliminar).
 
@@ -26,7 +26,7 @@ function ReciboRow({ recibo, companySettings, onEdit, onAnular, onDelete, onPdf 
           <span className="badge-vencido" title="Empleado eliminado (snapshot histórico)">huérfano</span>
         )}
       </td>
-      <td><span className="order-num">{recibo.empleado_cuil || '—'}</span></td>
+      <td><span className="order-num">{recibo.empleado_dni || '—'}</span></td>
       <td>
         <span className={`recibo-tipo-badge recibo-tipo-${recibo.tipo}`}>{tipoLabel}</span>
         {isAnulado && <span className="badge-vencido" style={{marginLeft:6}}>anulado</span>}

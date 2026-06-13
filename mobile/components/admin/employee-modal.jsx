@@ -2,7 +2,7 @@
    Modal de alta/edicion de empleado con ficha en 4 secciones colapsables
    + bloque 5 (Historial — solo edit, lazy, datos reales S2.15).
 
-   1) Datos personales (default open): CUIL, nombre, fecha_nacimiento,
+   1) Datos personales (default open): DNI, nombre, fecha_nacimiento,
       email, telefono, direccion, ciudad, provincia, codigo_postal.
    2) Datos laborales: fecha_ingreso, categoria, modalidad,
       tipo_contratacion, lugar_trabajo, convenio.
@@ -11,8 +11,8 @@
    5) Historial (solo edit): lazy mount con datos reales S2.15
       (stat cards + botón "Ver histórico completo").
 
-   CUIL readOnly en mode='edit' con tooltip (decision S2.11 paralelo a
-   cuit_immutable de S2.2).
+   DNI readOnly en mode='edit' con tooltip (decision S2.11 paralelo a
+   cuit_immutable de S2.2; RRHH por DNI — pedido de Seba).
 
    Props: { mode: 'create'|'edit', initial?, onClose, onSuccess }
    ══ */
@@ -27,7 +27,7 @@ function EmployeeModal({ mode, initial, onClose, onSuccess }) {
   const [form, setForm] = useState({
     // bloque 1 — personales
     nombre:           (initial && initial.nombre)           || '',
-    cuil:             (initial && initial.cuil)             || '',
+    dni:              (initial && initial.dni)              || '',
     fecha_nacimiento: (initial && initial.fecha_nacimiento)
                         ? String(initial.fecha_nacimiento).slice(0,10) : '',
     email:            (initial && initial.email)            || '',
@@ -82,8 +82,8 @@ function EmployeeModal({ mode, initial, onClose, onSuccess }) {
     if (!nombre) e.nombre = 'Nombre requerido';
     else if (nombre.length > 120) e.nombre = 'Máximo 120 caracteres';
 
-    const cuilNorm = A.normalizeCuil(form.cuil);
-    if (form.cuil && !cuilNorm) e.cuil = 'Formato XX-XXXXXXXX-X o 11 dígitos';
+    const dniNorm = A.normalizeDni(form.dni);
+    if (form.dni && !dniNorm) e.dni = '7 u 8 dígitos (ej. 12.345.678)';
 
     if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
       e.email = 'Email inválido';
@@ -115,7 +115,7 @@ function EmployeeModal({ mode, initial, onClose, onSuccess }) {
       const eKeys = Object.keys(errors);
       setOpenSections(s => ({
         ...s,
-        personales: s.personales || eKeys.some(k => ['nombre','cuil','email'].includes(k)),
+        personales: s.personales || eKeys.some(k => ['nombre','dni','email'].includes(k)),
         pago:       s.pago       || eKeys.includes('cbu'),
         liquidacion:s.liquidacion|| eKeys.includes('sueldo_bruto_base'),
       }));
@@ -123,10 +123,10 @@ function EmployeeModal({ mode, initial, onClose, onSuccess }) {
     }
     setSaving(true);
     try {
-      const cuilNorm = A.normalizeCuil(form.cuil);
+      const dniNorm = A.normalizeDni(form.dni);
       const payload = {
         nombre: form.nombre.trim(),
-        cuil: cuilNorm || '',
+        dni: dniNorm || '',
         fecha_nacimiento: form.fecha_nacimiento || '',
         email: form.email.trim(),
         telefono: form.telefono.trim(),
@@ -151,8 +151,8 @@ function EmployeeModal({ mode, initial, onClose, onSuccess }) {
       };
       if (isEdit) {
         payload.id = initial.id;
-        // CUIL no editable; se manda igual al actual para evitar HINT='cuil_immutable'
-        payload.cuil = initial.cuil || '';
+        // DNI no editable; se manda igual al actual para evitar HINT='dni_immutable'
+        payload.dni = initial.dni || '';
         await A.updateEmployee(payload);
       } else {
         await A.createEmployee(payload);
@@ -161,11 +161,11 @@ function EmployeeModal({ mode, initial, onClose, onSuccess }) {
       try { onSuccess?.(); } catch (_) {}
       onClose?.();
     } catch (err) {
-      if (err && err.hint === 'duplicate_cuil') {
-        toast.error('Ya existe otro empleado con ese CUIL');
+      if (err && err.hint === 'duplicate_dni') {
+        toast.error('Ya existe otro empleado con ese DNI');
         setOpenSections(s => ({ ...s, personales: true }));
-      } else if (err && err.hint === 'cuil_immutable') {
-        toast.error('El CUIL no se puede modificar');
+      } else if (err && err.hint === 'dni_immutable') {
+        toast.error('El DNI no se puede modificar');
       } else {
         toast.error(err.message || 'No se pudo guardar');
       }
@@ -198,18 +198,18 @@ function EmployeeModal({ mode, initial, onClose, onSuccess }) {
         </div>
 
         <div className="field-group">
-          <label className="field-label">CUIL</label>
-          <input className={`field-input ${errors.cuil ? 'has-error' : ''} ${isEdit ? 'is-readonly' : ''}`}
-                 value={form.cuil} placeholder="XX-XXXXXXXX-X"
+          <label className="field-label">DNI</label>
+          <input className={`field-input ${errors.dni ? 'has-error' : ''} ${isEdit ? 'is-readonly' : ''}`}
+                 value={form.dni} placeholder="12.345.678"
                  readOnly={isEdit}
-                 title={isEdit ? 'El CUIL no se puede modificar. Para corregir, dá de baja este empleado y creá uno nuevo.' : ''}
-                 onChange={e => set('cuil', e.target.value)}
+                 title={isEdit ? 'El DNI no se puede modificar. Para corregir, dá de baja este empleado y creá uno nuevo.' : ''}
+                 onChange={e => set('dni', e.target.value)}
                  onBlur={validate}/>
-          {errors.cuil
-            ? <div className="field-error">{errors.cuil}</div>
+          {errors.dni
+            ? <div className="field-error">{errors.dni}</div>
             : isEdit
-              ? <div className="field-help">El CUIL es inmutable en edición (S2.11)</div>
-              : <div className="field-help">Formato XX-XXXXXXXX-X o 11 dígitos sin guiones</div>}
+              ? <div className="field-help">El DNI es inmutable en edición (S2.11)</div>
+              : <div className="field-help">7 u 8 dígitos (con o sin puntos, ej. 12.345.678)</div>}
         </div>
 
         <div className="supplier-modal-grid">

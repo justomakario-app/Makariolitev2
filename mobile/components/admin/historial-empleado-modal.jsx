@@ -133,7 +133,7 @@ function HistorialEmpleadoModal({ employeeId, onClose }) {
 
   const headerSnapshot = empleado.id ? (
     <div className="historial-snapshot">
-      <span><strong>CUIL:</strong> {empleado.cuil || '—'}</span>
+      <span><strong>DNI:</strong> {empleado.dni || '—'}</span>
       <span><strong>Categoría:</strong> {empleado.categoria || '—'}</span>
       <span><strong>F. ingreso:</strong> {A.formatDate(empleado.fecha_ingreso)}</span>
       {empleado.lugar_trabajo && <span><strong>Lugar:</strong> {empleado.lugar_trabajo}</span>}

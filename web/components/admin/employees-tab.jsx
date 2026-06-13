@@ -51,7 +51,7 @@ function EmployeesTab() {
       if (categoriaFilter !== 'todas' && it.categoria !== categoriaFilter) return false;
       if (!q) return true;
       return (it.nombre || '').toLowerCase().includes(q)
-          || (it.cuil   || '').toLowerCase().includes(q)
+          || (it.dni    || '').toLowerCase().includes(q)
           || (it.email  || '').toLowerCase().includes(q);
     });
   }, [items, searchQuery, modalidadFilter, categoriaFilter]);
@@ -105,7 +105,7 @@ function EmployeesTab() {
         <div className="admin-search">
           <Icon n="search" s={14} c="var(--ink-muted)"/>
           <input className="filter-input admin-search-input"
-                 placeholder="Buscar nombre, CUIL, email…"
+                 placeholder="Buscar nombre, DNI, email…"
                  value={searchQuery}
                  onChange={e => setSearchQuery(e.target.value)}/>
         </div>
@@ -162,7 +162,7 @@ function EmployeesTab() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>CUIL</th><th>Nombre</th><th>F.Ingreso</th>
+                  <th>DNI</th><th>Nombre</th><th>F.Ingreso</th>
                   <th>Categoría</th><th>Modalidad</th>
                   <th style={{textAlign:'right'}}>Sueldo bruto</th>
                   <th></th>
@@ -173,7 +173,7 @@ function EmployeesTab() {
                   const isInactive = emp.activo === false;
                   return (
                     <tr key={emp.id} className={isInactive ? 'row-inactive' : ''}>
-                      <td><span className="order-num">{emp.cuil || '—'}</span></td>
+                      <td><span className="order-num">{emp.dni || '—'}</span></td>
                       <td style={{fontWeight:600}}>{emp.nombre}</td>
                       <td>{A.formatDate(emp.fecha_ingreso)}</td>
                       <td>{emp.categoria || '—'}</td>

@@ -8,7 +8,8 @@
      2) preview : tabla con N filas + dropdown action en duplicados
      3) result  : summary + boton descargar reporte
 
-   Sinonimo 'cuit' tolerado como 'cuil' en headers (decision Jefe).
+   RRHH por DNI (pedido de Seba). Sinonimos 'cuil'/'cuit' tolerados en
+   headers: si vienen 11 dígitos tomamos los 8 del medio (DNI).
 
    Props: { onClose, onSuccess }
    ══ */
@@ -54,18 +55,18 @@ function BulkImportEmployeesModal({ onClose, onSuccess }) {
       }
       const validated = parsed.map(r => A.validateEmployeeRow(r));
 
-      const cuilsToCheck = validated
-        .filter(r => r.isValid && r.normalized.cuil)
-        .map(r => r.normalized.cuil);
+      const dnisToCheck = validated
+        .filter(r => r.isValid && r.normalized.dni)
+        .map(r => r.normalized.dni);
       let dup = { existing: [], not_existing: [] };
-      if (cuilsToCheck.length > 0) {
-        dup = await A.checkCuilsExist(cuilsToCheck);
+      if (dnisToCheck.length > 0) {
+        dup = await A.checkDnisExist(dnisToCheck);
       }
-      const existingByCuil = {};
-      for (const e of (dup.existing || [])) existingByCuil[e.cuil] = e;
+      const existingByDni = {};
+      for (const e of (dup.existing || [])) existingByDni[e.dni] = e;
 
       const finalRows = validated.map(r => {
-        const match = r.isValid && r.normalized.cuil ? existingByCuil[r.normalized.cuil] : null;
+        const match = r.isValid && r.normalized.dni ? existingByDni[r.normalized.dni] : null;
         return {
           ...r,
           isDuplicate: !!match,
@@ -137,7 +138,7 @@ function BulkImportEmployeesModal({ onClose, onSuccess }) {
           _rowNum: r.rowNum, _normalized: r.normalized,
           id: r.existingMatch.id,
           ...r.normalized,
-          cuil: r.normalized.cuil,
+          dni: r.normalized.dni,
         });
       }
     }
@@ -274,16 +275,16 @@ function BulkImportEmployeesModal({ onClose, onSuccess }) {
         </div>
 
         <div className="bulk-headers-help">
-          <strong>Columnas esperadas (cuil + nombre obligatorios):</strong>
+          <strong>Columnas esperadas (dni + nombre obligatorios):</strong>
           <div>
-            cuil*, nombre*, fecha_nacimiento, email, telefono, direccion,
+            dni*, nombre*, fecha_nacimiento, email, telefono, direccion,
             ciudad, provincia, codigo_postal, fecha_ingreso, categoria,
             modalidad, tipo_contratacion, lugar_trabajo, convenio,
             sueldo_bruto_base, dias_vacaciones_anuales, banco, cbu,
             alias_cbu, forma_cobro, notas
           </div>
           <div style={{marginTop:6, fontSize:11, color:'var(--ink-muted)'}}>
-            * = obligatorios. Aceptamos "CUIT" como sinónimo de "CUIL".
+            * = obligatorios. DNI: 7 u 8 dígitos. Si pegás un CUIL/CUIT de 11, tomamos los 8 del medio.
             Modalidad: full_time/part_time/horas/eventual.
             Tipo contratación: relacion_dependencia/monotributo/autonomo/eventual.
           </div>
@@ -306,7 +307,7 @@ function BulkImportEmployeesModal({ onClose, onSuccess }) {
               <tr>
                 <th style={{width:36}}>#</th>
                 <th style={{width:86}}>Estado</th>
-                <th style={{width:140}}>CUIL</th>
+                <th style={{width:140}}>DNI</th>
                 <th>Nombre</th>
                 <th style={{width:140}}>Categoría</th>
                 <th style={{width:120}}>Modalidad</th>
@@ -412,9 +413,9 @@ function BulkImportEmployeesModal({ onClose, onSuccess }) {
 function humanizeEmpReason(err) {
   if (!err || !err.reason) return 'Error desconocido';
   switch (err.reason) {
-    case 'duplicate_cuil':  return `CUIL duplicado (${err.cuil || ''})`;
+    case 'duplicate_dni':   return `DNI duplicado (${err.dni || ''})`;
     case 'check_violation': return `Validación BD: ${err.detail || ''}`;
-    case 'cuil_immutable':  return `CUIL no se puede modificar (era ${err.current_cuil}, intentó ${err.new_cuil})`;
+    case 'dni_immutable':   return `DNI no se puede modificar (era ${err.current_dni}, intentó ${err.new_dni})`;
     case 'missing_id':      return 'Falta id (interno)';
     case 'not_found':       return 'Empleado no existe (id no encontrado)';
     case 'other':           return err.detail || `Error BD (${err.sqlstate || '?'})`;

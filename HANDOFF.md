@@ -80,6 +80,32 @@
 
 ---
 
+### [2026-06-13] RRHH — Empleados: CUIL → DNI (pedido de Seba)
+
+**Qué se hizo:** se cambió la identificación de empleados de **CUIL** a **DNI** en todo el módulo de RRHH (BD + ambos frontends), con formato **DNI con puntos** (`12.345.678`). El **CUIT de proveedores NO se tocó** (es otro dominio).
+
+**Por qué:** Seba pidió expresamente manejar a los empleados por DNI en vez de CUIL.
+
+**Backend — `0076_rrhh_cuil_a_dni.sql` (escrita + smoke BEGIN/ROLLBACK validado, NO aplicada aún — espera OK):**
+- `employees.cuil` → **`dni`** (RENAME COLUMN). Se dropea `employees_cuil_check` + `employees_cuil_unique_idx`.
+- **Migración del dato existente:** el CUIL guardado (`XX-DDDDDDDD-V`) se convierte al DNI tomando los **8 dígitos del medio** y se formatea con puntos. (El único empleado real `20-40914074-3` → `40.914.074`.)
+- Nuevo **`employees_dni_check`** `CHECK (dni ~ '^\d{1,2}\.\d{3}\.\d{3}$')` + `employees_dni_unique_idx`.
+- **Snapshot de recibos:** `recibos.empleado_cuil` → **`empleado_dni`**.
+- **8 RPCs** vía `CREATE OR REPLACE` (cero downtime): create/update/bulk_create/bulk_update employee, create_recibo (snapshot `empleado_dni`), historial, reportes_global — todas leen `p_payload->>'dni'`. HINTs renombrados (`duplicate_cuil`→`duplicate_dni`, `cuil_immutable`→`dni_immutable`). DNI sigue **inmutable post-alta**.
+- `rpc_admin_check_cuils_exist(text[])` se **DROPea** y se crea **`rpc_admin_check_dnis_exist(p_dnis text[])`** (REVOKE anon/public + GRANT authenticated).
+
+**Smoke (rolled back, 0 datos):** la extracción CUIL→DNI da `12.345.678` / `1.234.567`; el CHECK acepta DNI con puntos y rechaza sin-puntos/CUIL; el empleado existente convierte a `40.914.074`. ✅
+
+**Frontend (10 archivos admin, web→mobile byte-idénticos):**
+- `admin-data.js`: nuevo **`normalizeDni`** (acepta DNI 7-8 díg con/sin puntos, o CUIL/CUIT de 11 → toma 8 del medio; devuelve con puntos). `checkCuilsExist`→**`checkDnisExist`** (rpc + `p_dnis`). `EMPLOYEE_HEADER_SYNONYMS`: clave `cuil`→`dni` (sinónimos `documento`/`cuil`/`cuit`…). Validación, template Excel (header `dni`, ejemplo `12.345.678`, notas), reporte bulk (`DNI`), PDFs/Excel históricos (`DNI:`), exports.
+- `employee-modal.jsx`: campo `dni`, label/placeholder `12.345.678`, validación, payload, readonly+tooltip en edición, hints `duplicate_dni`/`dni_immutable`.
+- `employees-tab.jsx` (búsqueda/placeholder/th/celda), `historial-empleado-modal.jsx` (snapshot), `recibos-tab.jsx` (agrupado/filtro/búsqueda/th/option), `recibo-modal.jsx` (dropdown + snapshot select y locked), `recibo-row.jsx` (celda), `recibo-pdf-generator.js` (label `DNI:`), `bulk-import-employees-modal.jsx` (dnisToCheck/existingByDni/payload/headers/th/errores), `bulk-import-employee-row.jsx` (celda).
+- **Compatibilidad de carga masiva:** si pegan un CUIL/CUIT de 11 dígitos, `normalizeDni` toma los 8 del medio automáticamente (no rompe planillas viejas).
+
+**Técnico:** NUEVO `supabase/migrations/0076_rrhh_cuil_a_dni.sql`; 10 archivos `web|mobile/components/admin/*` (copia byte-idéntica verificada por hash); cache-busters bumpeados en ambos HTML (admin-data web v22/mobile v21, employee-modal v4, employees-tab/recibo-row/recibo-modal/recibos-tab/recibo-pdf-generator/historial-empleado-modal/bulk-import-employee-row/bulk-import-employees-modal v2). Migraciones históricas (0059/0060/0064/0068) **no se tocan** (son inmutables; 0076 es el forward-fix). **Pendiente: OK explícito del Jefe para aplicar 0076 en prod + push** (frontend y backend van juntos).
+
+---
+
 ### [2026-06-12] Producción — Verificación completa (frontend + backend + lógica) + hardening
 
 **Qué se hizo:** auditoría integral del módulo de producción y resolución de lo accionable.

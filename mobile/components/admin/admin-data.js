@@ -1128,10 +1128,10 @@
     return data;
   }
 
-  async function checkCuilsExist(cuils) {
-    const arr = Array.isArray(cuils) ? cuils.filter(Boolean) : [];
+  async function checkDnisExist(dnis) {
+    const arr = Array.isArray(dnis) ? dnis.filter(Boolean) : [];
     if (arr.length === 0) return { existing: [], not_existing: [] };
-    const { data, error } = await supa.rpc('rpc_admin_check_cuils_exist', { p_cuils: arr });
+    const { data, error } = await supa.rpc('rpc_admin_check_dnis_exist', { p_dnis: arr });
     if (error) throw new Error(error.message || 'No se pudo verificar duplicados');
     return data || { existing: [], not_existing: [] };
   }
@@ -1196,10 +1196,11 @@
     { value: 'otro',          label: 'Otro' },
   ];
 
-  /* Diccionario fuzzy headers para bulk import. 'cuit' aceptado como
-     sinonimo de 'cuil' (decision Jefe). */
+  /* Diccionario fuzzy headers para bulk import. RRHH se maneja por DNI
+     (pedido de Seba). Aceptamos 'cuil'/'cuit' como sinonimos historicos:
+     si vienen 11 digitos los normalizamos al DNI (8 del medio). */
   const EMPLOYEE_HEADER_SYNONYMS = {
-    cuil:                    ['cuil','cuil_cuit','cuit','nro_cuil','dni_cuil'],
+    dni:                     ['dni','documento','nro_dni','num_dni','d_n_i','cuil','cuit','cuil_cuit','nro_cuil','dni_cuil'],
     nombre:                  ['nombre','apellido_nombre','nombre_apellido','empleado','razon_social','rs'],
     fecha_nacimiento:        ['fecha_nacimiento','nacimiento','fecha_nac','f_nacimiento','fec_nac'],
     email:                   ['email','correo','mail','correo_electronico','e_mail'],
@@ -1223,8 +1224,16 @@
     notas:                   ['notas','observaciones','comentarios','obs'],
   };
 
-  /* normalizeCuil = alias de normalizeCuit (mismo regex XX-XXXXXXXX-X). */
-  const normalizeCuil = normalizeCuit;
+  /* normalizeDni: acepta DNI (7-8 dígitos, con o sin puntos) o un CUIL/CUIT
+     de 11 dígitos (del que extrae los 8 del medio). Devuelve el DNI con
+     puntos (12.345.678) o null si es inválido. */
+  function normalizeDni(raw) {
+    if (raw == null || raw === '') return null;
+    let digits = String(raw).replace(/\D/g, '');
+    if (digits.length === 11) digits = digits.slice(2, 10); /* CUIL/CUIT → DNI */
+    if (digits.length < 7 || digits.length > 8) return null;
+    return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  }
 
   function mapEmployeeHeaders(rawHeaders) {
     const fieldMap = {};
@@ -1238,8 +1247,8 @@
     if (!fields.includes('nombre')) {
       throw new Error('Falta columna obligatoria "nombre" (o sinónimos: apellido_nombre, empleado, razón social).');
     }
-    if (!fields.includes('cuil')) {
-      throw new Error('Falta columna obligatoria "cuil" (o sinónimo CUIT/CUIL).');
+    if (!fields.includes('dni')) {
+      throw new Error('Falta columna obligatoria "dni" (o sinónimo documento/CUIL/CUIT).');
     }
     return fieldMap;
   }
@@ -1277,8 +1286,8 @@
     if (!nombre) errors.push('Falta nombre');
     else if (nombre.length > 120) errors.push('Nombre supera 120 caracteres');
 
-    const cuilNorm = normalizeCuil(row.cuil);
-    if (!cuilNorm) errors.push(`CUIL inválido (formato XX-XXXXXXXX-X o 11 dígitos)`);
+    const dniNorm = normalizeDni(row.dni);
+    if (!dniNorm) errors.push(`DNI inválido (7 u 8 dígitos, ej. 12.345.678)`);
 
     const email = (row.email || '').trim();
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -1327,7 +1336,7 @@
       errors,
       normalized: {
         nombre,
-        cuil: cuilNorm,
+        dni: dniNorm,
         fecha_nacimiento: fNac,
         email,
         telefono: (row.telefono || '').trim(),
@@ -1357,27 +1366,27 @@
       throw new Error('SheetJS (XLSX) no esta cargado.');
     }
     const headers = [
-      'cuil','nombre','fecha_nacimiento','email','telefono','direccion',
+      'dni','nombre','fecha_nacimiento','email','telefono','direccion',
       'ciudad','provincia','codigo_postal','fecha_ingreso','categoria',
       'modalidad','tipo_contratacion','lugar_trabajo','convenio',
       'sueldo_bruto_base','dias_vacaciones_anuales','banco','cbu',
       'alias_cbu','forma_cobro','notas',
     ];
     const example = [
-      '20-12345678-9','Juan Pérez','1985-03-15','juan@example.com','011-4444-5555',
+      '12.345.678','Juan Pérez','1985-03-15','juan@example.com','011-4444-5555',
       'Av. Maipú 1234','Florida','Buenos Aires','1602','2024-03-01','Operario',
       'full_time','relacion_dependencia','Taller principal','UOM',
       '450000','14','Galicia','0001234567890123456789',
       'juan.perez.gal','transferencia','Empleado de planta',
     ];
     const note = [
-      'NOTA: cuil y nombre son obligatorios.',
-      '       CUIL formato XX-XXXXXXXX-X o 11 dígitos sin guiones.',
+      'NOTA: dni y nombre son obligatorios.',
+      '       DNI: 7 u 8 dígitos (con o sin puntos, ej. 12.345.678).',
+      '       Si pegás un CUIL/CUIT de 11 dígitos, tomamos los 8 del medio.',
       '       Modalidad: full_time/part_time/horas/eventual.',
       '       Tipo contratación: relacion_dependencia/monotributo/autonomo/eventual.',
       '       Forma cobro: transferencia/efectivo/cheque/otro.',
       '       CBU: 22 dígitos exactos si presente.',
-      '       Aceptamos "CUIT" como sinónimo de "CUIL".',
     ];
     const aoa = [headers, example, [], ...note.map(n => [n])];
     const ws = window.XLSX.utils.aoa_to_sheet(aoa);
@@ -1395,7 +1404,7 @@
       '#': r.rowNum,
       'Estado': r.status,
       'Motivo': r.reason || '',
-      'CUIL': r.cuil || '',
+      'DNI': r.dni || '',
       'Nombre': r.nombre || '',
       'Fecha ingreso': r.fecha_ingreso || '',
       'Categoria': r.categoria || '',
@@ -1578,7 +1587,7 @@
     /* Encabezado + KPIs */
     const aoa = [
       [`Histórico salarial - ${empleado.nombre || '—'}`],
-      [`CUIL: ${empleado.cuil || '—'}    Categoría: ${empleado.categoria || '—'}    F.Ingreso: ${empleado.fecha_ingreso || '—'}`],
+      [`DNI: ${empleado.dni || '—'}    Categoría: ${empleado.categoria || '—'}    F.Ingreso: ${empleado.fecha_ingreso || '—'}`],
       [`Año: ${year}`],
       [],
       [`Total año:        $ ${Number(totales.year_total || 0).toLocaleString('es-AR', {minimumFractionDigits:2})}`],
@@ -1637,7 +1646,7 @@
       kpis.top_employee ? [`Top:  ${kpis.top_employee.nombre} → $ ${Number(kpis.top_employee.total_year || 0).toLocaleString('es-AR')}`] : [],
       kpis.low_employee ? [`Low:  ${kpis.low_employee.nombre} → $ ${Number(kpis.low_employee.total_year || 0).toLocaleString('es-AR')}`] : [],
       [],
-      ['Empleado','CUIL','Categoría','Total año','Total mes','Adelantos','Quincenas','Sueldos','# Recibos','Último recibo'],
+      ['Empleado','DNI','Categoría','Total año','Total mes','Adelantos','Quincenas','Sueldos','# Recibos','Último recibo'],
     ];
     tabla.forEach(t => {
       const ultimo = t.ultimo_recibo;
@@ -1646,7 +1655,7 @@
         : '—';
       resumenAoa.push([
         t.nombre || '—',
-        t.cuil || '',
+        t.dni || '',
         t.categoria || '',
         Number(t.total_year || 0),
         Number(t.total_month || 0),
@@ -1667,7 +1676,7 @@
     detallables.forEach((t, idx) => {
       const detalleAoa = [
         [`Detalle - ${t.nombre || '—'}`],
-        [`CUIL: ${t.cuil || '—'}    Categoría: ${t.categoria || '—'}    Año ${year}`],
+        [`DNI: ${t.dni || '—'}    Categoría: ${t.categoria || '—'}    Año ${year}`],
         [],
         ['Tipo','Período desde','Período hasta','Fecha pago','Sueldo básico','Total','Notas'],
       ];
@@ -2209,10 +2218,10 @@
     reporteHsExtras,
     updateValorHoraEmpleado,
     getEmployeeHistorial,
-    checkCuilsExist,
+    checkDnisExist,
     bulkCreateEmployees,
     bulkUpdateEmployees,
-    normalizeCuil,
+    normalizeDni,
     parseEmployeesSpreadsheet,
     validateEmployeeRow,
     downloadEmployeesTemplate,
