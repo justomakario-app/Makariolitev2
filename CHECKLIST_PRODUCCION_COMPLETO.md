@@ -397,20 +397,23 @@
 
 # FASE 8 — FLUJOS DE APROBACIÓN
 
+> **Decisiones del Jefe (2026-06-13):** el "coordinador" que aprueba = el **encargado** (no hay rol coordinador por sector con permiso de gestión). El "director" = el **owner** (no existe rol `director`). Los inboxes viven **dentro del hub de Producción** → tab **"Aprobar"** del Panel del Encargado (`encargado-panel.jsx`), donde caen encargado/owner/admin.
+
 ## 8.1 Solicitud de insumos
-- [ ] Coordinador carga la solicitud (estado: pendiente)
-- [ ] Coordinador aprueba (estado: aprobada_coord)
-- [ ] ⚙️ ADMINISTRACIÓN recepciona y gestiona compra (estado: recepcionada_admin)
-- [ ] NO aparece en el panel del encargado
+- [x] Coordinador (sector) carga la solicitud (estado: pendiente) — tab Solicitud de cada sector (`LpSolicitud` → `prod_rpc_crear_solicitud`)
+- [x] **Encargado** aprueba (estado: aprobada_coord) — tab Aprobar, botón "Aprobar" (`prod_rpc_gestionar_solicitud`)
+- [x] ⚙️ ADMINISTRACIÓN (admin/owner) recepciona y gestiona compra (estado: recepcionada_admin) — botón "Recepcionar"
+- [x] El flujo vive en el hub de Producción (no en un área aparte); botones por rol (encargado aprueba, admin recepciona)
 
 ## 8.2 Reporte de mantenimiento
-- [ ] Coordinador reporta el problema (estado: pendiente)
-- [ ] Coordinador aprueba (estado: aprobado_coord)
-- [ ] ⚙️ DIRECTOR recibe en SU panel (estado: recibido_director)
-- [ ] NO va al panel del encargado
+- [x] Coordinador (sector) reporta el problema (estado: pendiente) — tab Mantenimiento de cada sector (`LpMant` → `prod_rpc_reportar_mantenimiento`)
+- [x] **Encargado** aprueba (estado: aprobado_coord) — tab Aprobar (`prod_rpc_gestionar_mantenimiento`, **0078** amplía la RPC para admitir encargado en este paso)
+- [x] ⚙️ DIRECTOR (owner/admin) recibe (estado: recibido_director) — botón "Recibir (director)"; la RPC restringe `recibido_director` a owner/admin
+- [x] El badge de la tab "Aprobar" cuenta solo lo accionable por el rol actual
 
 ## 8.3 Qué ve el encargado
-- [ ] Solo notificación informativa de que fueron derivadas (no las gestiona)
+- [x] El encargado **sí** gestiona la aprobación (decisión del Jefe, revisa el brief original que lo dejaba solo informativo). La tab Avisos sigue mostrando el mantenimiento derivado como info; la tab Aprobar es la accionable.
+- [~] 🔴 Realtime de solicitudes: **0078** publica `prod_solicitud` y el panel se suscribe → las solicitudes nuevas aparecen en vivo
 
 ---
 
@@ -465,7 +468,7 @@
 | 5 — Explosión + optimizadores | `[~]` | **5a ✅** BOM recursivo (`prod_componente`) + explosión (`prod_v_explosion`) + corte/materia prima (0074, smoke ok, import-skus extendido) · **5b ⏳** 2 optimizadores de corte (combos / cutting-stock) + atributos SKU §5.0 + pantalla Optimización |
 | 6 — Stock y compras | `[ ]` | — |
 | 7 — Panel del encargado | `[~]` | Inicio (KPIs + cadena en vivo + alertas) ✅ · Sectores (detalle + edición auditada) ✅ · Stock/remitos = pendiente Fase 6 · avance por canal = refinamiento |
-| 8 — Flujos de aprobación | `[ ]` | — |
+| 8 — Flujos de aprobación | `[x]` | Tab "Aprobar" en el Panel del Encargado: el encargado aprueba (coord), admin recepciona insumos, owner/admin (director) recibe mantenimiento. 0078 amplía gestionar_mantenimiento (encargado) + publica prod_solicitud en realtime. Acciones por rol + badge |
 | 9 — Histórico y director | `[ ]` | — |
 
 > **Backend del esqueleto: sólido y aislado. Cero impacto en producción.**

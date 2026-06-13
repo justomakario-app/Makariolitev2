@@ -80,6 +80,32 @@
 
 ---
 
+### [2026-06-13] Producción — Fase 8: Flujos de aprobación
+
+**Qué se hizo:** se cerró el loop que quedaba colgado — los coordinadores ya cargaban solicitudes de insumos y reportes de mantenimiento, pero **nadie los recibía**. Ahora el **Panel del Encargado** tiene una tab **"Aprobar"** donde se gestiona todo, con acciones según el rol.
+
+**Decisiones del Jefe (vía AskUserQuestion):** (1) los inboxes viven **dentro del hub de Producción** (no en un área nueva); (2) el **encargado** es quien aprueba (el "coordinador" del brief). Además: no existe rol `director` → el **owner** es el director.
+
+**Flujo resultante:**
+- **Insumos:** sector carga (pendiente) → **encargado** aprueba (aprobada_coord) → **admin/owner** recepciona (recepcionada_admin).
+- **Mantenimiento:** sector reporta (pendiente) → **encargado** aprueba (aprobado_coord) → **owner/admin = director** recibe (recibido_director).
+
+**Backend — `0078_prod_fase8_aprobaciones.sql` (escrita + smoke validado, NO aplicada aún — espera OK):**
+- `CREATE OR REPLACE prod_rpc_gestionar_mantenimiento`: antes solo owner/admin; ahora **encargado** puede marcar `aprobado_coord` (y `pendiente`), pero `recibido_director` queda **restringido a owner/admin** (el director). `gestionar_solicitud` ya admitía encargado, no se tocó.
+- Publica **`prod_solicitud`** en `supabase_realtime` (idempotente) para que el panel vea las solicitudes nuevas en vivo (Fase 4.2). 100% aditivo.
+
+**Frontend:**
+- **`lp-data.jsx`:** +`solicitudes()`, +`gestionarSolicitud()`, +`gestionarMantenimiento()`; `mantenimientos()` ahora trae `descripcion`/`reportado_por`.
+- **`encargado-panel.jsx`:** nueva tab **"Aprobar"** (5ª) con `EncAprobaciones` — secciones Solicitudes de insumos + Reportes de mantenimiento; **botones por rol** (encargado: "Aprobar"; admin/owner: "Recepcionar"/"Recibir (director)"); resto ve "Esperando…". Badge en el nav con lo accionable por el rol. El panel toma el rol de `window.useMockData().user.role`. Suscripción Realtime extendida con `prod_solicitud`. El backend igual valida server-side (la UI solo guía).
+
+**Cómo / decisiones:**
+- Esto **revisa** el brief original (8.3 decía que el encargado solo veía info y no gestionaba). El Jefe decidió que el encargado aprueba — se documentó en el checklist. La tab Avisos sigue mostrando el mantenimiento derivado como informativo; la tab Aprobar es la accionable.
+- Las acciones se muestran/ocultan por rol pero la autorización real está en las RPCs `SECURITY DEFINER` (defensa en profundidad).
+
+**Técnico:** NUEVO `supabase/migrations/0078_prod_fase8_aprobaciones.sql`; `lp-data.jsx` + `encargado-panel.jsx` (web→mobile byte-idénticos, verificado por hash; compilados con Babel 7.29.0 OK). Cache-busters: lp-data v6, encargado-panel v3 (ambos HTML). **Pendiente: OK explícito del Jefe para aplicar 0078 + push.** *(Sin la migración: el encargado no podría aprobar mantenimiento y las solicitudes no llegarían en vivo; el resto del panel anda igual.)*
+
+---
+
 ### [2026-06-13] Producción — Datos de Seba para Fase 0.2 / 5 / 6 (captura)
 
 **Qué se hizo:** Seba respondió varios de los cabos abiertos que bloqueaban la Lógica 2 (Fase 5/6). Se **capturaron en el checklist** (0.2 + cabos abiertos), sin construir nada todavía (decisión del Jefe: "capturar y pedir lo que falta" — fiel a "no construir a ciegas").

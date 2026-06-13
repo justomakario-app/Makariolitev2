@@ -62,12 +62,17 @@ window.LP_DATA = window.LP_DATA || (function () {
 
     // ── Encargado (panel de control) ──
     alertas: () => sel('prod_alerta', 'id, insumo_sku, nivel, stock_actual, stock_minimo, vista, created_at', q => q.eq('vista', false).order('created_at', { ascending: false })),
-    mantenimientos: () => sel('prod_mantenimiento', 'id, sector, tipo, urgencia, maquina, estado, created_at', q => q.order('created_at', { ascending: false })),
+    mantenimientos: () => sel('prod_mantenimiento', 'id, sector, tipo, urgencia, maquina, descripcion, estado, reportado_por, created_at', q => q.order('created_at', { ascending: false })),
+    solicitudes: () => sel('prod_solicitud', 'id, jornada_id, sector, items, estado, solicitado_por, created_at', q => q.order('created_at', { ascending: false })),
     insumos: () => sel('prod_insumo', 'sku, nombre, categoria, sector, stock_actual, stock_minimo, unidad', q => q.order('nombre')),
 
     // ── Soporte (todas las pantallas) ──
     crearSolicitud:        (p) => rpc('prod_rpc_crear_solicitud', p),
     reportarMantenimiento: (p) => rpc('prod_rpc_reportar_mantenimiento', p),
+
+    // ── Aprobaciones (Fase 8) ── el encargado aprueba (coord); admin recepciona insumos; owner/admin (director) recibe mantenimiento.
+    gestionarSolicitud:     (p) => rpc('prod_rpc_gestionar_solicitud', p),     // { id, estado: 'aprobada_coord' | 'recepcionada_admin' }
+    gestionarMantenimiento: (p) => rpc('prod_rpc_gestionar_mantenimiento', p), // { id, estado: 'aprobado_coord' | 'recibido_director' }
 
     // ── Realtime (Fase 4.2) ──
     // Suscribe a INSERT/UPDATE/DELETE de las `tables` indicadas y llama a

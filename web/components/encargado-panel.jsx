@@ -1,8 +1,10 @@
 /* ══ PANEL DEL ENCARGADO — Línea productiva (FASE 7) ═══════════════════
    Centro de control. El encargado NO carga producción: ve los 4 sectores
    en vivo, edita con auditoría obligatoria, ve stock/alertas y avisos.
-   Slate #2E4057. 4 tabs: Inicio · Sectores · Stock · Avisos.
+   Slate #2E4057. 5 tabs: Inicio · Sectores · Aprobar · Stock · Avisos.
    Data: window.LP_DATA. UI: lp-ui.jsx (LpEditModal con motivoRequerido).
+   Fase 8: el encargado aprueba (coord); admin recepciona insumos; el
+   director (owner/admin) recibe el mantenimiento.
    Nota: Stock de insumos / remitos / alertas dependen de datos de insumos
    (Fase 6) — hoy muestran estado vacío honesto hasta que se carguen.
    ═══════════════════════════════════════════════════════════════════════ */
@@ -27,6 +29,8 @@ function sum(arr, fn) { let s = 0; for (const x of (arr || [])) s += (Number(fn(
 function EncargadoPanel() {
   const U = ENC_UI;
   const toast = useToast();
+  const M = window.useMockData();
+  const role = ((M.user || {}).role || '').toLowerCase();
   const [tab, setTab] = useState('inicio');
   const [jornada, setJornada] = useState(null);
   const [placas, setPlacas] = useState([]);
@@ -39,6 +43,7 @@ function EncargadoPanel() {
   const [alertas, setAlertas] = useState([]);
   const [mantes, setMantes] = useState([]);
   const [insumos, setInsumos] = useState([]);
+  const [solicitudes, setSolicitudes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null); // { sector, row }
 
@@ -50,7 +55,7 @@ function EncargadoPanel() {
       const j = await window.LP_DATA.jornadaHoy();
       setJornada(j);
       const jid = j && j.jornada_id ? j.jornada_id : null;
-      const [pl, st, ct, ml, pn, em, dm, al, mt, ins] = await Promise.all([
+      const [pl, st, ct, ml, pn, em, dm, al, mt, ins, sl] = await Promise.all([
         window.LP_DATA.placas().catch(() => []),
         window.LP_DATA.stock().catch(() => null),
         jid ? window.LP_DATA.cortesDia(jid).catch(() => []) : Promise.resolve([]),
@@ -61,10 +66,11 @@ function EncargadoPanel() {
         window.LP_DATA.alertas().catch(() => []),
         window.LP_DATA.mantenimientos().catch(() => []),
         window.LP_DATA.insumos().catch(() => []),
+        window.LP_DATA.solicitudes().catch(() => []),
       ]);
       setPlacas(pl); setStock(st || { stock_pieza:[], stock_melamina:[], stock_patas:[], stock_terminado:[] });
       setCortes(ct); setMelamina(ml); setPino(pn); setEmbalaje(em);
-      setDemanda(dm); setAlertas(al); setMantes(mt); setInsumos(ins);
+      setDemanda(dm); setAlertas(al); setMantes(mt); setInsumos(ins); setSolicitudes(sl);
     } catch (err) {
       toast.error(err && err.message ? err.message : 'No se pudo cargar el panel');
     } finally { setLoading(false); }
@@ -77,9 +83,19 @@ function EncargadoPanel() {
   useEffect(() => window.LP_DATA.subscribe(
     ['prod_corte', 'prod_melamina', 'prod_pino', 'prod_embalaje',
      'prod_stock_pieza', 'prod_stock_melamina', 'prod_stock_patas', 'prod_stock_terminado',
-     'prod_alerta', 'prod_mantenimiento', 'prod_jornada'],
+     'prod_alerta', 'prod_mantenimiento', 'prod_solicitud', 'prod_jornada'],
     () => cargar({ silent: true })
   ), [cargar]);
+
+  // Fase 8: aprobar/recepcionar/recibir → RPC + refetch silencioso.
+  const handleAprob = useCallback(async (tipo, id, estado) => {
+    try {
+      if (tipo === 'solicitud') await window.LP_DATA.gestionarSolicitud({ id: id, estado: estado });
+      else await window.LP_DATA.gestionarMantenimiento({ id: id, estado: estado });
+      toast.success('Listo');
+      await cargar({ silent: true });
+    } catch (err) { toast.error(err && err.message ? err.message : 'No se pudo'); }
+  }, [toast, cargar]);
 
   // ── Agregados ──
   const cortesNetas = useMemo(() => sum(cortes, c => {
@@ -106,9 +122,19 @@ function EncargadoPanel() {
     alertas: alertas.length,
   };
 
+  // Fase 8: cuántos ítems puede accionar el rol actual (para el badge).
+  const canDirector = role === 'owner' || role === 'admin';
+  const canCoord = canDirector || role === 'encargado';
+  const solPend  = solicitudes.filter(s => s.estado === 'pendiente').length;
+  const solAprob = solicitudes.filter(s => s.estado === 'aprobada_coord').length;
+  const mantPend  = mantes.filter(m => m.estado === 'pendiente').length;
+  const mantAprob = mantes.filter(m => m.estado === 'aprobado_coord').length;
+  const aprobBadge = (canCoord ? solPend + mantPend : 0) + (canDirector ? solAprob + mantAprob : 0);
+
   const NAV = [
     { id:'inicio',   label:'Inicio',   icon:'chart' },
     { id:'sectores', label:'Sectores', icon:'layers' },
+    { id:'aprob',    label:'Aprobar',  icon:'check', badge: aprobBadge },
     { id:'stock',    label:'Stock',    icon:'box' },
     { id:'avisos',   label:'Avisos',   icon:'bell', badge: alertas.length },
   ];
@@ -162,6 +188,8 @@ function EncargadoPanel() {
           <EncSectores U={U} jornada={jornada} placaMap={placaMap}
                        cortes={cortes} melamina={melamina} pino={pino} embalaje={embalaje}
                        onEdit={(sector, row) => setEditing({ sector, row })}/>
+        ) : tab === 'aprob' ? (
+          <EncAprobaciones U={U} role={role} solicitudes={solicitudes} mantes={mantes} onAction={handleAprob}/>
         ) : tab === 'stock' ? (
           <EncStock U={U} insumos={insumos} alertas={alertas} onRemito={() => toast.info('Carga de remitos: se habilita con el stock de insumos (Fase 6)')}/>
         ) : (
@@ -497,6 +525,103 @@ function EncAvisos({ U, alertas, mantes, jornada }) {
       <div style={{background:U.surface2, border:`1px solid ${U.border}`, borderRadius:12, padding:'12px 14px',
                    fontSize:11, color:U.inkMuted, lineHeight:1.6}}>
         <b style={{color:U.inkSoft}}>Ruteo:</b> las solicitudes de insumos las recepciona administración; los reportes de mantenimiento, una vez aprobados por el coordinador, van al director. El encargado no gestiona ninguno — solo los ve informados.
+      </div>
+    </div>
+  );
+}
+
+/* ── Tab Aprobaciones (Fase 8) ──
+   El encargado aprueba (coord). Insumos: admin (director) recepciona.
+   Mantenimiento: el director (owner/admin) recibe. Las acciones se muestran
+   según el rol; el backend (RPCs) igual valida server-side. */
+function EncAprobaciones({ U, role, solicitudes, mantes, onAction }) {
+  const canDirector = role === 'owner' || role === 'admin';
+  const canCoord = canDirector || role === 'encargado';
+
+  const solAbiertas  = (solicitudes || []).filter(s => s.estado === 'pendiente' || s.estado === 'aprobada_coord');
+  const mantAbiertos = (mantes || []).filter(m => m.estado === 'pendiente' || m.estado === 'aprobado_coord');
+
+  const badge = (txt, col) => (
+    <span style={{fontSize:9.5, fontWeight:800, letterSpacing:'.04em', textTransform:'uppercase',
+                  padding:'2px 8px', borderRadius:999, background:col+'1f', color:col, whiteSpace:'nowrap'}}>{txt}</span>
+  );
+  const btn = (label, col, onClick) => (
+    <button onClick={onClick}
+      style={{border:'none', borderRadius:10, background:col, color:'#fff', padding:'8px 13px',
+              fontSize:11.5, fontWeight:800, cursor:'pointer', whiteSpace:'nowrap'}}>{label}</button>
+  );
+  const espera = (txt) => <span style={{fontSize:11, color:U.inkMuted}}>{txt}</span>;
+  const urgCol = (u) => u === 'alta' ? U.danger : (u === 'media' ? U.warn : U.inkSoft);
+  const itemsTxt = (items) => {
+    if (!Array.isArray(items)) return '—';
+    return items.map(it => `${it.nombre}${it.cantidad ? ' ×' + it.cantidad : ''}`).join(' · ');
+  };
+
+  return (
+    <div>
+      {/* Solicitudes de insumos */}
+      <h3 style={{fontSize:13.5, fontWeight:800, margin:'0 0 10px', color:U.ink}}>Solicitudes de insumos</h3>
+      {solAbiertas.length === 0 ? (
+        <div style={{background:U.surface, border:`1px solid ${U.border}`, borderRadius:12, padding:'14px',
+                     fontSize:12.5, color:U.inkSoft, textAlign:'center', marginBottom:18}}>Sin solicitudes pendientes.</div>
+      ) : (
+        <div style={{display:'flex', flexDirection:'column', gap:8, marginBottom:18}}>
+          {solAbiertas.map(s => {
+            const pend = s.estado === 'pendiente';
+            return (
+              <div key={s.id} style={{background:U.surface, border:`1px solid ${U.border}`, borderRadius:12, padding:'12px 13px'}}>
+                <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6}}>
+                  <span style={{fontSize:12.5, fontWeight:800, color:U.ink, textTransform:'capitalize'}}>{s.sector}</span>
+                  {pend ? badge('pendiente', U.warn) : badge('aprobada', U.cnc)}
+                </div>
+                <div style={{fontSize:11.5, color:U.inkSoft, lineHeight:1.5, marginBottom:10}}>{itemsTxt(s.items)}</div>
+                <div style={{display:'flex', justifyContent:'flex-end', gap:8}}>
+                  {pend && canCoord ? btn('Aprobar', U.accent, () => onAction('solicitud', s.id, 'aprobada_coord')) : null}
+                  {!pend && canDirector ? btn('Recepcionar', U.ok, () => onAction('solicitud', s.id, 'recepcionada_admin')) : null}
+                  {pend && !canCoord ? espera('Esperando al encargado') : null}
+                  {!pend && !canDirector ? espera('Esperando a administración') : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Reportes de mantenimiento */}
+      <h3 style={{fontSize:13.5, fontWeight:800, margin:'0 0 10px', color:U.ink}}>Reportes de mantenimiento</h3>
+      {mantAbiertos.length === 0 ? (
+        <div style={{background:U.surface, border:`1px solid ${U.border}`, borderRadius:12, padding:'14px',
+                     fontSize:12.5, color:U.inkSoft, textAlign:'center', marginBottom:18}}>Sin reportes pendientes.</div>
+      ) : (
+        <div style={{display:'flex', flexDirection:'column', gap:8, marginBottom:18}}>
+          {mantAbiertos.map(m => {
+            const pend = m.estado === 'pendiente';
+            return (
+              <div key={m.id} style={{background:U.surface, border:`1px solid ${U.border}`, borderRadius:12, padding:'12px 13px'}}>
+                <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6}}>
+                  <span style={{fontSize:12.5, fontWeight:800, color:U.ink, textTransform:'capitalize'}}>{m.sector} · {m.tipo || 'mantenimiento'}</span>
+                  {badge(m.urgencia || 'media', urgCol(m.urgencia))}
+                </div>
+                {m.maquina ? <div style={{fontSize:12, color:U.inkSoft, marginBottom:3}}>{m.maquina}</div> : null}
+                {m.descripcion ? <div style={{fontSize:11.5, color:U.inkMuted, lineHeight:1.5, marginBottom:10}}>{m.descripcion}</div> : <div style={{height:6}}/>}
+                <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:8}}>
+                  {pend ? badge('pendiente', U.warn) : badge('aprobado coord', U.pino)}
+                  <span style={{display:'flex', gap:8}}>
+                    {pend && canCoord ? btn('Aprobar', U.accent, () => onAction('mantenimiento', m.id, 'aprobado_coord')) : null}
+                    {!pend && canDirector ? btn('Recibir (director)', U.ok, () => onAction('mantenimiento', m.id, 'recibido_director')) : null}
+                    {pend && !canCoord ? espera('Esperando al encargado') : null}
+                    {!pend && !canDirector ? espera('Esperando al director') : null}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div style={{background:U.surface2, border:`1px solid ${U.border}`, borderRadius:12, padding:'12px 14px',
+                   fontSize:11, color:U.inkMuted, lineHeight:1.6}}>
+        <b style={{color:U.inkSoft}}>Flujo:</b> el sector carga → el encargado aprueba → las solicitudes de insumos las recepciona administración y los reportes de mantenimiento los recibe el director.
       </div>
     </div>
   );
