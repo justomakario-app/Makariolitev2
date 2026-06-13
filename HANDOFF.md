@@ -80,6 +80,28 @@
 
 ---
 
+### [2026-06-13] Producción — Datos de Seba (2da tanda) + verificación del catálogo
+
+**Qué se hizo:** Seba respondió los 4 puntos pendientes. Se **capturaron en el checklist** (0.2 + cabos abiertos) y se **verificó el catálogo cargado** contra sus respuestas. **No se hizo ningún UPDATE a la BD** (el Jefe rechazó el cambio suelto — las correcciones van por la capa de normalización + re-carga).
+
+**Respuestas de Seba (capturadas):**
+- **Caja del Hikari (MAD401): va en Caja N°1** (hoy cargado N°2 — corregir vía normalización).
+- **Tapatornillo blanco = AGU001** (AGU002 = color). Los AGU003-008 son compuestos ya cargados OK (AGU003=AGU001×12, AGU005=AGU001×2, etc.). ✅ verificado en `prod_componente`.
+- **Patas por modelo:** redonda 30→PAT002 · 40→PAT001 · 50→PAT002 · boomerang→PAT001 · gota xl/chica→PAT001 · gota grande→PAT002 · rectangular→PAT002 · **set xl→PAT001+PAT002**.
+- **Varilla:** VAR001 (14 mm) → **veladores** (materia prima). Hikari/Yori → implícito VAR002 (25 mm), no explícito.
+- **BOM "cada insumo genera un hijo"** (TOR003=TOR001×4, etc.) → **confirmado cargado** y la explosión lo recorre bien.
+
+**Hallazgo importante (gap a cerrar antes de poblar patas / Fase 5b):** la lista de modelos de Seba **NO mapea 1:1** con los 26 productos del catálogo. Los productos tienen SETs y variantes que Seba no mapeó:
+- `MAD051/052` "MESA REDONDA" (sin tamaño) → ¿es redonda 50? (su receta apunta a TAP005, así parece).
+- SETs sin pata definida: `SET GOTA`, `SET REDONDA`, `SET REDONDA SIMIL MÁRMOL`, `SET DOBLE BOOM` (un set = varias mesas → patas = suma de sus componentes, a confirmar).
+- "gota chica/grande" de la lista de Seba no existen como producto suelto (hay GOTA XL y SET GOTA).
+
+→ Para poblar `patas_tipo`/`patas_cant` y armar el optimizador de varilla (5b) faltan **3 aclaraciones**: (1) patas de los SETs, (2) tamaño de "MESA REDONDA" (MAD051/052), (3) confirmar varilla 25 mm para hikari/yori.
+
+**Técnico:** solo docs (checklist + HANDOFF). Sin código/BD. Catálogo base intacto (cargado el 2026-06-13).
+
+---
+
 ### [2026-06-13] Producción — Carga base del catálogo (Fase 0.3)
 
 **Qué se hizo:** se pobló el catálogo de producción desde `sku para sistema.xlsx` (el Excel verificado como correcto: 4 hojas, datos reales). El módulo pasa de "esqueleto vacío" a **usable con datos reales**.

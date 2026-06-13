@@ -74,10 +74,11 @@
 - [x] 🔒 Cantidades guardadas como texto → el parser ya las castea a int (`toIntOrNull`) en todo lo que carga (rendimiento, cantidad de receta)
 - [x] Corrección puntual: tornillos del Hikari → la pieza "Hikari x2" ahora existe única (TOR011). El re-cableado de KIT007 al sub-ensamble es Fase 5 (el árbol BOM todavía no se carga)
 - [~] 🔒 Filo no modelado como consumo → insumo por metro (rollo 50m). **Datos de Seba (2026-06-13, confirmado = filo/perímetro de tapa):** filo en cm por modelo: redonda 30→110 · 40→130 · 50→160 · gota chica→140 · gota grande→180 · boomerang→210 · mesa xl→225 · rectangular→190 · hikari→140 · yori→240. **Falta:** SKU del filo + mapeo modelo→MAD. → Fase 5.0/6
-- [~] 🔒 Varilla → material de corte (optimizador lineal). **Datos de Seba:** viene fraccionada en barras de **1 m**. **Hikari** 45 cm/pata → 2 patas por varilla → 4 patas = **2 varillas** (10 cm merma c/u). **Yori** 85 cm/pata → 1 pata por varilla → 4 patas = **4 varillas** (15 cm merma c/u). **Falta:** ¿qué varilla usa cada modelo (VAR001 14 mm / VAR002 25 mm)? → Fase 5b
-- [~] 🔒 Patas: pieza de corte (las corta Pino, **no se compran**). **Datos de Seba:** `patas_cant` = **3 por mesa**, **4 en la rectangular**; hikari/yori usan 4 (pero de **varilla**, no Pino). **Falta:** ¿qué mesas usan PAT001 chica vs PAT002 grande? → Fase 5.0
-- [~] Tapatornillos color AGU006/007/008. **Datos de Seba:** se usan **solo en hikari y yori, 12 unidades c/u**; hoy se vende **solo en blanco** (los SKU de color quedan definidos pero inactivos). **Falta:** SKU del tapatornillo blanco en uso.
-- [ ] ⚠️ Caja del Hikari (MAD401 → Caja N°2): **Seba aún no respondió** — sigue pendiente.
+- [~] 🔒 Varilla → material de corte (optimizador lineal). Barras de **1 m**. **Hikari** 45 cm/pata → 2 patas/varilla → 4 patas = **2 varillas** (10 cm merma c/u); **Yori** 85 cm/pata → 1 pata/varilla → 4 patas = **4 varillas** (15 cm merma c/u). **Seba (2da tanda):** la **VAR001 (14 mm) va en los VELADORES**, agregada solo como materia prima. ⚠️ **Falta cerrar:** entonces ¿hikari/yori usan VAR002 (25 mm)? (lo da a entender, no lo dijo explícito). → Fase 5b
+- [x] 🔒 Patas: pieza de corte (las corta Pino, **no se compran**). `patas_cant` = **3 por mesa, 4 rectangular**; hikari/yori usan 4 (de varilla). **Seba (2da tanda) — pata por modelo:** redonda 30→**PAT002** · redonda 40→**PAT001** · redonda 50→**PAT002** · boomerang→**PAT001** · gota xl→**PAT001** · gota chica→**PAT001** · gota grande→**PAT002** · rectangular→**PAT002** · **set xl → PAT001 y PAT002** (lleva ambas). → poblar `patas_tipo`/`patas_cant` en Fase 5.0
+- [x] Tapatornillos. **Seba (2da tanda):** el **tapatornillo blanco base es AGU001** (AGU002 = color). Los AGU003-008 son **compuestos** ya cargados (AGU003=Yori blanco AGU001×12, AGU004=Hikari blanco AGU001×12, AGU005=Hikari x2 blanco AGU001×2; 006/007/008 = ídem en color sobre AGU002). Hoy se vende solo blanco.
+- [x] ⚠️ Caja del Hikari (MAD401). **Seba (2da tanda): va en Caja N°1** (no N°2). → corregir el dato cargado (vía normalización import-skus + re-carga, no UPDATE suelto).
+- [x] 🔒 Estructura BOM "cada insumo genera un hijo" (Seba): un SKU compuesto = base × cantidad (ej. **TOR003 = TOR001 × 4**, TOR004 = TOR002 × 10). **Confirmado cargado** en `prod_componente` y la explosión lo recorre bien.
 
 ## 0.3 Importación del Excel maestro (Edge Function)
 - [x] Edge Function `import-skus` escrita (Deno + SheetJS)
@@ -434,7 +435,8 @@
 - [~] ⚠️ Filo: cuántos metros lleva cada modelo — **respondido por Seba (2026-06-13):** cm por modelo (ver 0.2). Se compra por rollo de 50 m. Falta SKU de filo + mapeo modelo→MAD.
 - [ ] ⚠️ Melamina: ¿solo termina tapas de CNC o fabrica algún componente propio (soportes)?
 - [ ] ⚠️ Palet de listones: cantidad real varía 600-700, cargar en cada ingreso (no fijar)
-- [~] ⚠️ prod_producto: tipo (simple/combinado) y patas no vienen en el Excel — **patas_cant respondido por Seba (2026-06-13):** 3 por mesa, 4 rectangular; hikari/yori 4 (de varilla). Falta el split chica/grande por modelo + el tipo simple/combinado.
+- [x] ⚠️ prod_producto patas — **Seba (2026-06-13, completo):** `patas_cant` 3 por mesa / 4 rectangular; **split por modelo** redonda 30→PAT002 · 40→PAT001 · 50→PAT002 · boomerang→PAT001 · gota xl/chica→PAT001 · gota grande→PAT002 · rectangular→PAT002 · **set xl→PAT001+PAT002** (ver 0.2). Falta: mapeo modelo→MAD para poblar + el `tipo` simple/combinado.
+- [ ] ⚠️ **Veladores + VAR001 (14 mm):** Seba sumó la varilla de 14 mm como materia prima para los **veladores** (producto/modelo nuevo no detallado aún) — definir alcance.
 
 ---
 
