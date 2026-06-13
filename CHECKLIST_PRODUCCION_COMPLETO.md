@@ -276,20 +276,22 @@
 > 2 líneas que convergen en Embalaje. Al cerrar el día cada sector empuja datos netos al siguiente.
 
 ## 4.1 Triggers de encadenamiento ⚙️
-- [ ] ⚙️ CNC → Melamina: al registrar corte, piezas crudas netas aparecen en stock_pieza automático
-- [ ] ⚙️ Melamina → Embalaje: piezas terminadas (con filo + refilado, netas de fallas) a stock_melamina
-- [ ] ⚙️ Pino → Embalaje: patas terminadas por tamaño a stock_patas
-- [ ] ⚙️ Embalaje → sistema pedidos: unidades terminadas = "listo para despacho" en prod_pedido_estado
-- [ ] ⚙️ Dependencias como estados: "esperando tapas y patas" hasta que CNC/Melamina y Pino tengan stock
-- [ ] CNC y Pino pueden trabajar en paralelo desde el arranque
+> El encadenamiento NO vive en triggers separados: ocurre **dentro de cada RPC `registrar_*`** (Fase 2), que descuenta el stock propio y acredita el del siguiente eslabón en la misma transacción. Funcionalmente equivalente y validado en el smoke end-to-end de la Fase 2.
+- [x] ⚙️ CNC → Melamina: `prod_rpc_registrar_corte` ⚙️ UPSERT prod_stock_pieza += piezas netas
+- [x] ⚙️ Melamina → Embalaje: `prod_rpc_registrar_melamina` ⚙️ UPSERT prod_stock_melamina += terminadas (netas de fallas)
+- [x] ⚙️ Pino → Embalaje: `prod_rpc_registrar_pino` ⚙️ UPSERT prod_stock_patas += terminadas por tamaño
+- [x] ⚙️ Embalaje → sistema pedidos: `prod_rpc_registrar_embalaje` ⚙️ INSERT prod_pedido_estado='listo_despacho' (si hay order_id)
+- [x] ⚙️ Dependencias como estados: las pantallas muestran "esperando CNC / piezas / patas" cuando el stock del eslabón previo es 0 (banners ámbar por sector)
+- [x] CNC y Pino trabajan en paralelo desde el arranque (no comparten stock; convergen recién en Embalaje)
 
-## 4.2 Realtime (🔴 sin polling)
-- [ ] 🔴 Melamina escucha prod_stock_pieza (ve crudo que dejó CNC)
-- [ ] 🔴 Embalaje escucha prod_stock_melamina + prod_stock_patas
-- [ ] 🔴 Encargado escucha prod_corte/melamina/embalaje/pino (dashboard 4 sectores)
-- [ ] 🔴 Encargado escucha prod_alerta (stock bajo)
-- [ ] 🔴 Director escucha prod_mantenimiento (estado recibido_director)
-- [ ] 🔴 Todos los sectores escuchan cambios en pedidos (resumen del día se actualiza solo)
+## 4.2 Realtime (🔴 sin polling) — **migration 0077 + suscripciones frontend**
+> Habilitado vía `supabase_realtime` (0077, las 11 tablas operativas `prod_*`) + helper `LP_DATA.subscribe(tables, onChange)` (canal por pantalla, debounce 250ms, baja en el cleanup del effect). El refetch es **silencioso** (no muestra el loader). RLS filtra server-side: cada rol solo recibe lo que puede leer.
+- [x] 🔴 Melamina escucha prod_stock_pieza (ve crudo que dejó CNC) + prod_melamina + prod_jornada
+- [x] 🔴 Embalaje escucha prod_stock_melamina + prod_stock_patas + prod_embalaje + prod_jornada
+- [x] 🔴 CNC escucha prod_corte + prod_jornada · Pino escucha prod_stock_patas + prod_pino + prod_jornada
+- [x] 🔴 Encargado escucha los 4 sectores + 4 stocks + prod_alerta + prod_mantenimiento + prod_jornada (centro de control en vivo)
+- [ ] 🔴 Director escucha prod_mantenimiento (estado recibido_director) → **Fase 8** (el panel del director aún no existe)
+- [~] 🔴 Todos los sectores escuchan cambios en pedidos (resumen del día) — hoy el resumen se re-fetchea ante cualquier cambio `prod_*`; escuchar `orders`/`carrier_state` directo (tablas existentes) requiere revisar su RLS para los roles de sector → **refinamiento diferido**
 
 ---
 
@@ -459,7 +461,7 @@
 | 1 — Roles y accesos | `[x]` | Roles ✅ · RLS ✅ · guards frontend (router por sector) ✅ |
 | 2 — Motor de carga (RPCs) | `[x]` | 16 RPCs + cadena de stock + smoke ✅ |
 | 3 — Frontend por sector | `[x]` | **4 sectores de operario completos** (CNC · Melamina · Pino · Embalaje) + edición 24h + badges + QR cámara + tokens §15 |
-| 4 — Encadenamiento + Realtime | `[ ]` | — |
+| 4 — Encadenamiento + Realtime | `[x]` | Encadenamiento ✅ (vive en las RPCs `registrar_*`, Fase 2) · Realtime ✅ (0077 publica 11 tablas `prod_*` + `LP_DATA.subscribe`; las 5 pantallas + encargado en vivo). Director (mantenimiento) → Fase 8 · `orders`/`carrier_state` directo = refinamiento |
 | 5 — Explosión + optimizadores | `[~]` | **5a ✅** BOM recursivo (`prod_componente`) + explosión (`prod_v_explosion`) + corte/materia prima (0074, smoke ok, import-skus extendido) · **5b ⏳** 2 optimizadores de corte (combos / cutting-stock) + atributos SKU §5.0 + pantalla Optimización |
 | 6 — Stock y compras | `[ ]` | — |
 | 7 — Panel del encargado | `[~]` | Inicio (KPIs + cadena en vivo + alertas) ✅ · Sectores (detalle + edición auditada) ✅ · Stock/remitos = pendiente Fase 6 · avance por canal = refinamiento |

@@ -44,8 +44,8 @@ function EncargadoPanel() {
 
   const placaMap = useMemo(() => { const m = {}; for (const p of placas) m[p.sku] = p; return m; }, [placas]);
 
-  const cargar = useCallback(async () => {
-    setLoading(true);
+  const cargar = useCallback(async (opts) => {
+    if (!(opts && opts.silent)) setLoading(true);
     try {
       const j = await window.LP_DATA.jornadaHoy();
       setJornada(j);
@@ -71,6 +71,15 @@ function EncargadoPanel() {
   }, [toast]);
 
   useEffect(() => { cargar(); }, [cargar]);
+
+  // 🔴 Realtime (Fase 4.2): centro de control en vivo — los 4 sectores, los
+  // 4 stocks, alertas, mantenimiento y jornada.
+  useEffect(() => window.LP_DATA.subscribe(
+    ['prod_corte', 'prod_melamina', 'prod_pino', 'prod_embalaje',
+     'prod_stock_pieza', 'prod_stock_melamina', 'prod_stock_patas', 'prod_stock_terminado',
+     'prod_alerta', 'prod_mantenimiento', 'prod_jornada'],
+    () => cargar({ silent: true })
+  ), [cargar]);
 
   // ── Agregados ──
   const cortesNetas = useMemo(() => sum(cortes, c => {

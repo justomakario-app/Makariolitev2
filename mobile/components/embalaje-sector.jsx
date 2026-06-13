@@ -46,8 +46,8 @@ function EmbalajeSector() {
 
   const jornadaAbierta = jornada && jornada.estado === 'abierta';
 
-  const cargar = useCallback(async () => {
-    setLoading(true);
+  const cargar = useCallback(async (opts) => {
+    if (!(opts && opts.silent)) setLoading(true);
     try {
       const j = await window.LP_DATA.jornadaHoy();
       setJornada(j);
@@ -70,6 +70,12 @@ function EmbalajeSector() {
   }, [toast]);
 
   useEffect(() => { cargar(); }, [cargar]);
+
+  // 🔴 Realtime (Fase 4.2): insumos de Melamina/Pino + cargas propias + jornada.
+  useEffect(() => window.LP_DATA.subscribe(
+    ['prod_stock_melamina', 'prod_stock_patas', 'prod_embalaje', 'prod_jornada'],
+    () => cargar({ silent: true })
+  ), [cargar]);
 
   const totalEmbalado = registros.reduce((s, r) => s + (Number(r.unidades) || 0), 0);
 

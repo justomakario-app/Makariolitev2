@@ -80,6 +80,30 @@
 
 ---
 
+### [2026-06-13] Producción — Fase 4.2: Realtime (🔴 sin polling)
+
+**Qué se hizo:** las 5 pantallas de sector + el panel del encargado ahora se actualizan **en vivo** ante cualquier cambio de producción, sin recargar ni polling. Cumple la promesa 🔴 que cruza todo el brief (cada sector "ve" lo que dejó el anterior al instante).
+
+**Por qué:** hasta ahora las pantallas solo refrescaban al montar o tras una carga propia. El encargado es un "centro de control en vivo" y Melamina/Embalaje dependen de ver el stock del eslabón previo apenas se produce.
+
+**Backend — `0077_prod_fase4_realtime.sql` (escrita + smoke BEGIN/ROLLBACK validado, NO aplicada aún — espera OK):**
+- Agrega las **11 tablas operativas `prod_*`** (jornada, los 4 sectores, los 4 stocks, alerta, mantenimiento) a la publicación **`supabase_realtime`**.
+- **100% aditivo y reversible:** no toca schema ni datos, solo la membresía de la publicación. **Idempotente** (chequea `pg_publication_tables` antes de cada `ADD`). No necesita `REPLICA IDENTITY FULL` (el frontend re-fetchea, no usa valores viejos).
+- **Smoke (rolled back):** la publicación existe; las 11 tablas se agregarían (hoy ninguna está); el `ALTER PUBLICATION … ADD TABLE` corre en transacción y revierte limpio. (`production_logs` ya estaba en realtime de antes — no es nuestra, no se tocó.)
+
+**Frontend — helper + suscripciones:**
+- **`lp-data.jsx` → `LP_DATA.subscribe(tables, onChange)`**: crea un canal Realtime, escucha `postgres_changes` (`event:'*'`) de las tablas indicadas, **debounce 250ms**, y devuelve la **función de baja** para el cleanup del `useEffect`. Si Realtime no está disponible → **no-op** (la pantalla sigue andando, solo sin vivo). RLS filtra server-side: cada rol recibe únicamente lo que puede leer.
+- **Refetch silencioso:** cada `cargar` ahora acepta `{ silent:true }` → el tick en vivo **no muestra el loader** (evita parpadeo). El montaje inicial sigue mostrando el spinner.
+- **Suscripciones por pantalla** (lo mínimo que cada una necesita): CNC `[corte, jornada]` · Melamina `[stock_pieza, melamina, jornada]` · Pino `[stock_patas, pino, jornada]` · Embalaje `[stock_melamina, stock_patas, embalaje, jornada]` · Encargado `[4 sectores + 4 stocks + alerta + mantenimiento + jornada]`.
+
+**Cómo / decisiones:**
+- El **encadenamiento** (4.1) ya vivía dentro de las RPCs `registrar_*` (descuentan el stock propio y acreditan el siguiente en la misma transacción) — se marcó hecho en el checklist; Realtime es lo que faltaba para que se **vea** en vivo.
+- **Director escuchando mantenimiento** y **escuchar `orders`/`carrier_state` directo** quedan fuera: el primero es Fase 8 (panel del director aún no existe); el segundo tocaría tablas existentes (revisar su RLS para roles de sector) → refinamiento. Hoy el resumen del día igual se re-fetchea ante cualquier cambio `prod_*`.
+
+**Técnico:** NUEVO `supabase/migrations/0077_prod_fase4_realtime.sql`; `lp-data.jsx` (+`subscribe`) y los 5 archivos de pantalla (`cnc/melamina/pino/embalaje-sector.jsx` + `encargado-panel.jsx`) web→mobile byte-idénticos (verificado por hash). Cache-busters: lp-data v5, cnc v6, melamina v4, pino v4, embalaje v4, encargado v2 (ambos HTML). **Pendiente: OK explícito del Jefe para aplicar 0077 + push.** *(Sin la migración el frontend no rompe: las suscripciones simplemente no reciben eventos hasta que se publique.)*
+
+---
+
 ### [2026-06-13] RRHH — Empleados: CUIL → DNI (pedido de Seba)
 
 **Qué se hizo:** se cambió la identificación de empleados de **CUIL** a **DNI** en todo el módulo de RRHH (BD + ambos frontends), con formato **DNI con puntos** (`12.345.678`). El **CUIT de proveedores NO se tocó** (es otro dominio).

@@ -42,8 +42,8 @@ function MelaminaSector() {
 
   const jornadaAbierta = jornada && jornada.estado === 'abierta';
 
-  const cargar = useCallback(async () => {
-    setLoading(true);
+  const cargar = useCallback(async (opts) => {
+    if (!(opts && opts.silent)) setLoading(true);
     try {
       const j = await window.LP_DATA.jornadaHoy();
       setJornada(j);
@@ -63,6 +63,12 @@ function MelaminaSector() {
   }, [toast]);
 
   useEffect(() => { cargar(); }, [cargar]);
+
+  // 🔴 Realtime (Fase 4.2): crudo de CNC + cargas propias + jornada en vivo.
+  useEffect(() => window.LP_DATA.subscribe(
+    ['prod_stock_pieza', 'prod_melamina', 'prod_jornada'],
+    () => cargar({ silent: true })
+  ), [cargar]);
 
   const totalTerminadas = registros.reduce((s, r) => s + (Number(r.terminadas) || 0), 0);
 

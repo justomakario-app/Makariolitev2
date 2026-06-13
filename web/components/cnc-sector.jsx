@@ -51,8 +51,8 @@ function CncSector() {
 
   const jornadaAbierta = jornada && jornada.estado === 'abierta';
 
-  const cargar = useCallback(async () => {
-    setLoading(true);
+  const cargar = useCallback(async (opts) => {
+    if (!(opts && opts.silent)) setLoading(true);
     try {
       const j = await window.LP_DATA.jornadaHoy();
       setJornada(j);
@@ -68,6 +68,12 @@ function CncSector() {
   }, [toast]);
 
   useEffect(() => { cargar(); }, [cargar]);
+
+  // 🔴 Realtime (Fase 4.2): refresca en vivo ante cargas propias / jornada.
+  useEffect(() => window.LP_DATA.subscribe(
+    ['prod_corte', 'prod_jornada'],
+    () => cargar({ silent: true })
+  ), [cargar]);
 
   const cortesView = useMemo(() => cortes.map(c => {
     const p = placaMap[c.placa_sku] || {};

@@ -68,5 +68,39 @@ window.LP_DATA = window.LP_DATA || (function () {
     // ── Soporte (todas las pantallas) ──
     crearSolicitud:        (p) => rpc('prod_rpc_crear_solicitud', p),
     reportarMantenimiento: (p) => rpc('prod_rpc_reportar_mantenimiento', p),
+
+    // ── Realtime (Fase 4.2) ──
+    // Suscribe a INSERT/UPDATE/DELETE de las `tables` indicadas y llama a
+    // onChange (debounced 250ms) ante cualquier cambio. RLS filtra server-side:
+    // cada rol solo recibe lo que puede leer. Devuelve una función de baja para
+    // usar en el cleanup del useEffect. Si Realtime no está disponible, es no-op
+    // (la pantalla sigue refrescando al montar/editar, sin romperse).
+    subscribe: function (tables, onChange) {
+      const client = sb();
+      const noop = function () {};
+      if (!client || typeof client.channel !== 'function') return noop;
+      const list = Array.isArray(tables) ? tables : [tables];
+      let timer = null;
+      const fire = function () {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(function () {
+          try { onChange(); } catch (e) { /* noop */ }
+        }, 250);
+      };
+      let ch;
+      try {
+        ch = client.channel('lp-rt-' + Date.now() + '-' + Math.floor(Math.random() * 1e6));
+        for (let i = 0; i < list.length; i++) {
+          ch.on('postgres_changes', { event: '*', schema: 'public', table: list[i] }, fire);
+        }
+        ch.subscribe();
+      } catch (e) {
+        return noop;
+      }
+      return function () {
+        if (timer) clearTimeout(timer);
+        try { client.removeChannel(ch); } catch (e) { /* noop */ }
+      };
+    },
   };
 })();
