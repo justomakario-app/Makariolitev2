@@ -9,12 +9,15 @@
    (Fase 6) — hoy muestran estado vacío honesto hasta que se carguen.
    ═══════════════════════════════════════════════════════════════════════ */
 
+/* Paleta integrada a la plataforma (clara/premium). El panel está tokenizado:
+   todo el render usa U.*, así que cambiando la paleta se re-tematiza entero
+   sin tocar la estructura. Los colores de sector quedan como acento. */
 const ENC_UI = {
-  accent:'#2E4057', accentText:'#9FB0C9', accentSoft:'rgba(46,64,87,.40)', accentLine:'rgba(46,64,87,.66)',
+  accent:'#2E4057', accentText:'#2E4057', accentSoft:'rgba(46,64,87,.08)', accentLine:'rgba(46,64,87,.20)',
   cnc:'#2563EB', mel:'#534AB7', pino:'#0F6E56', emb:'#993C1D',
-  bg:'#0C0C0E', surface:'#1A1A1D', surface2:'#222226', border:'#28282E',
-  ink:'#EFEFEF', inkSoft:'#9898A6', inkMuted:'#55555F', danger:'#FF4060', warn:'#FFB020', ok:'#00D68F',
-  radius:16,
+  bg:'transparent', surface:'#FFFFFF', surface2:'#F4F4F5', border:'rgba(0,0,0,0.09)',
+  ink:'#0A0A0A', inkSoft:'#555555', inkMuted:'#8A8A8A', danger:'#DC2626', warn:'#D97706', ok:'#16A34A',
+  radius:10,
 };
 
 const ENC_SECTORES = [
@@ -149,13 +152,10 @@ function EncargadoPanel() {
   };
 
   return (
-    <div style={{maxWidth:430, margin:'0 auto', minHeight:600, background:U.bg, color:U.ink,
-                 borderRadius:U.radius, overflow:'hidden', display:'flex', flexDirection:'column',
-                 boxShadow:'0 10px 40px rgba(0,0,0,.25)', fontSize:14}}>
+    <div style={{background:U.bg, color:U.ink, fontSize:13, padding:'0 16px 24px'}}>
 
-      {/* Topbar */}
-      <div style={{padding:'16px 18px', background:U.surface, borderBottom:`1px solid ${U.border}`,
-                   display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+      {/* Header de sección (integrado a la plataforma, no marco de teléfono) */}
+      <div style={{padding:'18px 0 14px', display:'flex', alignItems:'center', justifyContent:'space-between'}}>
         <div style={{display:'flex', alignItems:'center', gap:9}}>
           <span style={{width:34, height:34, borderRadius:10, background:U.accentSoft,
                         border:`1px solid ${U.accentLine}`, display:'flex', alignItems:'center', justifyContent:'center'}}>
@@ -180,8 +180,29 @@ function EncargadoPanel() {
         </div>
       </div>
 
+      {/* Tabs (estilo plataforma, arriba — reemplaza el bottom-nav de teléfono) */}
+      <div style={{display:'flex', gap:2, borderBottom:`1px solid ${U.border}`, overflowX:'auto', marginBottom:18}}>
+        {NAV.map(n => {
+          const on = tab === n.id;
+          return (
+            <button key={n.id} onClick={() => setTab(n.id)}
+              style={{border:'none', background:'transparent', cursor:'pointer', whiteSpace:'nowrap',
+                      padding:'11px 13px', display:'flex', alignItems:'center', gap:7,
+                      color: on ? U.accent : U.inkMuted, borderBottom:`2px solid ${on ? U.accent : 'transparent'}`,
+                      marginBottom:-1, fontSize:12.5, fontWeight: on ? 800 : 600, transition:'color .15s ease'}}>
+              <Icon n={n.icon} s={16} c={on ? U.accent : U.inkMuted}/>
+              <span>{n.label}</span>
+              {n.badge ? (
+                <span style={{minWidth:16, height:16, padding:'0 4px', borderRadius:999, background:U.danger,
+                              color:'#fff', fontSize:9.5, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1}}>{n.badge}</span>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Contenido */}
-      <div style={{flex:1, padding:'18px', overflowY:'auto'}}>
+      <div>
         {loading ? (
           <div style={{textAlign:'center', color:U.inkMuted, padding:'60px 0', fontSize:13}}>Cargando panel…</div>
         ) : tab === 'inicio' ? (
@@ -199,30 +220,6 @@ function EncargadoPanel() {
         ) : (
           <EncAvisos U={U} alertas={alertas} mantes={mantes} jornada={jornada}/>
         )}
-      </div>
-
-      {/* Bottom nav */}
-      <div style={{display:'flex', background:U.surface, borderTop:`1px solid ${U.border}`}}>
-        {NAV.map(n => {
-          const on = tab === n.id;
-          return (
-            <button key={n.id} onClick={() => setTab(n.id)}
-              style={{flex:1, border:'none', background:'transparent', cursor:'pointer',
-                      padding:'10px 4px 11px', display:'flex', flexDirection:'column', alignItems:'center', gap:4,
-                      color: on ? U.accentText : U.inkMuted, borderTop:`2px solid ${on ? U.accentText : 'transparent'}`,
-                      marginTop:-1, transition:'color .15s ease'}}>
-              <span style={{position:'relative', display:'flex'}}>
-                <Icon n={n.icon} s={19} c={on ? U.accentText : U.inkMuted}/>
-                {n.badge ? (
-                  <span style={{position:'absolute', top:-6, right:-10, minWidth:15, height:15, padding:'0 3px',
-                                borderRadius:999, background:U.danger, color:'#fff', fontSize:9, fontWeight:800,
-                                display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1}}>{n.badge}</span>
-                ) : null}
-              </span>
-              <span style={{fontSize:10, fontWeight:on ? 800 : 600, letterSpacing:'.02em'}}>{n.label}</span>
-            </button>
-          );
-        })}
       </div>
 
       {editing && (() => {

@@ -485,7 +485,7 @@
 > `[x]` = ya construida · `[ ]` = falta · ⚠️ = falta definir qué va adentro.
 
 ## Dentro de Producción (foco actual)
-- [ ] **Hub Producción → tab "Línea productiva"** — frontend por sector (= toda la FASE 3). Hoy stub.
+- [x] **Hub Producción → tab "Línea productiva"** — frontend por sector (FASE 3) construido **e integrado a la plataforma** (2026-06-13): las 5 pantallas (4 sectores + Encargado) pasaron de "teléfono dark flotante" a secciones nativas claras (full width, tabs arriba, acento por sector), en web y mobile, en todas las cuentas.
 - [ ] ⚠️ **Hub Producción → tab "De fábrica"** — stub sin definir alcance. Decidir contenido con el negocio.
 
 ## Otras áreas (módulo Gestión)

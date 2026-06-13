@@ -80,6 +80,25 @@
 
 ---
 
+### [2026-06-13] Producción — Integración visual a la plataforma (sacar el "teléfono dentro de la app")
+
+**Qué se hizo:** las 5 pantallas de Producción (4 sectores + Panel del Encargado) se veían como un **celular dark flotando** dentro de la plataforma clara (tarjeta 430px centrada + sombra + esquinas de dispositivo + bottom-nav). Se reencuadraron para que se vean **nativas de la plataforma**, en **todas las cuentas** (cada rol entra y ve su área integrada).
+
+**Por qué:** pedido explícito del Jefe — "todo tiene que verse como si fuese de la plataforma, diferentes segmentos, no como un teléfono dentro de la app", y aplica a **cada cuenta de empleado** (cnc, melamina, pino, embalaje) además del dueño.
+
+**Cómo (clave):** las pantallas ya estaban **tokenizadas** (todo el render usa un objeto `U` de colores), así que la integración fue de bajo riesgo y sin reescribir estructura:
+- **Paleta `U` dark → clara/plataforma** (tarjetas blancas `#FFFFFF`, texto `#0A0A0A`, bordes sutiles, `ok/warn/danger` alineados a `--green/--amber/--red`). Cada sector conserva **su color como acento** (CNC azul, Melamina violeta, Pino verde, Embalaje rust, Encargado slate).
+- **Sin marco de teléfono**: fuera `maxWidth:430` + `margin:auto` + `boxShadow` + `borderRadius` de dispositivo → ocupa el ancho del área de contenido con el padding del hub.
+- **Bottom-nav de teléfono → tabs arriba** estilo plataforma (borde inferior + acento del sector en la activa).
+
+**Web + mobile:** ambos integrados (mismo diseño claro). Única divergencia: el **padding** del contenedor (web `0 32px 32px`, mobile `0 16px 24px`) — verificado por diff que es la **única línea distinta** entre cada par web/mobile. Mobile sigue siendo cómodo en celular (full-width, tabs scrolleables).
+
+**Verificación:** los 10 archivos (5 web + 5 mobile) **compilan** con el Babel 7.29.0 del browser; **0 restos** de hex dark o del marco de teléfono; diff web↔mobile = 1 línea (padding) c/u. *(La lógica/datos no se tocó — sigue todo igual, solo el encuadre visual.)*
+
+**Técnico:** `web|mobile/components/{cnc,melamina,pino,embalaje}-sector.jsx` + `encargado-panel.jsx`. Cache-busters: cnc v7, melamina v5, pino v5, embalaje v5, encargado v6 (ambos HTML). Sin migraciones. **Pendiente: verificación visual del Jefe** (no puedo renderizar desde acá).
+
+---
+
 ### [2026-06-13] Producción — Fase 9: Histórico y Dashboard del Director
 
 **Qué se hizo:** el **dashboard analítico del director** — una tab **"Histórico"** en el Panel del Encargado, **visible solo para owner/admin** (el director; no hay rol `director`), con KPIs por período, comparativa, tendencia por día, top productos, mantenimientos recibidos y export a Excel.
