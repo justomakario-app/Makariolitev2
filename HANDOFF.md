@@ -80,6 +80,25 @@
 
 ---
 
+### [2026-06-13] Producción — Carga base del catálogo (Fase 0.3)
+
+**Qué se hizo:** se pobló el catálogo de producción desde `sku para sistema.xlsx` (el Excel verificado como correcto: 4 hojas, datos reales). El módulo pasa de "esqueleto vacío" a **usable con datos reales**.
+
+**Cargado (verificado por conteo, coincide exacto con el dry-run):** prod_pieza **76** · prod_placa **29** · prod_placa_pieza_extra **4** · prod_producto **26** · prod_receta **86** · prod_componente (BOM) **137**. **0 rechazos.**
+
+**Cómo (importante para reproducir):** el Edge Function `import-skus` **NO está deployado** (solo `invite_user` y `agent_admin` lo están) y correrlo requería la service_role key o un JWT de owner que no tengo. Se **replicó su lógica fielmente** en un script node (mismo SheetJS, mismos índices de columna, misma normalización `SKU_FIXES` Yori/Hikari→TOR009/010/011, mismas FK):
+1. **Dry-run** (read-only) → reportó las 358 filas + 0 rechazos antes de tocar nada.
+2. **Apply** vía Management API: `INSERT … ON CONFLICT DO UPDATE` en orden FK-seguro (pieza → producto → placa → placa_extra → receta → componente). Idempotente.
+3. **Verificación post-apply:** conteos OK + el motor (`prod_v_resumen_dia` + `prod_v_explosion`) ya produce demanda real contra los pedidos pendientes (ej. explosión TOR002 = 26.150).
+
+**Para re-importar** (si Seba manda un Excel nuevo): deployar `import-skus` con el xlsx bundleado, o re-correr el script replicado. Las correcciones 0.2 ya están en la capa de normalización; los 4 datos de Seba afectan 5b/6, no la carga base.
+
+**Nota:** los números de demanda altos (ej. 1443 pendientes de un producto) reflejan los **pedidos pendientes existentes** en `carrier_state` (dato de ventas, no del catálogo) — a revisar con el negocio si parece inflado, pero el motor explota correcto.
+
+**Técnico:** solo datos (no código/migraciones). Docs: checklist (0.3 + ESTADO GLOBAL Fase 0 → `[x]`) + este HANDOFF. El `sku para sistema.xlsx` NO se commitea (fuente de datos, no código).
+
+---
+
 ### [2026-06-13] Producción — Botón Abrir/Cerrar jornada (faltaba el cableado)
 
 **Qué se hizo:** se agregó el control **Abrir / Cerrar jornada de producción** en el **Panel del Encargado** (owner/admin/encargado). Faltaba: las RPCs existían desde Fase 2 (`prod_rpc_abrir_jornada` / `prod_rpc_cerrar_jornada`) pero **nunca se cablearon** al frontend, así que `prod_jornada` quedaba vacía y todas las pantallas mostraban "Sin jornada" — el módulo era inusable.

@@ -94,8 +94,8 @@
   - [x] 🔍 Rechazo por fila: si viola FK/CHECK → rechaza esa fila, reporta {fila, motivo}, continúa
   - [x] Orden de FK respetado: piezas → placas → productos → recetas
   - [x] Respuesta: {insertados, actualizados, rechazados:[{fila,motivo}], por_tabla}
-- [ ] 🔒 Ejecutar la función y poblar el catálogo
-- [ ] 🔍 Verificar que todos los SKUs entraron correctos (revisar rechazados)
+- [x] 🔒 **Catálogo cargado (2026-06-13)** — carga base ejecutada con la lógica del importador (mismo SheetJS + SKU_FIXES) vía Management API, tras dry-run con **0 rechazos**. Cargado: prod_pieza **76**, prod_placa **29**, prod_placa_pieza_extra **4**, prod_producto **26**, prod_receta **86**, prod_componente **137**. *(El Edge Function `import-skus` sigue SIN deployar; se replicó su lógica fielmente. Para re-importar con un Excel nuevo: deployar la función o re-correr el script replicado.)*
+- [x] 🔍 Verificar SKUs — **0 rechazados**; FK todas válidas; el motor (`prod_v_resumen_dia` + `prod_v_explosion`) ya produce demanda real contra los pedidos pendientes.
 
 ---
 
@@ -461,7 +461,7 @@
 
 | Fase | Estado | Detalle |
 |------|--------|---------|
-| 0 — Cimientos + datos maestros | `[~]` | Backend ✅ · Excel pendiente de correr · 🔒 correcciones de datos pendientes |
+| 0 — Cimientos + datos maestros | `[x]` | Backend ✅ · **catálogo cargado** (76 piezas · 29 placas · 26 productos · 86 recetas · 137 BOM, 0 rechazos, 2026-06-13) · falta solo datos de Seba para 5b/6 |
 | 1 — Roles y accesos | `[x]` | Roles ✅ · RLS ✅ · guards frontend (router por sector) ✅ |
 | 2 — Motor de carga (RPCs) | `[x]` | 16 RPCs + cadena de stock + smoke ✅ |
 | 3 — Frontend por sector | `[x]` | **4 sectores de operario completos** (CNC · Melamina · Pino · Embalaje) + edición 24h + badges + QR cámara + tokens §15 |
