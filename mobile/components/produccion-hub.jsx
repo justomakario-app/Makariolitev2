@@ -65,7 +65,10 @@ function ProduccionHubPage() {
 
   const TABS = ALL_TABS.filter(t => !t.stockOnly || canSeeStock);
 
-  const [tab, setTab] = useState('produccion');
+  // Los roles de producción aterrizan directo en SU pantalla (Línea productiva
+  // = panel del encargado / sector). owner/admin abren en la vista general.
+  const PROD_ROLES = ['encargado','cnc','melamina','pino','embalaje','carpinteria','logistica'];
+  const [tab, setTab] = useState(PROD_ROLES.includes(role) ? 'linea-prod' : 'produccion');
   const active = TABS.find(t => t.id === tab) || TABS[0];
 
   return (
