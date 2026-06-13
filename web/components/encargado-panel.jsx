@@ -138,6 +138,8 @@ function EncargadoPanel() {
     { id:'stock',    label:'Stock',    icon:'box' },
     { id:'avisos',   label:'Avisos',   icon:'bell', badge: alertas.length },
   ];
+  // Fase 9: el Histórico (dashboard del director) solo lo ve owner/admin.
+  if (canDirector) NAV.push({ id:'historico', label:'Histórico', icon:'history' });
 
   const editarConfig = {
     cnc:      { titulo:'Editar corte',  campos:[{ key:'hojas', label:'Hojas' }, { key:'desperdicio', label:'Desperdicio' }], fn:'editarCorte',    extra:(r) => ({}) },
@@ -192,6 +194,8 @@ function EncargadoPanel() {
           <EncAprobaciones U={U} role={role} solicitudes={solicitudes} mantes={mantes} onAction={handleAprob}/>
         ) : tab === 'stock' ? (
           <EncStock U={U} insumos={insumos} alertas={alertas} onRemito={() => toast.info('Carga de remitos: se habilita con el stock de insumos (Fase 6)')}/>
+        ) : tab === 'historico' ? (
+          <EncHistorico U={U}/>
         ) : (
           <EncAvisos U={U} alertas={alertas} mantes={mantes} jornada={jornada}/>
         )}
@@ -623,6 +627,203 @@ function EncAprobaciones({ U, role, solicitudes, mantes, onAction }) {
                    fontSize:11, color:U.inkMuted, lineHeight:1.6}}>
         <b style={{color:U.inkSoft}}>Flujo:</b> el sector carga → el encargado aprueba → las solicitudes de insumos las recepciona administración y los reportes de mantenimiento los recibe el director.
       </div>
+    </div>
+  );
+}
+
+/* ── Tab Histórico (Fase 9) — Dashboard del Director ──
+   Solo owner/admin. KPIs del período, comparativa vs período anterior,
+   producción por día, top productos embalados, mantenimientos recibidos,
+   y export a Excel. Lee prod_rpc_director_historico (solo lectura). */
+function EncHistorico({ U }) {
+  const toast = useToast();
+  const hoyStr = () => new Date().toISOString().slice(0, 10);
+  const diasAtras = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
+  const [desde, setDesde] = useState(() => diasAtras(29));
+  const [hasta, setHasta] = useState(hoyStr);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const cargar = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await window.LP_DATA.directorHistorico({ desde: desde, hasta: hasta });
+      setData(r);
+    } catch (err) { toast.error(err && err.message ? err.message : 'No se pudo cargar el historico'); }
+    finally { setLoading(false); }
+  }, [desde, hasta, toast]);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  const preset = (n) => { setHasta(hoyStr()); setDesde(diasAtras(n - 1)); };
+
+  const exportXlsx = () => {
+    if (typeof window.XLSX === 'undefined' || !data) { toast.error('No hay datos para exportar'); return; }
+    const k = data.kpis || {};
+    const aoa = [
+      ['Historico de produccion'],
+      [`Periodo: ${data.desde} a ${data.hasta}`],
+      [],
+      ['KPI', 'Valor'],
+      ['Jornadas', k.jornadas || 0],
+      ['Piezas cortadas (netas)', k.piezas_cortadas || 0],
+      ['Melamina terminada', k.melamina_term || 0],
+      ['Melamina fallas', k.melamina_fallas || 0],
+      ['Patas terminadas', k.patas_term || 0],
+      ['Embalado', k.embalado || 0],
+      ['Mantenimientos recibidos', k.mant_recibidos || 0],
+      [],
+      ['Produccion por dia'],
+      ['Fecha', 'Cortes', 'Melamina', 'Pino', 'Embalaje'],
+    ];
+    (data.por_dia || []).forEach(d => aoa.push([d.dia, d.cortes, d.melamina, d.pino, d.embalaje]));
+    aoa.push([]); aoa.push(['Top productos embalados']); aoa.push(['SKU', 'Nombre', 'Unidades']);
+    (data.top_productos || []).forEach(t => aoa.push([t.producto_sku, t.nombre, t.unidades]));
+    const ws = window.XLSX.utils.aoa_to_sheet(aoa);
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, 'Historico');
+    window.XLSX.writeFile(wb, `historico_produccion_${data.desde}_${data.hasta}.xlsx`);
+  };
+
+  const k = (data && data.kpis) || {};
+  const comp = (data && data.comparativa) || {};
+  const porDia = (data && data.por_dia) || [];
+  const top = (data && data.top_productos) || [];
+  const mant = (data && data.mantenimientos) || [];
+
+  let maxEmb = 1;
+  porDia.forEach(d => { const v = Number(d.embalaje) || 0; if (v > maxEmb) maxEmb = v; });
+  const embAct = Number(comp.embalado_actual) || 0;
+  const embPrev = Number(comp.embalado_prev) || 0;
+  const deltaPct = embPrev > 0 ? Math.round(((embAct - embPrev) / embPrev) * 100) : (embAct > 0 ? 100 : 0);
+  const deltaCol = deltaPct > 0 ? U.ok : (deltaPct < 0 ? U.danger : U.inkSoft);
+
+  const card = (label, val, color) => (
+    <div style={{flex:1, minWidth:0, background:U.surface, border:`1px solid ${U.border}`, borderRadius:14, padding:'12px 13px'}}>
+      <div style={{fontSize:22, fontWeight:800, color, fontVariantNumeric:'tabular-nums', lineHeight:1}}>{val}</div>
+      <div style={{fontSize:10, color:U.inkSoft, marginTop:6, fontWeight:600}}>{label}</div>
+    </div>
+  );
+  const presetBtn = (n, label) => (
+    <button onClick={() => preset(n)}
+      style={{flex:1, border:`1px solid ${U.border}`, background:U.surface2, color:U.inkSoft, borderRadius:9,
+              padding:'7px 4px', fontSize:11, fontWeight:700, cursor:'pointer'}}>{label}</button>
+  );
+  const dInput = (val, set) => (
+    <input type="date" value={val} max={hoyStr()} onChange={e => set(e.target.value)}
+      style={{flex:1, minWidth:0, background:U.surface2, border:`1px solid ${U.border}`, color:U.ink,
+              borderRadius:9, padding:'8px 10px', fontSize:12}}/>
+  );
+
+  return (
+    <div>
+      {/* Controles de período */}
+      <div style={{display:'flex', gap:6, marginBottom:8}}>
+        {presetBtn(1, 'Hoy')}{presetBtn(7, '7 días')}{presetBtn(30, '30 días')}{presetBtn(90, '90 días')}
+      </div>
+      <div style={{display:'flex', gap:8, alignItems:'center', marginBottom:16}}>
+        {dInput(desde, setDesde)}
+        <span style={{color:U.inkMuted, fontSize:12}}>→</span>
+        {dInput(hasta, setHasta)}
+        <button onClick={exportXlsx} title="Exportar a Excel"
+          style={{border:'none', background:U.accent, color:'#fff', borderRadius:9, padding:'8px 11px', cursor:'pointer', display:'flex', alignItems:'center'}}>
+          <Icon n="download" s={15} c="#fff"/>
+        </button>
+      </div>
+
+      {loading ? (
+        <div style={{textAlign:'center', color:U.inkMuted, padding:'40px 0', fontSize:13}}>Cargando histórico…</div>
+      ) : (
+        <div>
+          {/* KPIs */}
+          <div style={{display:'flex', gap:8, marginBottom:8}}>
+            {card('Embalado', k.embalado || 0, U.ok)}
+            {card('Piezas cortadas', k.piezas_cortadas || 0, U.cnc)}
+          </div>
+          <div style={{display:'flex', gap:8, marginBottom:8}}>
+            {card('Melamina term.', k.melamina_term || 0, U.mel)}
+            {card('Patas term.', k.patas_term || 0, U.pino)}
+          </div>
+          <div style={{display:'flex', gap:8, marginBottom:16}}>
+            {card('Jornadas', k.jornadas || 0, U.ink)}
+            {card('Fallas melamina', k.melamina_fallas || 0, (k.melamina_fallas ? U.warn : U.inkSoft))}
+            {card('Mant. recibidos', k.mant_recibidos || 0, U.ink)}
+          </div>
+
+          {/* Comparativa */}
+          <div style={{background:U.surface, border:`1px solid ${U.border}`, borderRadius:14, padding:'12px 14px',
+                       marginBottom:16, display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+            <div>
+              <div style={{fontSize:11, color:U.inkSoft, fontWeight:600}}>Embalado vs período anterior</div>
+              <div style={{fontSize:10.5, color:U.inkMuted, marginTop:2}}>{comp.prev_desde || '—'} a {comp.prev_hasta || '—'}: {embPrev}</div>
+            </div>
+            <div style={{fontSize:18, fontWeight:800, color:deltaCol, fontVariantNumeric:'tabular-nums'}}>
+              {deltaPct > 0 ? '+' : ''}{deltaPct}%
+            </div>
+          </div>
+
+          {/* Producción por día (embalado) */}
+          <h3 style={{fontSize:13.5, fontWeight:800, margin:'0 0 10px', color:U.ink}}>Embalado por día</h3>
+          {porDia.length === 0 ? (
+            <div style={{background:U.surface, border:`1px solid ${U.border}`, borderRadius:12, padding:'14px',
+                         fontSize:12.5, color:U.inkSoft, textAlign:'center', marginBottom:16}}>Sin jornadas en el período.</div>
+          ) : (
+            <div style={{background:U.surface, border:`1px solid ${U.border}`, borderRadius:14, padding:'14px 12px 10px',
+                         marginBottom:16, display:'flex', alignItems:'flex-end', gap:3, height:120, overflowX:'auto'}}>
+              {porDia.map((d, i) => {
+                const v = Number(d.embalaje) || 0;
+                const h = Math.round((v / maxEmb) * 84);
+                return (
+                  <div key={d.dia || i} title={`${d.dia}: ${v}`} style={{flex:'1 0 14px', minWidth:14, display:'flex', flexDirection:'column', alignItems:'center', gap:4}}>
+                    <span style={{fontSize:8.5, color:U.inkMuted, fontVariantNumeric:'tabular-nums'}}>{v || ''}</span>
+                    <div style={{width:'100%', maxWidth:18, height:Math.max(h, v > 0 ? 4 : 1), background: v > 0 ? U.ok : U.border, borderRadius:3}}/>
+                    <span style={{fontSize:7.5, color:U.inkMuted}}>{String(d.dia || '').slice(8, 10)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Top productos */}
+          <h3 style={{fontSize:13.5, fontWeight:800, margin:'0 0 10px', color:U.ink}}>Top productos embalados</h3>
+          {top.length === 0 ? (
+            <div style={{background:U.surface, border:`1px solid ${U.border}`, borderRadius:12, padding:'14px',
+                         fontSize:12.5, color:U.inkSoft, textAlign:'center', marginBottom:16}}>Sin embalaje en el período.</div>
+          ) : (
+            <div style={{background:U.surface, border:`1px solid ${U.border}`, borderRadius:14, overflow:'hidden', marginBottom:16}}>
+              {top.slice(0, 10).map((t, i) => (
+                <div key={t.producto_sku || i} style={{display:'flex', alignItems:'center', justifyContent:'space-between',
+                             padding:'10px 13px', borderBottom: i < Math.min(top.length, 10) - 1 ? `1px solid ${U.border}` : 'none'}}>
+                  <div style={{minWidth:0, paddingRight:10}}>
+                    <div style={{fontSize:12.5, fontWeight:700, color:U.ink, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{t.nombre || t.producto_sku}</div>
+                    <div style={{fontSize:10, color:U.inkMuted}}>{t.producto_sku}</div>
+                  </div>
+                  <span style={{fontSize:14, fontWeight:800, color:U.ok, fontVariantNumeric:'tabular-nums'}}>{t.unidades}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Mantenimientos recibidos */}
+          <h3 style={{fontSize:13.5, fontWeight:800, margin:'0 0 10px', color:U.ink}}>Mantenimientos recibidos</h3>
+          {mant.length === 0 ? (
+            <div style={{background:U.surface, border:`1px solid ${U.border}`, borderRadius:12, padding:'14px',
+                         fontSize:12.5, color:U.inkSoft, textAlign:'center'}}>Ninguno en el período.</div>
+          ) : (
+            <div style={{display:'flex', flexDirection:'column', gap:8}}>
+              {mant.slice(0, 10).map(m => (
+                <div key={m.id} style={{background:U.surface, border:`1px solid ${U.border}`, borderRadius:12, padding:'11px 13px'}}>
+                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                    <span style={{fontSize:12.5, fontWeight:700, color:U.ink, textTransform:'capitalize'}}>{m.sector} · {m.tipo || 'mantenimiento'}</span>
+                    <span style={{fontSize:10, color:U.inkMuted}}>{String(m.created_at || '').slice(0, 10)}</span>
+                  </div>
+                  {m.maquina ? <div style={{fontSize:11, color:U.inkSoft, marginTop:3}}>{m.maquina}</div> : null}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

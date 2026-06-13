@@ -74,6 +74,9 @@ window.LP_DATA = window.LP_DATA || (function () {
     gestionarSolicitud:     (p) => rpc('prod_rpc_gestionar_solicitud', p),     // { id, estado: 'aprobada_coord' | 'recepcionada_admin' }
     gestionarMantenimiento: (p) => rpc('prod_rpc_gestionar_mantenimiento', p), // { id, estado: 'aprobado_coord' | 'recibido_director' }
 
+    // ── Histórico / Dashboard del director (Fase 9) ── solo owner/admin.
+    directorHistorico: (p) => rpc('prod_rpc_director_historico', p), // { desde, hasta } → { kpis, comparativa, por_dia, top_productos, mantenimientos }
+
     // ── Realtime (Fase 4.2) ──
     // Suscribe a INSERT/UPDATE/DELETE de las `tables` indicadas y llama a
     // onChange (debounced 250ms) ante cualquier cambio. RLS filtra server-side:

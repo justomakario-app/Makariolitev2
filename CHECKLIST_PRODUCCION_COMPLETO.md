@@ -419,12 +419,13 @@
 
 # FASE 9 — HISTÓRICO, KPIs Y DASHBOARD DEL DIRECTOR (Capa 6)
 
-- [ ] Reportes por período: día / semana / mes
-- [ ] Exportación a Excel / PDF
-- [ ] Dashboard del director con analítica histórica
-- [ ] Comparativas por período
-- [ ] ⚙️ Recepción de reportes de mantenimiento aprobados
-- [ ] Producción por SKU/sector/jornada
+> Tab **"Histórico"** del Panel del Encargado, **solo visible para owner/admin** (= director; no hay rol `director`). Lee `prod_rpc_director_historico` (solo lectura, gate owner/admin) que agrega por fecha de jornada. **migration 0079.**
+- [x] Reportes por período: día / semana / mes — presets (Hoy · 7 · 30 · 90 días) + rango libre (date pickers)
+- [~] Exportación a Excel / PDF — **Excel hecho** (KPIs + serie por día + top productos vía `window.XLSX`); PDF diferido (se puede sumar con pdfMake que ya está cargado)
+- [x] Dashboard del director con analítica histórica — KPIs (embalado, piezas cortadas, melamina, patas, jornadas, fallas, mant. recibidos)
+- [x] Comparativas por período — embalado vs período anterior de igual longitud (delta %)
+- [x] ⚙️ Recepción de reportes de mantenimiento aprobados — lista de `recibido_director` en el período (cierra con Fase 8)
+- [~] Producción por SKU/sector/jornada — por **SKU** (top productos embalados), por **sector** (KPIs), por **día/jornada** (serie con mini-barras). Falta desglose fino por sector×SKU = refinamiento
 
 ---
 
@@ -469,7 +470,7 @@
 | 6 — Stock y compras | `[ ]` | — |
 | 7 — Panel del encargado | `[~]` | Inicio (KPIs + cadena en vivo + alertas) ✅ · Sectores (detalle + edición auditada) ✅ · Stock/remitos = pendiente Fase 6 · avance por canal = refinamiento |
 | 8 — Flujos de aprobación | `[x]` | Tab "Aprobar" en el Panel del Encargado: el encargado aprueba (coord), admin recepciona insumos, owner/admin (director) recibe mantenimiento. 0078 amplía gestionar_mantenimiento (encargado) + publica prod_solicitud en realtime. Acciones por rol + badge |
-| 9 — Histórico y director | `[ ]` | — |
+| 9 — Histórico y director | `[x]` | Tab "Histórico" (solo owner/admin) en el Panel del Encargado: KPIs por período (presets + rango libre), comparativa vs período anterior, serie por día, top productos, mantenimientos recibidos, export Excel. RPC `prod_rpc_director_historico` (0079). PDF + sector×SKU = refinamiento |
 
 > **Backend del esqueleto: sólido y aislado. Cero impacto en producción.**
 > **Bloqueante crítico antes de poblar datos: las correcciones del Excel (Fase 0.2).**

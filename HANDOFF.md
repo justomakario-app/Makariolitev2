@@ -80,6 +80,33 @@
 
 ---
 
+### [2026-06-13] Producción — Fase 9: Histórico y Dashboard del Director
+
+**Qué se hizo:** el **dashboard analítico del director** — una tab **"Histórico"** en el Panel del Encargado, **visible solo para owner/admin** (el director; no hay rol `director`), con KPIs por período, comparativa, tendencia por día, top productos, mantenimientos recibidos y export a Excel.
+
+**Backend — `0079_prod_fase9_director_historico.sql` (escrita + smoke FUNCIONAL validado, NO aplicada — espera OK):**
+- RPC **`prod_rpc_director_historico(p_payload {desde, hasta})`** — solo lectura, gate owner/admin, `SECURITY DEFINER`. Agrega por **fecha de jornada**. Devuelve:
+  - `kpis`: jornadas, piezas cortadas (netas, con rendimiento de placa), melamina terminada/fallas, patas terminadas, embalado, mantenimientos recibidos.
+  - `comparativa`: embalado del período vs el **período anterior de igual longitud** (delta).
+  - `por_dia`: serie por día (cortes/melamina/pino/embalaje).
+  - `top_productos`: embalaje agrupado por producto (top 15).
+  - `mantenimientos`: los `recibido_director` del período (cierra el ciclo con Fase 8).
+- REVOKE anon/public + GRANT authenticated. 100% aditivo (no toca nada).
+- **Smoke funcional (rolled back):** se creó la RPC en una transacción, se la llamó **impersonando a un owner** (`request.jwt.claims`), devolvió el JSON con la forma correcta (KPIs en 0 con tablas vacías, rango por defecto 30 días 2026-05-15→06-13, comparativa 2026-04-15→05-14 bien calculada) y revirtió. Toda la SQL de agregación corre sin error. Confirmado que no quedó en prod.
+
+**Frontend:**
+- **`lp-data.jsx`:** +`directorHistorico({desde, hasta})`.
+- **`encargado-panel.jsx`:** tab **"Histórico"** (6ª, **solo si owner/admin** — `canDirector`) con `EncHistorico`: presets (Hoy/7/30/90 días) + rango libre, grilla de KPIs, tarjeta de comparativa (delta %), **mini-barras de embalado por día**, top productos, lista de mantenimientos recibidos, y botón **export a Excel** (`window.XLSX`, ya cargado). El nav suma el ítem solo para el director (ícono `history`).
+
+**Cómo / decisiones:**
+- El "director" = **owner** (no existe rol `director`); también lo ve admin (oversight). Vive en el hub de Producción (coherente con la decisión de Fase 8).
+- Hoy renderiza casi todo en cero porque el sistema todavía no tiene historia cargada; la estructura se llena sola a medida que se use. No está bloqueado por Seba.
+- **PDF** quedó diferido (Excel cubre el export; pdfMake ya está cargado si se quiere sumar). Desglose fino sector×SKU = refinamiento.
+
+**Técnico:** NUEVO `supabase/migrations/0079_prod_fase9_director_historico.sql`; `lp-data.jsx` + `encargado-panel.jsx` (web→mobile byte-idénticos; compilados con Babel 7.29.0 OK). Cache-busters: lp-data v7, encargado-panel v4 (ambos HTML). **Pendiente: OK explícito del Jefe para aplicar 0079 + push.** *(Sin la migración: la tab Histórico muestra error al pedir datos; el resto del panel anda igual.)*
+
+---
+
 ### [2026-06-13] Producción — Fase 8: Flujos de aprobación
 
 **Qué se hizo:** se cerró el loop que quedaba colgado — los coordinadores ya cargaban solicitudes de insumos y reportes de mantenimiento, pero **nadie los recibía**. Ahora el **Panel del Encargado** tiene una tab **"Aprobar"** donde se gestiona todo, con acciones según el rol.
