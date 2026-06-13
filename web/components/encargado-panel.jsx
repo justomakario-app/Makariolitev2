@@ -47,6 +47,7 @@ function EncargadoPanel() {
   const [mantes, setMantes] = useState([]);
   const [insumos, setInsumos] = useState([]);
   const [solicitudes, setSolicitudes] = useState([]);
+  const [jornadaBusy, setJornadaBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null); // { sector, row }
 
@@ -99,6 +100,26 @@ function EncargadoPanel() {
       await cargar({ silent: true });
     } catch (err) { toast.error(err && err.message ? err.message : 'No se pudo'); }
   }, [toast, cargar]);
+
+  // Jornada de producción (brief): el encargado/owner/admin la abre y cierra.
+  // Es independiente de la jornada de VENTAS (no la toca). La demanda de cada
+  // sector llega igual de los pedidos; la jornada habilita registrar producción.
+  const jornadaAbierta = jornada && jornada.estado === 'abierta';
+  const toggleJornada = useCallback(async () => {
+    setJornadaBusy(true);
+    try {
+      if (jornada && jornada.estado === 'abierta') {
+        const r = await window.LP_DATA.cerrarJornada();
+        const rs = (r && r.resumen) || {};
+        toast.success('Jornada cerrada · ' + (rs.cortes || 0) + ' cortes · ' + (rs.melamina || 0) + ' melamina · ' + (rs.pino || 0) + ' pino · ' + (rs.embalaje || 0) + ' embalaje');
+      } else {
+        await window.LP_DATA.abrirJornada();
+        toast.success('Jornada de producción abierta');
+      }
+      await cargar({ silent: true });
+    } catch (err) { toast.error(err && err.message ? err.message : 'No se pudo gestionar la jornada'); }
+    finally { setJornadaBusy(false); }
+  }, [jornada, toast, cargar]);
 
   // ── Agregados ──
   const cortesNetas = useMemo(() => sum(cortes, c => {
@@ -169,14 +190,25 @@ function EncargadoPanel() {
             </div>
           </div>
         </div>
-        <div style={{textAlign:'right'}}>
-          <div style={{fontSize:15, fontWeight:800, fontVariantNumeric:'tabular-nums'}}><LpClock/></div>
-          <span style={{display:'inline-block', marginTop:3, fontSize:9.5, fontWeight:800, letterSpacing:'.06em',
-                        textTransform:'uppercase', padding:'2px 8px', borderRadius:999,
-                        background: (jornada && jornada.estado === 'abierta') ? 'rgba(0,214,143,.14)' : 'rgba(255,64,96,.14)',
-                        color: (jornada && jornada.estado === 'abierta') ? U.ok : U.danger}}>
-            {jornada ? (jornada.estado === 'abierta' ? 'Jornada abierta' : 'Jornada cerrada') : 'Sin jornada'}
-          </span>
+        <div style={{display:'flex', alignItems:'center', gap:14}}>
+          <button onClick={toggleJornada} disabled={jornadaBusy}
+            style={{border: jornadaAbierta ? ('1px solid ' + U.border) : 'none',
+                    background: jornadaAbierta ? U.surface : U.accent,
+                    color: jornadaAbierta ? U.inkSoft : '#fff', borderRadius:9, padding:'9px 14px',
+                    fontSize:12.5, fontWeight:800, cursor: jornadaBusy ? 'default' : 'pointer',
+                    opacity: jornadaBusy ? 0.6 : 1, display:'flex', alignItems:'center', gap:7, whiteSpace:'nowrap'}}>
+            <Icon n={jornadaAbierta ? 'check' : 'plus'} s={15} c={jornadaAbierta ? U.inkSoft : '#fff'}/>
+            {jornadaAbierta ? 'Cerrar jornada' : 'Abrir jornada'}
+          </button>
+          <div style={{textAlign:'right'}}>
+            <div style={{fontSize:15, fontWeight:800, fontVariantNumeric:'tabular-nums'}}><LpClock/></div>
+            <span style={{display:'inline-block', marginTop:3, fontSize:9.5, fontWeight:800, letterSpacing:'.06em',
+                          textTransform:'uppercase', padding:'2px 8px', borderRadius:999,
+                          background: jornadaAbierta ? 'rgba(22,163,74,.12)' : 'rgba(220,38,38,.10)',
+                          color: jornadaAbierta ? U.ok : U.danger}}>
+              {jornada ? (jornada.estado === 'abierta' ? 'Jornada abierta' : 'Jornada cerrada') : 'Sin jornada'}
+            </span>
+          </div>
         </div>
       </div>
 

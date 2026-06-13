@@ -80,6 +80,23 @@
 
 ---
 
+### [2026-06-13] Producción — Botón Abrir/Cerrar jornada (faltaba el cableado)
+
+**Qué se hizo:** se agregó el control **Abrir / Cerrar jornada de producción** en el **Panel del Encargado** (owner/admin/encargado). Faltaba: las RPCs existían desde Fase 2 (`prod_rpc_abrir_jornada` / `prod_rpc_cerrar_jornada`) pero **nunca se cablearon** al frontend, así que `prod_jornada` quedaba vacía y todas las pantallas mostraban "Sin jornada" — el módulo era inusable.
+
+**Por qué surgió:** el Jefe entró a Producción y vio "Sin jornada" aunque había una jornada de **ventas** abierta (Seba). Aclaración importante del diseño (decisión: mantener la lógica del brief):
+- **Jornada de VENTAS** (`jornadas`, Dashboard) y **jornada de PRODUCCIÓN** (`prod_jornada`) son **independientes** por diseño del brief (prod_* aislado, no toca ventas).
+- La **demanda** sí fluye de ventas a cada sector (explosión/`prod_v_resumen_dia`) — eso ya andaba, aun con la jornada de producción cerrada. La jornada de producción solo habilita **registrar** lo producido (ledger del turno).
+
+**Cómo:**
+- `lp-data.jsx`: +`abrirJornada()` / `cerrarJornada()` (RPCs existentes).
+- `encargado-panel.jsx`: botón en el header — "Abrir jornada" (acento) si no hay/está cerrada; "Cerrar jornada" (outline) si está abierta. Al cerrar, el toast muestra el resumen por sector (cortes/melamina/pino/embalaje). Refresca en vivo. Los sectores **no** abren jornada (ya dicen "el encargado la gestiona").
+- **Smoke (rolled back, impersonando owner):** abrir→cerrar devuelven `ok:true` + resumen, sin escribir. No se dejó ninguna jornada abierta en prod (el intento de abrir una "para probar" lo bloqueó el clasificador con razón — lo abre el Jefe desde el botón).
+
+**Técnico:** `web|mobile/components/lp-data.jsx` (byte-idéntico) + `encargado-panel.jsx` (difiere solo en padding 32/16). Compilan con Babel 7.29.0. Cache-busters: lp-data v8, encargado v7 (ambos HTML). Sin migraciones. **Para usarlo:** el encargado/owner entra a Producción → Panel del Encargado → "Abrir jornada"; ahí los sectores pueden registrar.
+
+---
+
 ### [2026-06-13] Producción — Integración visual a la plataforma (sacar el "teléfono dentro de la app")
 
 **Qué se hizo:** las 5 pantallas de Producción (4 sectores + Panel del Encargado) se veían como un **celular dark flotando** dentro de la plataforma clara (tarjeta 430px centrada + sombra + esquinas de dispositivo + bottom-nav). Se reencuadraron para que se vean **nativas de la plataforma**, en **todas las cuentas** (cada rol entra y ve su área integrada).

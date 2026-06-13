@@ -26,6 +26,8 @@ window.LP_DATA = window.LP_DATA || (function () {
   return {
     // ── Jornada ──
     jornadaHoy: () => rpc('prod_rpc_get_jornada_hoy'),
+    abrirJornada:  () => rpc('prod_rpc_abrir_jornada'),   // owner/admin/encargado; abre la de HOY
+    cerrarJornada: () => rpc('prod_rpc_cerrar_jornada'),  // cierra la abierta de hoy; devuelve resumen por sector
 
     // ── Maestros ──
     placas:    () => sel('prod_placa', 'sku, nombre, material, rendimiento, pieza_sku, combinada', q => q.order('sku')),
