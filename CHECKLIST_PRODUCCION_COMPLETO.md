@@ -73,11 +73,11 @@
 - [x] 🔒 SKUs duplicados TOR005/006/007 (rectangular **Y** Yori/Hikari, confirmado filas 43-49 de INSUMOS) → la capa reasigna las variantes Yori/Hikari a **TOR009 (Yori), TOR010 (Hikari), TOR011 (Hikari x2)**; las rectangulares/set conservan TOR005/006/007. Validado en memoria: 0 colisiones, 50 piezas distintas.
 - [x] 🔒 Cantidades guardadas como texto → el parser ya las castea a int (`toIntOrNull`) en todo lo que carga (rendimiento, cantidad de receta)
 - [x] Corrección puntual: tornillos del Hikari → la pieza "Hikari x2" ahora existe única (TOR011). El re-cableado de KIT007 al sub-ensamble es Fase 5 (el árbol BOM todavía no se carga)
-- [ ] 🔒 Filo no modelado como consumo → agregar como insumo por metro — **falta dato de Seba (metros por modelo) · Fase 5/6**
-- [ ] 🔒 Varilla no modelada → material de corte — **Fase 5 (optimizador lineal Pino)**
-- [ ] 🔒 Patas de los sets: insumo comprado pero las corta Pino → pasar a pieza de corte — **falta `patas_cant` por producto (no está en el Excel) · Fase 3/5**
-- [ ] Tapatornillos de color: AGU006/007/008 existen pero **huérfanos** (Yori/Hikari son solo Blanco) — **¿qué productos negros los usan? dato de Seba**
-- [ ] ⚠️ Corrección puntual: caja del Hikari → hoy MAD401 → Caja N°2 (consistente en ambas hojas) — **¿es correcto? confirmar con Seba**
+- [~] 🔒 Filo no modelado como consumo → insumo por metro (rollo 50m). **Datos de Seba (2026-06-13, confirmado = filo/perímetro de tapa):** filo en cm por modelo: redonda 30→110 · 40→130 · 50→160 · gota chica→140 · gota grande→180 · boomerang→210 · mesa xl→225 · rectangular→190 · hikari→140 · yori→240. **Falta:** SKU del filo + mapeo modelo→MAD. → Fase 5.0/6
+- [~] 🔒 Varilla → material de corte (optimizador lineal). **Datos de Seba:** viene fraccionada en barras de **1 m**. **Hikari** 45 cm/pata → 2 patas por varilla → 4 patas = **2 varillas** (10 cm merma c/u). **Yori** 85 cm/pata → 1 pata por varilla → 4 patas = **4 varillas** (15 cm merma c/u). **Falta:** ¿qué varilla usa cada modelo (VAR001 14 mm / VAR002 25 mm)? → Fase 5b
+- [~] 🔒 Patas: pieza de corte (las corta Pino, **no se compran**). **Datos de Seba:** `patas_cant` = **3 por mesa**, **4 en la rectangular**; hikari/yori usan 4 (pero de **varilla**, no Pino). **Falta:** ¿qué mesas usan PAT001 chica vs PAT002 grande? → Fase 5.0
+- [~] Tapatornillos color AGU006/007/008. **Datos de Seba:** se usan **solo en hikari y yori, 12 unidades c/u**; hoy se vende **solo en blanco** (los SKU de color quedan definidos pero inactivos). **Falta:** SKU del tapatornillo blanco en uso.
+- [ ] ⚠️ Caja del Hikari (MAD401 → Caja N°2): **Seba aún no respondió** — sigue pendiente.
 
 ## 0.3 Importación del Excel maestro (Edge Function)
 - [x] Edge Function `import-skus` escrita (Deno + SheetJS)
@@ -427,10 +427,10 @@
 
 # CABOS ABIERTOS (definir con el negocio) ⚠️
 
-- [ ] ⚠️ Filo: cuántos metros lleva cada modelo (se consume por metro, se compra por rollo de 50m)
+- [~] ⚠️ Filo: cuántos metros lleva cada modelo — **respondido por Seba (2026-06-13):** cm por modelo (ver 0.2). Se compra por rollo de 50 m. Falta SKU de filo + mapeo modelo→MAD.
 - [ ] ⚠️ Melamina: ¿solo termina tapas de CNC o fabrica algún componente propio (soportes)?
 - [ ] ⚠️ Palet de listones: cantidad real varía 600-700, cargar en cada ingreso (no fijar)
-- [ ] ⚠️ prod_producto: tipo (simple/combinado) y patas no vienen en el Excel actual → cargar a mano o ampliar Excel
+- [~] ⚠️ prod_producto: tipo (simple/combinado) y patas no vienen en el Excel — **patas_cant respondido por Seba (2026-06-13):** 3 por mesa, 4 rectangular; hikari/yori 4 (de varilla). Falta el split chica/grande por modelo + el tipo simple/combinado.
 
 ---
 

@@ -80,6 +80,28 @@
 
 ---
 
+### [2026-06-13] Producción — Datos de Seba para Fase 0.2 / 5 / 6 (captura)
+
+**Qué se hizo:** Seba respondió varios de los cabos abiertos que bloqueaban la Lógica 2 (Fase 5/6). Se **capturaron en el checklist** (0.2 + cabos abiertos), sin construir nada todavía (decisión del Jefe: "capturar y pedir lo que falta" — fiel a "no construir a ciegas").
+
+**Datos recibidos (2026-06-13):**
+- **Filo** (confirmado por el Jefe = perímetro de tapa, en cm por modelo): redonda 30→110 · 40→130 · 50→160 · gota chica→140 · gota grande→180 · boomerang→210 · mesa xl→225 · rectangular→190 · hikari→140 · yori→240. Se compra por **rollo de 50 m**.
+- **Varilla** (barras de 1 m): **Hikari** 45 cm/pata → 2 patas/varilla → 4 patas = **2 varillas** (10 cm merma c/u). **Yori** 85 cm/pata → 1 pata/varilla → 4 patas = **4 varillas** (15 cm merma c/u). Insumo del optimizador lineal (Fase 5b).
+- **Patas** (las corta Pino, no se compran): `patas_cant` = **3 por mesa, 4 en la rectangular**; hikari/yori usan 4 (de varilla).
+- **Tapatornillos color** (AGU006/007/008): solo hikari/yori, **12 unidades c/u**; hoy solo se vende **blanco** (los SKU de color quedan inactivos).
+
+**Pendiente de Seba (relayado al Jefe):**
+1. Caja del Hikari (MAD401 = Caja N°2, ¿correcto?) — Seba no respondió.
+2. ¿Qué varilla usa cada modelo (VAR001 14 mm / VAR002 25 mm)?
+3. ¿Qué mesas usan PAT001 chica vs PAT002 grande? (son 3 patas, falta el tamaño por modelo)
+4. SKU del tapatornillo blanco en uso.
+
+**Por qué importa:** estos datos + el catálogo cargado (import-skus, aún gated) habilitan Fase 5.0 (atributos SKU: largo/naturaleza/unidad de compra/patas_cant), Fase 5b (optimizadores de placa y varilla) y Fase 6 (filo/varilla como insumo por metro/rollo). Se construyen como bloque conectado una vez cerrados los 4 puntos + corrido import-skus.
+
+**Técnico:** solo doc — `CHECKLIST_PRODUCCION_COMPLETO.md` (0.2 #4/#6/#7 + cabos abiertos filo/patas_cant) + este HANDOFF. Sin código ni migraciones.
+
+---
+
 ### [2026-06-13] Producción — Fase 4.2: Realtime (🔴 sin polling)
 
 **Qué se hizo:** las 5 pantallas de sector + el panel del encargado ahora se actualizan **en vivo** ante cualquier cambio de producción, sin recargar ni polling. Cumple la promesa 🔴 que cruza todo el brief (cada sector "ve" lo que dejó el anterior al instante).
