@@ -80,6 +80,24 @@
 
 ---
 
+### [2026-06-13] RRHH — DNI editable (sacar la inmutabilidad)
+
+**Qué se hizo:** los DNI de empleados ya cargados **no se podían corregir** (al pasar de CUIL→DNI en 0076 se arrastró la regla vieja de que el CUIL era inmutable post-alta). El Jefe pidió que se puedan **editar/corregir**. Se quitó esa inmutabilidad en backend y frontend.
+
+**Backend — `0080_rrhh_dni_editable.sql` (escrita + smoke validado, NO aplicada aún — espera OK):**
+- `rpc_admin_update_employee`: se eliminó el bloque `dni_immutable`; ahora el `UPDATE` incluye `dni = CASE WHEN payload ? 'dni' THEN … ELSE dni END`. El **índice único** `employees_dni_unique_idx` sigue evitando duplicados (→ `duplicate_dni`) y el CHECK de formato sigue.
+- `rpc_admin_bulk_update_employees`: ídem (se quitó el rechazo `dni_immutable`; el bulk ahora puede corregir DNI).
+- **Smoke (rolled back, impersonando owner):** editó el DNI de un empleado real `40.914.074` → `99.888.777`, devolvió `updated:true`, y revirtió (prod intacto). ✅
+
+**Frontend — `employee-modal.jsx`:**
+- El campo **DNI ya no es readonly en edición** (se sacó `readOnly`, el tooltip y el help "es inmutable"). Valida formato (`normalizeDni`) y unicidad.
+- El submit ahora **manda el DNI del form** (antes lo pisaba con `initial.dni` para no disparar `dni_immutable`).
+- Se quitó el branch de error `dni_immutable` (ya no aplica). El `duplicate_dni` sigue avisando "Ya existe otro empleado con ese DNI".
+
+**Técnico:** NUEVO `supabase/migrations/0080_rrhh_dni_editable.sql`; `web|mobile/components/admin/employee-modal.jsx` (byte-idéntico, compila OK). Cache-buster employee-modal v5 (ambos HTML). **Pendiente: aplicar 0080 + push** (frontend y backend juntos). *(El bulk-import ya mandaba DNI; con esto deja de rechazarlo.)*
+
+---
+
 ### [2026-06-13] Producción — Datos de Seba (2da tanda) + verificación del catálogo
 
 **Qué se hizo:** Seba respondió los 4 puntos pendientes. Se **capturaron en el checklist** (0.2 + cabos abiertos) y se **verificó el catálogo cargado** contra sus respuestas. **No se hizo ningún UPDATE a la BD** (el Jefe rechazó el cambio suelto — las correcciones van por la capa de normalización + re-carga).

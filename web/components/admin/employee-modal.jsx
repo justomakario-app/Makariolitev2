@@ -11,8 +11,8 @@
    5) Historial (solo edit): lazy mount con datos reales S2.15
       (stat cards + botón "Ver histórico completo").
 
-   DNI readOnly en mode='edit' con tooltip (decision S2.11 paralelo a
-   cuit_immutable de S2.2; RRHH por DNI — pedido de Seba).
+   DNI EDITABLE también en mode='edit' (pedido de Seba: los DNI ya cargados
+   se pueden corregir). Solo valida formato + unicidad; no es inmutable.
 
    Props: { mode: 'create'|'edit', initial?, onClose, onSuccess }
    ══ */
@@ -151,8 +151,7 @@ function EmployeeModal({ mode, initial, onClose, onSuccess }) {
       };
       if (isEdit) {
         payload.id = initial.id;
-        // DNI no editable; se manda igual al actual para evitar HINT='dni_immutable'
-        payload.dni = initial.dni || '';
+        // DNI editable: se manda el del form (normalizado), permite corregirlo.
         await A.updateEmployee(payload);
       } else {
         await A.createEmployee(payload);
@@ -164,8 +163,6 @@ function EmployeeModal({ mode, initial, onClose, onSuccess }) {
       if (err && err.hint === 'duplicate_dni') {
         toast.error('Ya existe otro empleado con ese DNI');
         setOpenSections(s => ({ ...s, personales: true }));
-      } else if (err && err.hint === 'dni_immutable') {
-        toast.error('El DNI no se puede modificar');
       } else {
         toast.error(err.message || 'No se pudo guardar');
       }
@@ -199,17 +196,13 @@ function EmployeeModal({ mode, initial, onClose, onSuccess }) {
 
         <div className="field-group">
           <label className="field-label">DNI</label>
-          <input className={`field-input ${errors.dni ? 'has-error' : ''} ${isEdit ? 'is-readonly' : ''}`}
+          <input className={`field-input ${errors.dni ? 'has-error' : ''}`}
                  value={form.dni} placeholder="12.345.678"
-                 readOnly={isEdit}
-                 title={isEdit ? 'El DNI no se puede modificar. Para corregir, dá de baja este empleado y creá uno nuevo.' : ''}
                  onChange={e => set('dni', e.target.value)}
                  onBlur={validate}/>
           {errors.dni
             ? <div className="field-error">{errors.dni}</div>
-            : isEdit
-              ? <div className="field-help">El DNI es inmutable en edición (S2.11)</div>
-              : <div className="field-help">7 u 8 dígitos (con o sin puntos, ej. 12.345.678)</div>}
+            : <div className="field-help">7 u 8 dígitos (con o sin puntos, ej. 12.345.678)</div>}
         </div>
 
         <div className="supplier-modal-grid">
