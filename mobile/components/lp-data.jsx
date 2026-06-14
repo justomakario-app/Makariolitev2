@@ -43,6 +43,9 @@ window.LP_DATA = window.LP_DATA || (function () {
     demandaTap:        () => sel('prod_v_demanda_tap', 'pieza_sku, demanda', q => q.order('demanda', { ascending: false })),
 
     // ── CNC ──
+    // Plan de corte óptimo (Fase 5b): minimiza cantidad de placas (y a igualdad,
+    // merma) aprovechando placas combinadas. Solo lectura; gate cnc/encargado/owner/admin.
+    planCorte: () => rpc('prod_rpc_plan_corte'), // → { total_placas, total_merma, plan:[{placa,material,tipo,cantidad,produce}] }
     registrarCorte: (p) => rpc('prod_rpc_registrar_corte', p),
     editarCorte: (p) => rpc('prod_rpc_editar_corte', p),
     cortesDia: (j) => sel('prod_corte', 'id, placa_sku, hojas, desperdicio, created_at, editable_hasta', q => q.eq('jornada_id', j).order('created_at', { ascending: false })),

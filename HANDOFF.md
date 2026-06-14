@@ -80,16 +80,34 @@
 
 ---
 
+### [2026-06-14] Producción — Fase 5b: pantalla "Optimización" (frontend CNC + Encargado)
+
+**Qué se hizo:** la pantalla que consume el RPC `prod_rpc_plan_corte` (0082) para que CNC y Encargado vean el plan de corte óptimo en vivo.
+
+**Cómo:**
+- **`lp-data.jsx` (web+mobile, v8→v9):** nuevo helper `planCorte()` → `rpc('prod_rpc_plan_corte')`.
+- **`cnc-sector.jsx` (web+mobile, v7→v8):** nueva tab **"Optimizar"** (icono `spark`, entre Inicio y Scan) + componente `CncOptimizacion`. Carga `planCorte()` + `piezas()` (para nombrar las tapas). Muestra 2 KPIs (placas a cortar / merma en piezas), botón **Recalcular**, y una tarjeta por placa: nombre, SKU·material, cantidad grande, badge "Combinada", y chips de qué tapas produce (`nombre tapa → qty`). Combinadas primero (ahorran placas), luego simples. Estados loading/error/sin-demanda honestos. 100% tokenizado (`U.*`), light/premium, integrado a la plataforma.
+- **`encargado-panel.jsx` (web+mobile, v7→v8):** nueva tab **"Optimizar"** (entre Sectores y Aprobar) que **reusa** `CncOptimizacion` (global, cnc-sector carga antes) con `U=ENC_UI` (slate) — el componente está 100% tokenizado, re-tematiza solo.
+
+**Por qué:** el RPC ya calculaba el plan, pero CNC no tenía cómo verlo. Ahora el operario abre "Optimizar" y ve exactamente cuántas placas de cada tipo cortar y qué rinde cada una, sin pedir nada a nadie.
+
+**Verificación (antes del push):**
+- RPC `prod_rpc_plan_corte` **aplicado en prod** (0082) y smoke funcional como owner: **245 placas · 229 merma · 21 ítems**. Forma del ítem confirmada: `{placa:COM001, material:"PLACA BLANCA", tipo:combinada, cantidad:12, produce:{TAP003:96, TAP005:180}}` → casa 1:1 con el render.
+- Los 6 archivos JSX/data modificados **transpilan limpio** con `@babel/standalone@7.29.0` (preset react). Sin sintaxis prohibida (`??`, `<>`, object-spread).
+- web/mobile **espejo exacto** salvo padding (verificado con diff).
+
+---
+
 ### [2026-06-13] Producción — Fase 5b: Optimizador de placas (CNC)
 
 **Qué se hizo:** el **optimizador de corte de placas** (Brief Lógica 2 §7.2) — calcula el plan de corte que minimiza la cantidad de placas (y a igualdad, la merma) aprovechando las placas combinadas. No depende de Seba (usa el catálogo ya cargado).
 
-**Backend — `0082_prod_fase5b_plan_corte.sql` (escrita + smoke validado contra demanda real, NO aplicada — espera OK):**
+**Backend — `0082_prod_fase5b_plan_corte.sql` (APLICADA en prod 2026-06-14 + smoke funcional como owner OK: 245 placas · 229 merma · 21 ítems):**
 - RPC **`prod_rpc_plan_corte()`** — solo lectura, gate cnc/encargado/owner/admin. Lee `prod_v_demanda_corte` (demanda de tapas) y devuelve `{ total_placas, total_merma, plan:[{placa, material, tipo:'combinada'|'simple', cantidad, produce:{tap:qty}}] }`.
 - **Algoritmo:** las 4 placas COM vinculan un par 40/50 por color (ej. COM001 = TAP003×8 + TAP005×15). Para cada par, **búsqueda exacta** del nº de combos que minimiza (placas, luego merma); residuos + tapas sin combo → placa simple `ceil(demanda/rendimiento)`. Escala diaria chica → la búsqueda 1D es barata.
 - **Smoke (rolled back, demanda real):** 245 placas · 229 merma · 21 ítems · 3 combos. Ej. blanca: COM001×12 (96 TAP-40 + 180 TAP-50) + PLB002×2 + PLB003×5 para el residuo. Coherente y óptimo.
 
-**Pendiente:** (1) pantalla "Optimización" en el frontend para que CNC/encargado vean el plan; (2) optimizador de **varilla** (Fase 5b, cutting-stock lineal) — ese sí necesita la respuesta de Seba (14 vs 25mm hikari/yori).
+**Pendiente:** (1) ~~pantalla "Optimización" en el frontend~~ → **HECHA** (ver entrada 2026-06-14 arriba); (2) optimizador de **varilla** (Fase 5b, cutting-stock lineal) — ese sí necesita la respuesta de Seba (14 vs 25mm hikari/yori).
 
 **Técnico:** NUEVO `0082`. Sin frontend aún. **Pendiente: aplicar 0082** (backend-only).
 

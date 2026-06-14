@@ -318,12 +318,13 @@
 - [x] 📊 Materia prima: rollup de insumos vs stock → qué falta → **`prod_v_materia_prima`** (0074)
 - [x] ⚙️ Las piezas de corte (tapas + patas) se desvían a `prod_v_demanda_corte`, no se tratan como compra
 
-## 5.3 Optimizador de placas (CNC)
-- [ ] Rendimiento fijo por placa (ej. placa blanca rinde 18 redondas de 50)
-- [ ] ⚙️ Lógica de combos: placa COM rinde 2 medidas en un corte (ej. 8 de 40 + 15 de 50)
-- [ ] ⚙️ Algoritmo: agrupa tapas que comparten combo, prueba combinaciones (cuántos combos + cuántas placas simples), elige menos placas y a igualdad menos merma
-- [ ] Encuentra el óptimo real (escala diaria chica)
-- [ ] ⚙️ Produce plan de placas de la jornada
+## 5.3 Optimizador de placas (CNC) — ✅ `prod_rpc_plan_corte` (0082, aplicado 2026-06-14) + pantalla "Optimizar"
+- [x] Rendimiento fijo por placa (ej. placa blanca rinde 18 redondas de 50)
+- [x] ⚙️ Lógica de combos: placa COM rinde 2 medidas en un corte (ej. 8 de 40 + 15 de 50)
+- [x] ⚙️ Algoritmo: agrupa tapas que comparten combo, prueba combinaciones (cuántos combos + cuántas placas simples), elige menos placas y a igualdad menos merma
+- [x] Encuentra el óptimo real (escala diaria chica) — búsqueda exacta 1D por par; smoke real: 245 placas · 229 merma
+- [x] ⚙️ Produce plan de placas de la jornada — `{total_placas, total_merma, plan:[{placa,material,tipo,cantidad,produce}]}`
+- [x] 🎨 Pantalla "Optimizar" en CNC + Encargado (lp-data `planCorte()`, `CncOptimizacion`) — KPIs + plan por placa con chips de qué produce
 
 ## 5.4 Optimizador lineal (Pino — cutting stock)
 - [ ] Material en múltiples largos: varilla 1m; listón 1.8 / 2.1 / 2.4 / 2.7 / 3m
@@ -468,7 +469,7 @@
 | 2 — Motor de carga (RPCs) | `[x]` | 16 RPCs + cadena de stock + smoke ✅ |
 | 3 — Frontend por sector | `[x]` | **4 sectores de operario completos** (CNC · Melamina · Pino · Embalaje) + edición 24h + badges + QR cámara + tokens §15 |
 | 4 — Encadenamiento + Realtime | `[x]` | Encadenamiento ✅ (vive en las RPCs `registrar_*`, Fase 2) · Realtime ✅ (0077 publica 11 tablas `prod_*` + `LP_DATA.subscribe`; las 5 pantallas + encargado en vivo). Director (mantenimiento) → Fase 8 · `orders`/`carrier_state` directo = refinamiento |
-| 5 — Explosión + optimizadores | `[~]` | **5a ✅** BOM recursivo (`prod_componente`) + explosión (`prod_v_explosion`) + corte/materia prima (0074, smoke ok, import-skus extendido) · **5b ⏳** 2 optimizadores de corte (combos / cutting-stock) + atributos SKU §5.0 + pantalla Optimización |
+| 5 — Explosión + optimizadores | `[~]` | **5a ✅** BOM recursivo (`prod_componente`) + explosión (`prod_v_explosion`) + corte/materia prima (0074, smoke ok, import-skus extendido) · **5b: placas ✅** (`prod_rpc_plan_corte` 0082 + pantalla "Optimizar" en CNC/Encargado) · **varilla ⏳** (cutting-stock lineal, espera 14/25mm de Seba) + atributos SKU §5.0 patas SETs ⏳ |
 | 6 — Stock y compras | `[ ]` | — |
 | 7 — Panel del encargado | `[~]` | Inicio (KPIs + cadena en vivo + alertas) ✅ · Sectores (detalle + edición auditada) ✅ · Stock/remitos = pendiente Fase 6 · avance por canal = refinamiento |
 | 8 — Flujos de aprobación | `[x]` | Tab "Aprobar" en el Panel del Encargado: el encargado aprueba (coord), admin recepciona insumos, owner/admin (director) recibe mantenimiento. 0078 amplía gestionar_mantenimiento (encargado) + publica prod_solicitud en realtime. Acciones por rol + badge |

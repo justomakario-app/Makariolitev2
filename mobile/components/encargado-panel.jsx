@@ -158,6 +158,7 @@ function EncargadoPanel() {
   const NAV = [
     { id:'inicio',   label:'Inicio',   icon:'chart' },
     { id:'sectores', label:'Sectores', icon:'layers' },
+    { id:'optim',    label:'Optimizar', icon:'spark' },
     { id:'aprob',    label:'Aprobar',  icon:'check', badge: aprobBadge },
     { id:'stock',    label:'Stock',    icon:'box' },
     { id:'avisos',   label:'Avisos',   icon:'bell', badge: alertas.length },
@@ -243,6 +244,8 @@ function EncargadoPanel() {
           <EncSectores U={U} jornada={jornada} placaMap={placaMap}
                        cortes={cortes} melamina={melamina} pino={pino} embalaje={embalaje}
                        onEdit={(sector, row) => setEditing({ sector, row })}/>
+        ) : tab === 'optim' ? (
+          <CncOptimizacion U={U} placaMap={placaMap} toast={toast}/>
         ) : tab === 'aprob' ? (
           <EncAprobaciones U={U} role={role} solicitudes={solicitudes} mantes={mantes} onAction={handleAprob}/>
         ) : tab === 'stock' ? (

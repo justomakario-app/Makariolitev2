@@ -90,6 +90,7 @@ function CncSector() {
 
   const NAV = [
     { id:'inicio',    label:'Inicio',    icon:'home', badge: demanda.length },
+    { id:'opt',       label:'Optimizar', icon:'spark' },
     { id:'scan',      label:'Scan',      icon:'qr' },
     { id:'solicitud', label:'Solicitud', icon:'package' },
     { id:'mant',      label:'Mant.',     icon:'tools' },
@@ -151,6 +152,8 @@ function CncSector() {
           <div style={{textAlign:'center', color:U.inkMuted, padding:'60px 0', fontSize:13}}>Cargando sector…</div>
         ) : tab === 'inicio' ? (
           <CncInicio U={U} jornadaAbierta={jornadaAbierta} jornada={jornada} cortes={cortesView} totalNeto={totalNeto} demanda={demanda} onEdit={setEditing}/>
+        ) : tab === 'opt' ? (
+          <CncOptimizacion U={U} placaMap={placaMap} toast={toast}/>
         ) : tab === 'scan' ? (
           <CncScan U={U} jornadaAbierta={jornadaAbierta} placas={placas}
                    onRegistrado={cargar} toast={toast} goInicio={() => setTab('inicio')}/>
@@ -403,6 +406,148 @@ function CncScan({ U, jornadaAbierta, placas, onRegistrado, toast, goInicio }) {
             if (p) { setSel(p); toast.success(`Placa ${sku}`); }
             else { toast.error(`SKU no reconocido: ${sku}`); }
           }}/>
+      )}
+    </div>
+  );
+}
+
+/* ── Tab Optimizar (Fase 5b: plan de corte óptimo por demanda) ──────────
+   Llama a prod_rpc_plan_corte: minimiza la CANTIDAD de placas (y a igualdad,
+   la merma) aprovechando las placas combinadas. Solo lectura. */
+function CncOptimizacion({ U, placaMap, toast }) {
+  const [plan, setPlan] = useState(null);   // { total_placas, total_merma, plan:[] }
+  const [piezaMap, setPiezaMap] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const cargar = useCallback(async () => {
+    setLoading(true); setError(null);
+    try {
+      const [pz, res] = await Promise.all([
+        window.LP_DATA.piezas().catch(() => []),
+        window.LP_DATA.planCorte(),
+      ]);
+      const pm = {}; for (const p of pz) pm[p.sku] = p.nombre || p.sku;
+      setPiezaMap(pm);
+      setPlan(res || { total_placas:0, total_merma:0, plan:[] });
+    } catch (err) {
+      setError(err && err.message ? err.message : 'No se pudo calcular el plan');
+    } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  // Combinadas primero (son la jugada que ahorra placas), luego simples.
+  const items = useMemo(() => {
+    const list = (plan && Array.isArray(plan.plan)) ? plan.plan.slice() : [];
+    return list.sort((a, b) => {
+      if (a.tipo !== b.tipo) return a.tipo === 'combinada' ? -1 : 1;
+      return (b.cantidad || 0) - (a.cantidad || 0);
+    });
+  }, [plan]);
+
+  if (loading) {
+    return <div style={{textAlign:'center', color:U.inkMuted, padding:'60px 0', fontSize:13}}>Calculando plan de corte…</div>;
+  }
+  if (error) {
+    return (
+      <div style={{textAlign:'center', padding:'48px 16px'}}>
+        <Icon n="alert" s={26} c={U.danger}/>
+        <p style={{fontSize:12.5, color:U.ink, margin:'12px 0 14px', maxWidth:300, marginLeft:'auto', marginRight:'auto'}}>{error}</p>
+        <button onClick={cargar} style={{border:`1px solid ${U.border}`, background:U.surface, color:U.ink,
+          borderRadius:11, padding:'9px 16px', fontSize:12.5, fontWeight:700, cursor:'pointer'}}>Reintentar</button>
+      </div>
+    );
+  }
+
+  const tieneDemanda = items.length > 0;
+
+  return (
+    <div>
+      {/* Intro */}
+      <div style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:12, marginBottom:16}}>
+        <div style={{display:'flex', gap:10, alignItems:'flex-start', minWidth:0}}>
+          <span style={{width:30, height:30, flexShrink:0, borderRadius:9, background:U.accentSoft,
+                        border:`1px solid ${U.accentLine}`, display:'flex', alignItems:'center', justifyContent:'center'}}>
+            <Icon n="spark" s={16} c={U.accent}/>
+          </span>
+          <div style={{minWidth:0}}>
+            <h3 style={{fontSize:15, fontWeight:800, margin:0, color:U.ink}}>Plan de corte sugerido</h3>
+            <p style={{fontSize:11.5, color:U.inkSoft, margin:'3px 0 0', lineHeight:1.5}}>
+              Cubre la demanda pendiente con la menor cantidad de placas. Las combinadas rinden 2 medidas en un corte.
+            </p>
+          </div>
+        </div>
+        <button onClick={cargar} title="Recalcular"
+          style={{flexShrink:0, border:`1px solid ${U.border}`, background:U.surface, color:U.inkSoft,
+                  borderRadius:10, padding:'8px 10px', cursor:'pointer', display:'flex', alignItems:'center', gap:6, fontSize:11.5, fontWeight:700}}>
+          <Icon n="refresh" s={14} c={U.inkSoft}/> Recalcular
+        </button>
+      </div>
+
+      {/* KPIs */}
+      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:18}}>
+        <div style={{background:U.accentSoft, border:`1px solid ${U.accentLine}`, borderRadius:14, padding:'14px 16px'}}>
+          <div style={{fontSize:9.5, fontWeight:800, letterSpacing:'.1em', textTransform:'uppercase', color:U.accent}}>Placas a cortar</div>
+          <div style={{fontSize:28, fontWeight:800, color:U.ink, fontVariantNumeric:'tabular-nums', marginTop:2}}>{plan.total_placas}</div>
+        </div>
+        <div style={{background:U.surface, border:`1px solid ${U.border}`, borderRadius:14, padding:'14px 16px'}}>
+          <div style={{fontSize:9.5, fontWeight:800, letterSpacing:'.1em', textTransform:'uppercase', color:U.inkMuted}}>Merma (piezas)</div>
+          <div style={{fontSize:28, fontWeight:800, color: plan.total_merma > 0 ? U.warn : U.ok, fontVariantNumeric:'tabular-nums', marginTop:2}}>{plan.total_merma}</div>
+        </div>
+      </div>
+
+      {!tieneDemanda ? (
+        <div style={{textAlign:'center', color:U.inkMuted, padding:'40px 12px', background:U.surface,
+                     border:`1px solid ${U.border}`, borderRadius:14}}>
+          <Icon n="check-circle" s={26} c={U.ok}/>
+          <p style={{fontSize:12.5, margin:'12px 0 0', color:U.ink, fontWeight:700}}>Sin demanda de tapas pendiente.</p>
+          <p style={{fontSize:11.5, margin:'4px 0 0'}}>No hace falta cortar placas por ahora.</p>
+        </div>
+      ) : (
+        <div style={{display:'flex', flexDirection:'column', gap:10}}>
+          {items.map((it, i) => {
+            const pl = placaMap[it.placa] || {};
+            const combinada = it.tipo === 'combinada';
+            const produce = it.produce || {};
+            const keys = Object.keys(produce);
+            return (
+              <div key={(it.placa || '') + i} style={{background:U.surface, border:`1px solid ${combinada ? U.accentLine : U.border}`,
+                           borderRadius:14, padding:'13px 14px'}}>
+                <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:10}}>
+                  <div style={{minWidth:0}}>
+                    <div style={{display:'flex', alignItems:'center', gap:7}}>
+                      <span style={{fontSize:13.5, fontWeight:800, color:U.ink}}>{pl.nombre || it.placa}</span>
+                      {combinada && (
+                        <span style={{fontSize:9, fontWeight:800, letterSpacing:'.06em', textTransform:'uppercase',
+                                      color:U.accent, background:U.accentSoft, border:`1px solid ${U.accentLine}`,
+                                      borderRadius:999, padding:'2px 7px'}}>Combinada</span>
+                      )}
+                    </div>
+                    <div style={{fontSize:10.5, color:U.inkMuted, marginTop:2}}>
+                      {it.placa}{it.material ? ` · ${it.material}` : ''}
+                    </div>
+                  </div>
+                  <div style={{textAlign:'right', flexShrink:0}}>
+                    <div style={{fontSize:24, fontWeight:800, color:U.accent, fontVariantNumeric:'tabular-nums', lineHeight:1}}>{it.cantidad}</div>
+                    <div style={{fontSize:9.5, color:U.inkMuted, fontWeight:700, letterSpacing:'.04em', textTransform:'uppercase'}}>placas</div>
+                  </div>
+                </div>
+                {keys.length > 0 && (
+                  <div style={{display:'flex', flexWrap:'wrap', gap:6, marginTop:11, paddingTop:11, borderTop:`1px solid ${U.border}`}}>
+                    {keys.map(k => (
+                      <span key={k} style={{display:'inline-flex', alignItems:'center', gap:5, fontSize:11,
+                                    background:U.surface2, border:`1px solid ${U.border}`, borderRadius:999, padding:'4px 9px'}}>
+                        <span style={{color:U.inkSoft, fontWeight:600}}>{piezaMap[k] || k}</span>
+                        <span style={{color:U.ink, fontWeight:800, fontVariantNumeric:'tabular-nums'}}>{produce[k]}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );
