@@ -80,6 +80,23 @@
 
 ---
 
+### [2026-06-14] Producción — Fase 6 (parcial, no-Seba): ingreso de materia prima
+
+**Qué se hizo:** la base de Stock/compras que no depende de Seba — poblar insumos + cargar remitos que suman stock. (Lo Seba-dependiente queda fuera: lista de compras con conversión a cajas/rollos, optimizador de varilla, patas de SETs.)
+
+**Backend (aplicado en prod 2026-06-14 + verificado):**
+- **`0083_prod_fase6_poblar_insumos.sql`** — `prod_insumo` estaba **vacío** → la vista `prod_v_materia_prima` calculaba la necesidad pero sin nombre/unidad y la pestaña Stock no mostraba nada. Se **derivó** desde `prod_pieza` (los SKUs ya existían con nombre): **35 insumos** (Tornillería 11 · Tapatornillos/AGU 8 · Soportes 8 · Cajas 4 · Filo 2 metro · Varilla 2 barra), categoría/sector/unidad por prefijo, stock 0 / mínimo 0. Aditivo, idempotente (`ON CONFLICT DO NOTHING`). NO toca el .xlsx ni a Seba.
+- **`0084_prod_fase6_remito_ingreso.sql`** — RPC **`prod_rpc_ingresar_remito(p_payload)`** SECURITY DEFINER, gate owner/admin/encargado. Valida todo-o-nada (SKU∈prod_insumo, cantidad>0), inserta cabecera en `prod_remito` (ya existía) y **suma `prod_insumo.stock_actual`**. NO usa factores de conversión (carga unidad de consumo; la conversión a unidad de compra es Fase 6.1 = Seba). Suma `prod_insumo`+`prod_remito` a la publicación realtime.
+- **Verificación prod:** 35 insumos · 6 categorías · RPC existe · realtime=[prod_insumo, prod_remito]. Smoke funcional (rolled back) como encargado: remito 2 ítems → TOR001 +5000, CAJ001 +200, `{items:2, total_unidades:5200}`; error paths (SKU inexistente / sin ítems) OK.
+
+**Frontend (web+mobile, espejo salvo padding; transpila con babel standalone):**
+- **`lp-data.jsx` (v9→v10):** `remitos()` (historial, RLS encargado/owner/admin) + `ingresarRemito(p)`.
+- **`encargado-panel.jsx` (v8→v9):** el botón **"Cargar remito de mercadería"** (Stock) abre el modal real **`EncRemitoModal`** (proveedor/N°/fecha + selector de insumo agrupado por categoría + cantidad → lista con total → `ingresarRemito` → suma stock + refetch). **"Stock general"** lista los 35 insumos reales (se quitó el copy "se habilita con Fase 6"). Nueva sección **"Últimos remitos"** (historial). Realtime suscribe también `prod_insumo`+`prod_remito` → la carga aparece en vivo.
+
+**Por qué:** la fábrica necesita cargar la mercadería que entra y ver su stock; era el último bloque grande de Producción que no dependía de Seba. Con esto la pestaña Stock del Encargado deja de estar vacía y el motor de materia prima tiene datos reales.
+
+---
+
 ### [2026-06-14] Producción — Fase 5b: pantalla "Optimización" (frontend CNC + Encargado)
 
 **Qué se hizo:** la pantalla que consume el RPC `prod_rpc_plan_corte` (0082) para que CNC y Encargado vean el plan de corte óptimo en vivo.

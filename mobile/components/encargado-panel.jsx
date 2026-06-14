@@ -47,9 +47,11 @@ function EncargadoPanel() {
   const [mantes, setMantes] = useState([]);
   const [insumos, setInsumos] = useState([]);
   const [solicitudes, setSolicitudes] = useState([]);
+  const [remitos, setRemitos] = useState([]);
   const [jornadaBusy, setJornadaBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null); // { sector, row }
+  const [remitoOpen, setRemitoOpen] = useState(false); // modal ingreso de materia prima
 
   const placaMap = useMemo(() => { const m = {}; for (const p of placas) m[p.sku] = p; return m; }, [placas]);
 
@@ -59,7 +61,7 @@ function EncargadoPanel() {
       const j = await window.LP_DATA.jornadaHoy();
       setJornada(j);
       const jid = j && j.jornada_id ? j.jornada_id : null;
-      const [pl, st, ct, ml, pn, em, dm, al, mt, ins, sl] = await Promise.all([
+      const [pl, st, ct, ml, pn, em, dm, al, mt, ins, sl, rm] = await Promise.all([
         window.LP_DATA.placas().catch(() => []),
         window.LP_DATA.stock().catch(() => null),
         jid ? window.LP_DATA.cortesDia(jid).catch(() => []) : Promise.resolve([]),
@@ -71,10 +73,11 @@ function EncargadoPanel() {
         window.LP_DATA.mantenimientos().catch(() => []),
         window.LP_DATA.insumos().catch(() => []),
         window.LP_DATA.solicitudes().catch(() => []),
+        window.LP_DATA.remitos().catch(() => []),
       ]);
       setPlacas(pl); setStock(st || { stock_pieza:[], stock_melamina:[], stock_patas:[], stock_terminado:[] });
       setCortes(ct); setMelamina(ml); setPino(pn); setEmbalaje(em);
-      setDemanda(dm); setAlertas(al); setMantes(mt); setInsumos(ins); setSolicitudes(sl);
+      setDemanda(dm); setAlertas(al); setMantes(mt); setInsumos(ins); setSolicitudes(sl); setRemitos(rm);
     } catch (err) {
       toast.error(err && err.message ? err.message : 'No se pudo cargar el panel');
     } finally { setLoading(false); }
@@ -87,7 +90,8 @@ function EncargadoPanel() {
   useEffect(() => window.LP_DATA.subscribe(
     ['prod_corte', 'prod_melamina', 'prod_pino', 'prod_embalaje',
      'prod_stock_pieza', 'prod_stock_melamina', 'prod_stock_patas', 'prod_stock_terminado',
-     'prod_alerta', 'prod_mantenimiento', 'prod_solicitud', 'prod_jornada'],
+     'prod_alerta', 'prod_mantenimiento', 'prod_solicitud', 'prod_jornada',
+     'prod_insumo', 'prod_remito'],
     () => cargar({ silent: true })
   ), [cargar]);
 
@@ -249,7 +253,7 @@ function EncargadoPanel() {
         ) : tab === 'aprob' ? (
           <EncAprobaciones U={U} role={role} solicitudes={solicitudes} mantes={mantes} onAction={handleAprob}/>
         ) : tab === 'stock' ? (
-          <EncStock U={U} insumos={insumos} alertas={alertas} onRemito={() => toast.info('Carga de remitos: se habilita con el stock de insumos (Fase 6)')}/>
+          <EncStock U={U} insumos={insumos} remitos={remitos} onRemito={() => setRemitoOpen(true)}/>
         ) : tab === 'historico' ? (
           <EncHistorico U={U}/>
         ) : (
@@ -274,6 +278,12 @@ function EncargadoPanel() {
             }}/>
         );
       })()}
+
+      {remitoOpen && (
+        <EncRemitoModal U={U} insumos={insumos} toast={toast}
+          onClose={() => setRemitoOpen(false)}
+          onSaved={() => cargar({ silent: true })}/>
+      )}
     </div>
   );
 }
@@ -458,8 +468,10 @@ function EncSectores({ U, jornada, placaMap, cortes, melamina, pino, embalaje, o
 }
 
 /* ── Tab Stock ── */
-function EncStock({ U, insumos, alertas, onRemito }) {
+function EncStock({ U, insumos, remitos, onRemito }) {
   const bajo = insumos.filter(i => (Number(i.stock_actual) || 0) < (Number(i.stock_minimo) || 0));
+  const histRem = remitos || [];
+  const itemsRem = (it) => Array.isArray(it) ? it.reduce((s, x) => s + (Number(x.cantidad) || 0), 0) : 0;
   return (
     <div>
       <button onClick={onRemito}
@@ -496,18 +508,41 @@ function EncStock({ U, insumos, alertas, onRemito }) {
       {insumos.length === 0 ? (
         <div style={{background:U.surface, border:`1px dashed ${U.border}`, borderRadius:12, padding:'18px 14px',
                      fontSize:12.5, color:U.inkSoft, textAlign:'center', lineHeight:1.6}}>
-          Todavía no hay insumos cargados.<br/>El stock de materia prima e insumos se habilita con la Fase 6.
+          Todavía no hay insumos cargados.<br/>Cargá un remito para empezar a sumar materia prima.
         </div>
       ) : (
-        <div style={{background:U.surface, border:`1px solid ${U.border}`, borderRadius:14, overflow:'hidden'}}>
-          {insumos.slice(0, 30).map((i, idx) => (
+        <div style={{background:U.surface, border:`1px solid ${U.border}`, borderRadius:14, overflow:'hidden', marginBottom:18}}>
+          {insumos.slice(0, 60).map((i, idx) => (
             <div key={i.sku} style={{display:'flex', alignItems:'center', justifyContent:'space-between',
-                         padding:'10px 12px', borderBottom: idx < Math.min(insumos.length, 30) - 1 ? `1px solid ${U.border}` : 'none'}}>
+                         padding:'10px 12px', borderBottom: idx < Math.min(insumos.length, 60) - 1 ? `1px solid ${U.border}` : 'none'}}>
               <div style={{minWidth:0, paddingRight:10}}>
                 <div style={{fontSize:12.5, fontWeight:700, color:U.ink, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{i.nombre || i.sku}</div>
-                <div style={{fontSize:10, color:U.inkMuted}}>{i.categoria || ''}</div>
+                <div style={{fontSize:10, color:U.inkMuted}}>{i.categoria || ''}{i.sku ? ` · ${i.sku}` : ''}</div>
               </div>
-              <span style={{fontSize:13, fontWeight:700, color:U.ink, fontVariantNumeric:'tabular-nums'}}>{i.stock_actual} {i.unidad}</span>
+              <span style={{fontSize:13, fontWeight:700, color:(Number(i.stock_actual)||0) > 0 ? U.ink : U.inkMuted, fontVariantNumeric:'tabular-nums'}}>{i.stock_actual} {i.unidad}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <h3 style={{fontSize:13.5, fontWeight:800, margin:'0 0 10px', color:U.ink}}>Últimos remitos</h3>
+      {histRem.length === 0 ? (
+        <div style={{background:U.surface, border:`1px solid ${U.border}`, borderRadius:12, padding:'14px',
+                     fontSize:12.5, color:U.inkSoft, textAlign:'center'}}>Sin remitos cargados todavía.</div>
+      ) : (
+        <div style={{background:U.surface, border:`1px solid ${U.border}`, borderRadius:14, overflow:'hidden'}}>
+          {histRem.slice(0, 12).map((r, idx) => (
+            <div key={r.id || idx} style={{display:'flex', alignItems:'center', justifyContent:'space-between',
+                         padding:'11px 13px', borderBottom: idx < Math.min(histRem.length, 12) - 1 ? `1px solid ${U.border}` : 'none'}}>
+              <div style={{minWidth:0, paddingRight:10}}>
+                <div style={{fontSize:12.5, fontWeight:700, color:U.ink, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>
+                  {r.proveedor || 'Sin proveedor'}{r.nro_remito ? ` · N° ${r.nro_remito}` : ''}
+                </div>
+                <div style={{fontSize:10, color:U.inkMuted}}>
+                  {String(r.fecha || r.created_at || '').slice(0, 10)} · {Array.isArray(r.items) ? r.items.length : 0} ítems
+                </div>
+              </div>
+              <span style={{fontSize:13, fontWeight:700, color:U.ok, fontVariantNumeric:'tabular-nums'}}>+{itemsRem(r.items)}</span>
             </div>
           ))}
         </div>
@@ -856,6 +891,170 @@ function EncHistorico({ U }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ── Modal: Ingreso de materia prima (remito) — Fase 6.2/6.3 ──
+   Carga un remito (proveedor/nro/fecha + items) → suma stock vía
+   prod_rpc_ingresar_remito. No usa factores de conversión (unidad de
+   consumo); la lista de compras (unidades de compra) es Fase 6.1. */
+function EncRemitoModal({ U, insumos, toast, onClose, onSaved }) {
+  const hoy = new Date().toISOString().slice(0, 10);
+  const [prov, setProv] = useState('');
+  const [nro, setNro] = useState('');
+  const [fecha, setFecha] = useState(hoy);
+  const [items, setItems] = useState([]); // [{ sku, nombre, unidad, cantidad }]
+  const [selSku, setSelSku] = useState('');
+  const [cant, setCant] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const insumoMap = useMemo(() => { const m = {}; for (const i of insumos) m[i.sku] = i; return m; }, [insumos]);
+  const grupos = useMemo(() => {
+    const g = {};
+    for (const i of insumos) { const k = i.categoria || 'Otros'; (g[k] = g[k] || []).push(i); }
+    return Object.keys(g).sort().map(k => ({ cat: k, items: g[k] }));
+  }, [insumos]);
+
+  const addItem = () => {
+    const ins = insumoMap[selSku];
+    const n = parseFloat(cant);
+    if (!ins || !Number.isFinite(n) || n <= 0) { toast.error('Elegí un insumo y una cantidad válida'); return; }
+    setItems(prev => {
+      const idx = prev.findIndex(x => x.sku === selSku);
+      if (idx >= 0) {
+        const cp = prev.slice();
+        cp[idx] = Object.assign({}, cp[idx], { cantidad: (Number(cp[idx].cantidad) || 0) + n });
+        return cp;
+      }
+      return prev.concat([{ sku: ins.sku, nombre: ins.nombre || ins.sku, unidad: ins.unidad || '', cantidad: n }]);
+    });
+    setSelSku(''); setCant('');
+  };
+  const removeItem = (sku) => setItems(prev => prev.filter(x => x.sku !== sku));
+
+  const total = items.reduce((s, x) => s + (Number(x.cantidad) || 0), 0);
+  const puede = items.length > 0 && !saving;
+
+  const guardar = async () => {
+    if (!puede) return;
+    setSaving(true);
+    try {
+      const payload = {
+        proveedor: prov, nro_remito: nro, fecha: fecha,
+        items: items.map(x => ({ sku: x.sku, cantidad: x.cantidad })),
+      };
+      const res = await window.LP_DATA.ingresarRemito(payload);
+      const tot = (res && res.total_unidades != null) ? res.total_unidades : total;
+      const nIt = (res && res.items != null) ? res.items : items.length;
+      toast.success(`Remito cargado · +${tot} en ${nIt} insumo${nIt === 1 ? '' : 's'}`);
+      onSaved(); onClose();
+    } catch (err) { toast.error(err && err.message ? err.message : 'No se pudo cargar el remito'); }
+    finally { setSaving(false); }
+  };
+
+  const inp = {
+    width:'100%', boxSizing:'border-box', background:U.surface2, border:`1px solid ${U.border}`,
+    borderRadius:10, color:U.ink, fontSize:13, padding:'10px 11px', outline:'none', fontFamily:'inherit',
+  };
+  const lbl = { display:'block', fontSize:10.5, fontWeight:700, color:U.inkSoft, marginBottom:5, letterSpacing:'.02em' };
+
+  return (
+    <div onClick={onClose} style={{position:'fixed', inset:0, background:'rgba(0,0,0,.62)', zIndex:9999,
+                 display:'flex', alignItems:'center', justifyContent:'center', padding:18}}>
+      <div onClick={e => e.stopPropagation()} style={{width:'100%', maxWidth:440, maxHeight:'88vh', overflowY:'auto',
+                   background:U.surface, border:`1px solid ${U.border}`, borderRadius:18, padding:'18px', color:U.ink}}>
+        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16}}>
+          <h3 style={{fontSize:15, fontWeight:800, margin:0}}>Ingreso de materia prima</h3>
+          <button onClick={onClose} style={{border:'none', background:'transparent', cursor:'pointer', padding:0}}>
+            <Icon n="x" s={18} c={U.inkMuted}/>
+          </button>
+        </div>
+
+        {/* Cabecera del remito */}
+        <div style={{display:'flex', gap:10, marginBottom:12}}>
+          <label style={{flex:2}}><span style={lbl}>Proveedor</span>
+            <input value={prov} onChange={e => setProv(e.target.value)} placeholder="Opcional" style={inp}/></label>
+          <label style={{flex:1}}><span style={lbl}>N° remito</span>
+            <input value={nro} onChange={e => setNro(e.target.value)} placeholder="Opcional" style={inp}/></label>
+        </div>
+        <label style={{display:'block', marginBottom:16}}><span style={lbl}>Fecha</span>
+          <input type="date" value={fecha} max={hoy} onChange={e => setFecha(e.target.value)} style={inp}/></label>
+
+        {/* Agregar item */}
+        <div style={{borderTop:`1px solid ${U.border}`, paddingTop:14, marginBottom:12}}>
+          <span style={lbl}>Agregar insumo</span>
+          <div style={{display:'flex', gap:8, alignItems:'flex-end'}}>
+            <div style={{flex:2}}>
+              <select value={selSku} onChange={e => setSelSku(e.target.value)} style={Object.assign({}, inp, { cursor:'pointer' })}>
+                <option value="">Elegí un insumo…</option>
+                {grupos.map(g => (
+                  <optgroup key={g.cat} label={g.cat}>
+                    {g.items.map(i => <option key={i.sku} value={i.sku}>{i.nombre || i.sku}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+            <div style={{flex:1}}>
+              <input type="number" inputMode="numeric" min="0" value={cant} placeholder="Cant."
+                     onChange={e => setCant(e.target.value)} style={Object.assign({}, inp, { textAlign:'center', fontWeight:700 })}/>
+            </div>
+            <button onClick={addItem} title="Agregar"
+              style={{flexShrink:0, border:'none', background:U.accent, color:'#fff', borderRadius:10,
+                      padding:'10px 12px', cursor:'pointer', display:'flex', alignItems:'center'}}>
+              <Icon n="plus" s={17} c="#fff"/>
+            </button>
+          </div>
+          {selSku && insumoMap[selSku] ? (
+            <div style={{fontSize:10.5, color:U.inkMuted, marginTop:5}}>
+              Se carga en <b style={{color:U.inkSoft}}>{insumoMap[selSku].unidad || 'unidad'}</b> · stock actual {insumoMap[selSku].stock_actual} {insumoMap[selSku].unidad}
+            </div>
+          ) : null}
+        </div>
+
+        {/* Lista de items */}
+        {items.length === 0 ? (
+          <div style={{background:U.surface2, border:`1px dashed ${U.border}`, borderRadius:12, padding:'16px',
+                       fontSize:12, color:U.inkMuted, textAlign:'center', marginBottom:16}}>
+            Agregá los insumos que llegaron en el remito.
+          </div>
+        ) : (
+          <div style={{background:U.surface2, border:`1px solid ${U.border}`, borderRadius:12, overflow:'hidden', marginBottom:14}}>
+            {items.map((x, i) => (
+              <div key={x.sku} style={{display:'flex', alignItems:'center', justifyContent:'space-between',
+                           padding:'10px 12px', borderBottom: i < items.length - 1 ? `1px solid ${U.border}` : 'none'}}>
+                <div style={{minWidth:0, paddingRight:10}}>
+                  <div style={{fontSize:12.5, fontWeight:700, color:U.ink, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{x.nombre}</div>
+                  <div style={{fontSize:10, color:U.inkMuted}}>{x.sku}</div>
+                </div>
+                <div style={{display:'flex', alignItems:'center', gap:10, flexShrink:0}}>
+                  <span style={{fontSize:13, fontWeight:800, color:U.ok, fontVariantNumeric:'tabular-nums'}}>+{x.cantidad} {x.unidad}</span>
+                  <button onClick={() => removeItem(x.sku)} style={{border:'none', background:'transparent', cursor:'pointer', padding:2}}>
+                    <Icon n="trash" s={15} c={U.danger}/>
+                  </button>
+                </div>
+              </div>
+            ))}
+            <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 12px', background:U.surface}}>
+              <span style={{fontSize:11, fontWeight:700, color:U.inkSoft, textTransform:'uppercase', letterSpacing:'.04em'}}>Total</span>
+              <span style={{fontSize:14, fontWeight:800, color:U.ink, fontVariantNumeric:'tabular-nums'}}>{total} u · {items.length} ítems</span>
+            </div>
+          </div>
+        )}
+
+        <div style={{display:'flex', gap:10}}>
+          <button onClick={onClose} style={{flex:1, padding:'13px', borderRadius:12, border:`1px solid ${U.border}`,
+                       background:U.surface2, color:U.inkSoft, fontSize:14, fontWeight:700, cursor:'pointer'}}>Cancelar</button>
+          <button onClick={guardar} disabled={!puede}
+            style={{flex:2, padding:'13px', borderRadius:12, border:'none',
+                    background: puede ? U.accent : U.surface2, color: puede ? '#fff' : U.inkMuted,
+                    fontSize:14, fontWeight:800, cursor: puede ? 'pointer' : 'not-allowed',
+                    display:'flex', alignItems:'center', justifyContent:'center', gap:8}}>
+            <Icon n="check" s={17} c={puede ? '#fff' : U.inkMuted}/>
+            {saving ? 'Cargando…' : 'Cargar remito'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

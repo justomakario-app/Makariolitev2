@@ -71,6 +71,11 @@ window.LP_DATA = window.LP_DATA || (function () {
     solicitudes: () => sel('prod_solicitud', 'id, jornada_id, sector, items, estado, solicitado_por, created_at', q => q.order('created_at', { ascending: false })),
     insumos: () => sel('prod_insumo', 'sku, nombre, categoria, sector, stock_actual, stock_minimo, unidad', q => q.order('nombre')),
 
+    // ── Materia prima / Remitos (Fase 6) ── ingreso suma stock; el historial
+    // se lee directo (RLS encargado/owner/admin). Gate del RPC: owner/admin/encargado.
+    remitos: () => sel('prod_remito', 'id, proveedor, nro_remito, fecha, items, created_at', q => q.order('created_at', { ascending: false })),
+    ingresarRemito: (p) => rpc('prod_rpc_ingresar_remito', p), // { proveedor, nro_remito, fecha, items:[{sku,cantidad}] }
+
     // ── Soporte (todas las pantallas) ──
     crearSolicitud:        (p) => rpc('prod_rpc_crear_solicitud', p),
     reportarMantenimiento: (p) => rpc('prod_rpc_reportar_mantenimiento', p),

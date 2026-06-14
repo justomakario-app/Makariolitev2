@@ -351,15 +351,18 @@
 - [ ] ⚙️ Conversión: filo metros→rollos (50m), listón unidad→palet (600-700), tornillos→cajas
 - [ ] ⚙️ Redondeo para arriba (no se compra fraccionado): 120m de filo = 3 rollos
 
+## 6.0 Poblar insumos — ✅ `0083` (aplicado 2026-06-14)
+- [x] `prod_insumo` poblado derivando de `prod_pieza`: 35 insumos (TOR/CAJ/SOP/AGU/FIL/VAR) con categoría/sector/unidad. La vista materia prima ya muestra nombre/unidad.
+
 ## 6.2 Flujo de stock
-- [ ] Ingreso: encargado carga mercadería como materia prima → ⚙️ suma stock + registra movimiento de entrada
-- [ ] ⚙️ Consumo: al producir/cortar, descuenta insumos + registra cada salida
-- [ ] ⚙️ Reposición: compara necesidad de jornada vs stock → calcula faltante
-- [ ] 📊 Faltante convertido a unidades de compra = lista de compras
-- [ ] ⚙️ Trazabilidad: cada entrada/salida con su motivo (producción, consumo, compra, corte, ajuste)
+- [x] Ingreso: encargado carga mercadería como materia prima → ⚙️ suma stock + registra entrada — **`prod_rpc_ingresar_remito` (0084)** + cabecera en `prod_remito`
+- [ ] ⚙️ Consumo: al producir/cortar, descuenta insumos + registra cada salida *(las RPCs registrar_* descuentan stock de piezas/patas; descuento de insumos materia prima = pendiente)*
+- [ ] ⚙️ Reposición: compara necesidad de jornada vs stock → calcula faltante *(la vista `prod_v_materia_prima` ya da necesita/stock/falta)*
+- [ ] 📊 Faltante convertido a unidades de compra = lista de compras → **espera "tornillos por caja" de Seba (Fase 6.1)**
+- [~] ⚙️ Trazabilidad: la entrada queda en `prod_remito` (proveedor/nro/fecha/items/quién); salidas = pendiente
 
 ## 6.3 Pantalla de ingreso de materia prima
-- [ ] Pantalla "Producción → Ingreso de materia prima"
+- [x] Pantalla "Ingreso de materia prima" — modal `EncRemitoModal` en Encargado → Stock (selector agrupado + cantidades + historial "Últimos remitos"), suma stock vía RPC
 
 ---
 
@@ -379,10 +382,10 @@
 - [x] 🔍⚙️ Tocar cualquier carga → `LpEditModal` con **AUDITORÍA OBLIGATORIA** (motivo requerido) → `editar_*`; el trigger registra usuario/fecha/valor ant/nuevo
 
 ## Tab Stock
-- [~] Botón ＋ Cargar remito — UI presente; el alta + suma de stock se habilita con **Fase 6** (no hay RPC de remito ni insumos cargados)
-- [x] 🔴 Bajo mínimo: insumos críticos/bajos con barra de nivel (vacío hasta cargar insumos)
-- [x] Stock general: nivel actual vs mínimo (estado vacío honesto hasta Fase 6)
-- [ ] Últimos remitos cargados → **Fase 6**
+- [x] Botón ＋ Cargar remito — **funcional (0084)**: modal `EncRemitoModal` → suma stock vía `prod_rpc_ingresar_remito`
+- [x] 🔴 Bajo mínimo: insumos críticos/bajos con barra de nivel (35 insumos cargados; mínimos los fija el negocio)
+- [x] Stock general: lista los 35 insumos reales con su stock actual
+- [x] Últimos remitos cargados → sección "Últimos remitos" con historial
 
 ## Tab Avisos
 - [x] 🔴 Notificaciones en vivo: alertas stock crítico/bajo (`prod_alerta`)
@@ -470,7 +473,7 @@
 | 3 — Frontend por sector | `[x]` | **4 sectores de operario completos** (CNC · Melamina · Pino · Embalaje) + edición 24h + badges + QR cámara + tokens §15 |
 | 4 — Encadenamiento + Realtime | `[x]` | Encadenamiento ✅ (vive en las RPCs `registrar_*`, Fase 2) · Realtime ✅ (0077 publica 11 tablas `prod_*` + `LP_DATA.subscribe`; las 5 pantallas + encargado en vivo). Director (mantenimiento) → Fase 8 · `orders`/`carrier_state` directo = refinamiento |
 | 5 — Explosión + optimizadores | `[~]` | **5a ✅** BOM recursivo (`prod_componente`) + explosión (`prod_v_explosion`) + corte/materia prima (0074, smoke ok, import-skus extendido) · **5b: placas ✅** (`prod_rpc_plan_corte` 0082 + pantalla "Optimizar" en CNC/Encargado) · **varilla ⏳** (cutting-stock lineal, espera 14/25mm de Seba) + atributos SKU §5.0 patas SETs ⏳ |
-| 6 — Stock y compras | `[ ]` | — |
+| 6 — Stock y compras | `[~]` | **6.0 ✅** insumos poblados (0083, 35 insumos) · **6.2/6.3 ✅** ingreso de materia prima (`prod_rpc_ingresar_remito` 0084 + modal `EncRemitoModal` + historial) · **6.1 ⏳** lista de compras (conversión a cajas/rollos, espera "tornillos por caja" de Seba) · consumo de insumos materia prima = pendiente |
 | 7 — Panel del encargado | `[~]` | Inicio (KPIs + cadena en vivo + alertas) ✅ · Sectores (detalle + edición auditada) ✅ · Stock/remitos = pendiente Fase 6 · avance por canal = refinamiento |
 | 8 — Flujos de aprobación | `[x]` | Tab "Aprobar" en el Panel del Encargado: el encargado aprueba (coord), admin recepciona insumos, owner/admin (director) recibe mantenimiento. 0078 amplía gestionar_mantenimiento (encargado) + publica prod_solicitud en realtime. Acciones por rol + badge |
 | 9 — Histórico y director | `[x]` | Tab "Histórico" (solo owner/admin) en el Panel del Encargado: KPIs por período (presets + rango libre), comparativa vs período anterior, serie por día, top productos, mantenimientos recibidos, export Excel. RPC `prod_rpc_director_historico` (0079). PDF + sector×SKU = refinamiento |
