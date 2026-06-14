@@ -80,6 +80,21 @@
 
 ---
 
+### [2026-06-13] Producción — Fase 5b: Optimizador de placas (CNC)
+
+**Qué se hizo:** el **optimizador de corte de placas** (Brief Lógica 2 §7.2) — calcula el plan de corte que minimiza la cantidad de placas (y a igualdad, la merma) aprovechando las placas combinadas. No depende de Seba (usa el catálogo ya cargado).
+
+**Backend — `0082_prod_fase5b_plan_corte.sql` (escrita + smoke validado contra demanda real, NO aplicada — espera OK):**
+- RPC **`prod_rpc_plan_corte()`** — solo lectura, gate cnc/encargado/owner/admin. Lee `prod_v_demanda_corte` (demanda de tapas) y devuelve `{ total_placas, total_merma, plan:[{placa, material, tipo:'combinada'|'simple', cantidad, produce:{tap:qty}}] }`.
+- **Algoritmo:** las 4 placas COM vinculan un par 40/50 por color (ej. COM001 = TAP003×8 + TAP005×15). Para cada par, **búsqueda exacta** del nº de combos que minimiza (placas, luego merma); residuos + tapas sin combo → placa simple `ceil(demanda/rendimiento)`. Escala diaria chica → la búsqueda 1D es barata.
+- **Smoke (rolled back, demanda real):** 245 placas · 229 merma · 21 ítems · 3 combos. Ej. blanca: COM001×12 (96 TAP-40 + 180 TAP-50) + PLB002×2 + PLB003×5 para el residuo. Coherente y óptimo.
+
+**Pendiente:** (1) pantalla "Optimización" en el frontend para que CNC/encargado vean el plan; (2) optimizador de **varilla** (Fase 5b, cutting-stock lineal) — ese sí necesita la respuesta de Seba (14 vs 25mm hikari/yori).
+
+**Técnico:** NUEVO `0082`. Sin frontend aún. **Pendiente: aplicar 0082** (backend-only).
+
+---
+
 ### [2026-06-13] Producción — Fase 5.0 parcial: patas de mesas simples + caja (deducido)
 
 **Qué se hizo:** se **dedujo del catálogo** (receta→tapa→placa) el modelo/tamaño de cada producto, lo que permitió cargar las **patas de las mesas simples** sin preguntarle a Seba, + corregir la caja del Hikari. Análisis que destrabó esto:
