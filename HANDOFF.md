@@ -80,6 +80,24 @@
 
 ---
 
+### [2026-06-13] Producción — Fase 5.0 parcial: patas de mesas simples + caja (deducido)
+
+**Qué se hizo:** se **dedujo del catálogo** (receta→tapa→placa) el modelo/tamaño de cada producto, lo que permitió cargar las **patas de las mesas simples** sin preguntarle a Seba, + corregir la caja del Hikari. Análisis que destrabó esto:
+- **MAD051/052 "MESA REDONDA" = REDONDA 50** (su receta usa TAP005/006, las tapas de 50).
+- Composición de los SETs deducida (SET GOTA = gota grande+chica, SET REDONDA = 40+50, SET XL = 2 gota XL, SET DOBLE BOOM = 2 boomerang, etc.).
+- **FIL001/FIL002 (filo) y VAR001/VAR002 (varilla 14/25mm) ya existen** como SKU en el catálogo.
+
+**Backend — `0081_prod_fase5_patas_simples_caja.sql` (escrita + smoke ok, NO aplicada — espera OK):**
+- `patas_tipo`/`patas_cant` (las corta Pino; tipo 'chica'/'grande' casa con `prod_stock_patas.tamano`): redonda 30/50→grande×3 · redonda 40/boomerang/gota xl→chica×3 · rectangular→grande×4.
+- Caja Hikari (MAD401): N°2 → **N°1**.
+- **Smoke (rolled back):** valores verificados; Hikari/Yori/SETs quedan en patas_cant=0 (pendiente Seba).
+
+**Pendiente de Seba (reducido a 2 críticas + 3 de compras):** patas de los SETs (la suma simple no cierra por la contradicción del SET XL), varilla de hikari/yori (14 vs 25mm). Mensaje armado para pedirle todo de una vez.
+
+**Técnico:** NUEVO `0081`; doc HANDOFF + checklist. **Pendiente: aplicar 0081** (backend-only, sin frontend).
+
+---
+
 ### [2026-06-13] RRHH — DNI editable (sacar la inmutabilidad)
 
 **Qué se hizo:** los DNI de empleados ya cargados **no se podían corregir** (al pasar de CUIL→DNI en 0076 se arrastró la regla vieja de que el CUIL era inmutable post-alta). El Jefe pidió que se puedan **editar/corregir**. Se quitó esa inmutabilidad en backend y frontend.
