@@ -80,6 +80,28 @@
 
 ---
 
+### [2026-06-14] Producción — Fase 5: patas + varilla al BOM (cierre del motor) · llamada Seba
+
+**Contexto:** llamada con Seba que resolvió los 3 puntos abiertos. Lo descifrado:
+- **Varilla:** solo 25 mm (VAR002) para Yori/Hikari; la de 14 mm (VAR001) es de veladores (fuera del sistema todavía).
+- **Tornillos:** NO se convierte a cajas — "trabajamos sobre los tornillos ingresados, no por desglose de cajas; que diga qué se necesita y listo". → La **lista de compras (Fase 6.1) NO se construye**: la vista materia prima (necesita/falta en unidades) + el remito YA es lo pedido. Fase 6 cerrada.
+- **KITs:** los productos usan KITs de instalación (KIT001-009 = soportes + tornillos + tapatornillos), ya cargados y explotando bien.
+
+**HALLAZGO (verificado en base):** `prod_v_demanda_corte` saca la demanda de patas de los **componentes PAT del BOM** (`es_hoja AND sku ~~ 'PAT%'`), **NO** del atributo `prod_producto.patas_cant` cargado en 0081. Resultado: casi ningún producto generaba demanda de patas (no estaban en el BOM). El `patas_cant` de 0081 quedaba muerto. **Corrección:** las patas/varilla tienen que vivir como componentes en `prod_componente`.
+
+**Lógica aplicada (regla validada por el único dato dado, SET REDONDA = PAT005): cada SET = 2 mesas; sus patas = suma de las patas de esas 2 mesas (3 c/u).** Estructura PAT ya cargada: PAT001=1 chica, PAT002=1 grande, PAT003=3 chicas, PAT004=3 grandes, PAT005=PAT003+PAT004.
+
+**Backend — `0085_prod_fase5_patas_varilla_bom.sql` (APLICADA en prod 2026-06-14 + verificada):**
+- Mesas: redonda 30/50 → PAT004 · redonda 40/boomerang/gota XL → PAT003 · rectangular → PAT002 ×4.
+- Sets: SET REDONDA MARMOL → PAT005 (=40+50) · BUMERANG → PAT005 (redonda30 grande + boomerang chica) · SET GOTA/SET XL/DOBLE BOOM → PAT003 ×2 (6 chicas). SET REDONDA (095/096) ya tenía PAT005, no se tocó.
+- Yori → VAR002 ×4 (85 cm/pata, 1 pata/barra) · Hikari → VAR002 ×2 (45 cm/pata, 2 patas/barra). Dato de Seba: 4 patas c/u.
+- Aditivo, idempotente (`ON CONFLICT (padre_sku,hijo_sku) DO UPDATE`).
+- **Verificación prod:** 30 componentes PAT/VAR en BOM · demanda patas chicas (PAT001)=10.560, grandes (PAT002)=8.736 · varilla VAR002=408 barras. Como Yori es 1 pata/barra (forzado) y Hikari 2/barra (óptimo), el conteo de barras YA es óptimo → no hace falta optimizador de varilla aparte.
+
+**Nota:** `patas_cant` (0081) queda como dato informativo; la fuente real del motor son estos componentes. **Producción queda 100% cerrada** salvo veladores (producto futuro, fuera de alcance).
+
+---
+
 ### [2026-06-14] Producción — Fase 6 (parcial, no-Seba): ingreso de materia prima
 
 **Qué se hizo:** la base de Stock/compras que no depende de Seba — poblar insumos + cargar remitos que suman stock. (Lo Seba-dependiente queda fuera: lista de compras con conversión a cajas/rollos, optimizador de varilla, patas de SETs.)

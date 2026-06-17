@@ -327,12 +327,9 @@
 - [x] 🎨 Pantalla "Optimizar" en CNC + Encargado (lp-data `planCorte()`, `CncOptimizacion`) — KPIs + plan por placa con chips de qué produce
 
 ## 5.4 Optimizador lineal (Pino — cutting stock)
-- [ ] Material en múltiples largos: varilla 1m; listón 1.8 / 2.1 / 2.4 / 2.7 / 3m
-- [ ] ⚙️ Mezcla de medidas en una misma pieza (chicas 43cm + grandes 45cm combinadas)
-- [ ] Material se compra y corta entero (lo que sobra es merma)
-- [ ] ⚙️ Algoritmo: por cada largo calcula todas las formas de cortarlo, elige la combinación que cubre la demanda con menor largo total (minimiza merma)
-- [ ] ⚙️ Produce plan de listones/varillas con su patrón
-- [ ] ⚙️ Al confirmar el corte, el material se descuenta del stock
+> **Resuelto por Seba (llamada 2026-06-14):** la varilla **solo es de 25 mm (VAR002)** para Yori/Hikari (la de 14 mm es de veladores, fuera del sistema). Yori 85 cm/pata → 1 pata/barra; Hikari 45 cm/pata → 2 patas/barra. Como Yori es 1 pata/barra (forzado) y Hikari ya va 2/barra, **el conteo de barras del BOM ya es el óptimo** → no hace falta un optimizador lineal de varilla aparte. La varilla quedó como componente VAR002 en el BOM (0085) y la necesidad sale por `prod_v_materia_prima` (408 barras). El listón de pino es otra línea (patas de madera) — los largos múltiples siguen sin modelar, pero el motor de patas ya explota vía PAT.
+- [x] Varilla → VAR002 en el BOM (Yori ×4, Hikari ×2); necesidad en materia prima
+- [ ] Listón de pino en múltiples largos (1.8/2.1/2.4/2.7/3 m) → diferido (no bloqueante)
 
 ## 5.5 Las vistas/consultas que el sistema necesita (📊)
 - [~] 📊 Cola de producción (producto final) — `prod_v_resumen_dia` (por canal = refinamiento)
@@ -439,8 +436,9 @@
 - [~] ⚠️ Filo: cuántos metros lleva cada modelo — **respondido por Seba (2026-06-13):** cm por modelo (ver 0.2). Se compra por rollo de 50 m. Falta SKU de filo + mapeo modelo→MAD.
 - [ ] ⚠️ Melamina: ¿solo termina tapas de CNC o fabrica algún componente propio (soportes)?
 - [ ] ⚠️ Palet de listones: cantidad real varía 600-700, cargar en cada ingreso (no fijar)
-- [x] ⚠️ prod_producto patas — **Seba (2026-06-13, completo):** `patas_cant` 3 por mesa / 4 rectangular; **split por modelo** redonda 30→PAT002 · 40→PAT001 · 50→PAT002 · boomerang→PAT001 · gota xl/chica→PAT001 · gota grande→PAT002 · rectangular→PAT002 · **set xl→PAT001+PAT002** (ver 0.2). Falta: mapeo modelo→MAD para poblar + el `tipo` simple/combinado.
-- [ ] ⚠️ **Veladores + VAR001 (14 mm):** Seba sumó la varilla de 14 mm como materia prima para los **veladores** (producto/modelo nuevo no detallado aún) — definir alcance.
+- [x] ⚠️ Patas al BOM — **RESUELTO (0085, 2026-06-14):** el motor lee patas de los componentes PAT del BOM (no de `patas_cant`). Se agregaron PAT/VAR a los 26 productos con la lógica "set = suma de las 2 mesas" (validada por SET REDONDA=PAT005). Demanda real: 10.560 chicas + 8.736 grandes + 408 barras varilla.
+- [x] ⚠️ **Tornillos por caja — RESUELTO (Seba, llamada 2026-06-14):** NO se convierte a cajas; se trabaja sobre los tornillos ingresados. La materia prima en unidades ES la lista de compras → Fase 6.1 no se construye.
+- [ ] ⚠️ **Veladores + VAR001 (14 mm):** producto futuro, todavía NO está en el sistema (confirmado en llamada). Definir alcance cuando Seba pase los SKUs.
 
 ---
 
@@ -472,8 +470,8 @@
 | 2 — Motor de carga (RPCs) | `[x]` | 16 RPCs + cadena de stock + smoke ✅ |
 | 3 — Frontend por sector | `[x]` | **4 sectores de operario completos** (CNC · Melamina · Pino · Embalaje) + edición 24h + badges + QR cámara + tokens §15 |
 | 4 — Encadenamiento + Realtime | `[x]` | Encadenamiento ✅ (vive en las RPCs `registrar_*`, Fase 2) · Realtime ✅ (0077 publica 11 tablas `prod_*` + `LP_DATA.subscribe`; las 5 pantallas + encargado en vivo). Director (mantenimiento) → Fase 8 · `orders`/`carrier_state` directo = refinamiento |
-| 5 — Explosión + optimizadores | `[~]` | **5a ✅** BOM recursivo (`prod_componente`) + explosión (`prod_v_explosion`) + corte/materia prima (0074, smoke ok, import-skus extendido) · **5b: placas ✅** (`prod_rpc_plan_corte` 0082 + pantalla "Optimizar" en CNC/Encargado) · **varilla ⏳** (cutting-stock lineal, espera 14/25mm de Seba) + atributos SKU §5.0 patas SETs ⏳ |
-| 6 — Stock y compras | `[~]` | **6.0 ✅** insumos poblados (0083, 35 insumos) · **6.2/6.3 ✅** ingreso de materia prima (`prod_rpc_ingresar_remito` 0084 + modal `EncRemitoModal` + historial) · **6.1 ⏳** lista de compras (conversión a cajas/rollos, espera "tornillos por caja" de Seba) · consumo de insumos materia prima = pendiente |
+| 5 — Explosión + optimizadores | `[x]` | **5a ✅** BOM recursivo + explosión + corte/materia prima (0074) · **5b placas ✅** (`prod_rpc_plan_corte` 0082 + pantalla "Optimizar") · **patas+varilla al BOM ✅** (0085: PAT/VAR en los 26 productos, motor explotando 10.560 chicas + 8.736 grandes + 408 barras) · varilla = óptimo sin optimizador aparte (Seba) · listón de pino múltiples largos = diferido no-bloqueante |
+| 6 — Stock y compras | `[x]` | **6.0 ✅** insumos poblados (0083) · **6.2/6.3 ✅** ingreso de materia prima (`prod_rpc_ingresar_remito` 0084 + `EncRemitoModal` + historial) · **6.1 ✅ (Seba: NO conversión a cajas)** — la materia prima en unidades (`prod_v_materia_prima`) ES la lista de compras · consumo automático al producir = refinamiento (hoy el descuento de piezas/patas vive en las RPCs registrar_*) |
 | 7 — Panel del encargado | `[~]` | Inicio (KPIs + cadena en vivo + alertas) ✅ · Sectores (detalle + edición auditada) ✅ · Stock/remitos = pendiente Fase 6 · avance por canal = refinamiento |
 | 8 — Flujos de aprobación | `[x]` | Tab "Aprobar" en el Panel del Encargado: el encargado aprueba (coord), admin recepciona insumos, owner/admin (director) recibe mantenimiento. 0078 amplía gestionar_mantenimiento (encargado) + publica prod_solicitud en realtime. Acciones por rol + badge |
 | 9 — Histórico y director | `[x]` | Tab "Histórico" (solo owner/admin) en el Panel del Encargado: KPIs por período (presets + rango libre), comparativa vs período anterior, serie por día, top productos, mantenimientos recibidos, export Excel. RPC `prod_rpc_director_historico` (0079). PDF + sector×SKU = refinamiento |
