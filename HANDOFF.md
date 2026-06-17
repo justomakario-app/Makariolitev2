@@ -80,6 +80,25 @@
 
 ---
 
+### [2026-06-14] Producción — Fase 5.0: atributos de SKU + fix de KITs (Yori/Hikari) + causa raíz
+
+**Qué se hizo:** los dos puntos pendientes de §5.0 del checklist + un fix de integridad del BOM.
+
+**`0086_prod_fase5_atributos_sku.sql` (APLICADA + verificada):** atributos de SKU del Brief Lógica 2 §4.1/§8.1.
+- `prod_pieza` += `naturaleza` (text), `vendible` (bool def false), `unidad_compra` (bool def false), `contenido_compra` (numeric), `largo` (numeric, cm). `prod_producto` += `naturaleza` (def 'fabricado'), `vendible` (def true). Todo aditivo (`ADD COLUMN IF NOT EXISTS`).
+- Poblado por derivación de prefijo: **naturaleza** = corte 28 (TAP + PAT001/002), fabricado 12 (PAT003/004/005 + 9 KIT), insumo 35 (SOP/TOR/AGU/CAJ/FIL/VAR). **unidad_compra** = los 35 insumos. **contenido_compra** = 50 para FIL (rollo 50 m). **largo** = 100 para VAR (barra 1 m). Los 26 productos quedan vendible=true. → habilita que el módulo **Ventas B2B** filtre por `vendible`.
+- El "árbol de despiece recursivo + tabla prod_componente" (otro ítem §5.0) **ya estaba hecho** (es el motor de Fase 5); esa línea del checklist estaba vieja.
+
+**`0087_prod_fix_kits_yori_hikari.sql` (APLICADA + verificada):** corrige refs de KIT que hacían que la explosión NO diera exacto (cabo 0.2 #8).
+- KIT005 (Yori, MAD300): `TOR005` (rectangular) → **`TOR009`** "TORNILLOS DE YORI". KIT006 (Hikari, MAD401): `TOR006` → **`TOR010`** "TORNILOS HIKARI". KIT007 (Hikari x2, sin uso hoy): → `TOR011` + `AGU005`.
+- KIT003 (rectangular blanco, MAD201) recupera `TOR005`+`TOR006` (estaba incompleto vs KIT004 negro).
+- **Causa raíz:** una pieza fantasma con SKU `'1'` (fila del Excel mal parseada, nombre NULL) se había quedado como "padre" de `TOR005`+`TOR006` — eran justo los del rectangular blanco. Se borró el fantasma (y sus 2 aristas) tras devolverle los tornillos a KIT003.
+- **Verificación prod:** 75 piezas (era 76), 0 naturaleza NULL, 0 fantasma, **0 aristas huérfanas** (ningún componente apunta a un SKU inexistente — BOM consistente).
+
+**Nota de decisión diferida:** "recalcula al abrir jornada / foto de jornada" es decisión de diseño de Fase 4 (hoy demanda = vista en vivo, funciona). No bloqueante.
+
+---
+
 ### [2026-06-14] Producción — Fase 5: patas + varilla al BOM (cierre del motor) · llamada Seba
 
 **Contexto:** llamada con Seba que resolvió los 3 puntos abiertos. Lo descifrado:

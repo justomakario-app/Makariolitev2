@@ -300,18 +300,18 @@
 
 > Lo más sofisticado y **el grueso del Brief Lógica 2**. El cálculo que convierte ventas en demanda de piezas/materiales, y los 2 optimizadores de corte. Hoy NO existe: las pantallas usan vistas simples (`prod_v_resumen_dia`, `prod_v_armables`) como primera aproximación; este motor las enriquece sin romperlas.
 
-## 5.0 Enriquecer el catálogo (Brief Lógica 2 · §4.1, §8.1) — 🔒 prerequisito del motor
-- [ ] 🔒 Atributos nuevos de SKU: **Naturaleza** (fabricado/reventa/corte/insumo), **vendible** (bool), **unidad de compra**, **contenido de compra**, **largo**. Hoy `prod_pieza`/`prod_producto` no los tienen → ampliar schema (aditivo).
-- [ ] 🔒 **Cargar el árbol de despiece recursivo desde el Excel:** la hoja `INSUMOS` ya trae la estructura `TIPO PRODUCTO / CANTIDAD / SKU HIJO` (COMPUESTO→hijos), pero `import-skus` hoy **solo carga SKU+nombre** a `prod_pieza`. Falta una tabla `prod_componente (padre_sku, hijo_sku, cantidad)` y extender `import-skus` para poblarla.
+## 5.0 Enriquecer el catálogo (Brief Lógica 2 · §4.1, §8.1) — ✅ HECHO
+- [x] Atributos nuevos de SKU: **Naturaleza** (fabricado/reventa/corte/insumo), **vendible**, **unidad_compra**, **contenido_compra**, **largo** — **0086** (aditivo). Poblado: naturaleza corte 28 / fabricado 12 / insumo 35; 26 productos vendibles; FIL contenido=50; VAR largo=100. Habilita el filtro `vendible` para Ventas B2B.
+- [x] **Árbol de despiece recursivo:** YA cargado en `prod_componente` (161 filas, es el motor de Fase 5a) — la hoja INSUMOS se cargó vía el import replicado en node. *(Esta línea estaba vieja.)*
 
 ## 5.1 Árbol de despiece recursivo (BOM) — **Fase 5a (migration 0074)**
 - [x] 🔒 Estructura recursiva padre→hijo con cantidad, a cualquier profundidad → tabla **`prod_componente`** (+ RLS) · `import-skus` la puebla desde INSUMOS + "sku x producto"
 - [x] ⚙️ Motor de explosión: ventas pendientes → baja por el árbol multiplicando → **`prod_v_explosion`** (recursiva, guarda de profundidad <20). Smoke validado (MAD×5 → TAP 5, KIT 5, TOR 20, PAT 30).
 - [x] ⚙️ Suma demanda de cada SKU a través de TODAS las ventas pendientes (GROUP BY sku)
-- [~] ⚙️ Clasifica por naturaleza (corte / insumo / producto) — derivada por prefijo + es_hoja en las vistas; atributos formales de SKU (Naturaleza/vendible/unidad compra) = **§5.0 pendiente**
-- [ ] ⚙️ Se recalcula al abrir/recalcular jornada o cuando entran ventas nuevas (hoy es vista en vivo; el "foto de jornada" se decide en Fase 4)
+- [x] ⚙️ Clasifica por naturaleza (corte / insumo / producto) — atributos formales de SKU cargados en **0086** (Naturaleza/vendible/unidad_compra/contenido/largo)
+- [~] ⚙️ Se recalcula al abrir/recalcular jornada o cuando entran ventas nuevas — hoy es **vista en vivo (funciona)**; el "foto de jornada" (snapshot) es decisión de diseño de Fase 4, no bloqueante
 - [x] El corte va aparte del despiece — `prod_v_demanda_corte` (TAP+patas) separado de `prod_v_materia_prima` (insumos a comprar)
-- [ ] ⚠️ **Refs de KIT Yori/Hikari a TOR005/006/007** dependen de la corrección 0.2 #8 (Seba) para que la explosión dé exacto
+- [x] ⚠️ **Refs de KIT Yori/Hikari** — **RESUELTO (0087):** KIT005→TOR009, KIT006→TOR010, KIT003 completado, fantasma SKU '1' eliminado. BOM 100% consistente (0 aristas huérfanas). *(No dependía de Seba: los SKU correctos ya estaban en el catálogo por nombre.)*
 
 ## 5.2 Las dos salidas de la explosión
 - [~] 📊 Producto final: cola de producción por modelo *(hoy `prod_v_resumen_dia`; por canal = refinamiento)*
