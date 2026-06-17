@@ -100,6 +100,8 @@
 - **Acceso:** `data.js` ROLE_NAV del rol `marketing` → landing `marketing` + item `marketing` (web+mobile). app.jsx web ya ruteaba por `canSee('marketing')`; **mobile app.jsx** ahora rutea `marketing` (owner/admin/marketing).
 - Verificación: 6 archivos transpilando; dashboard RPC live ok; backend smoke completo.
 
+**Ajustes post-feedback (2026-06-17, marketing.jsx v3):** (1) **full-height** — el cockpit pasó de tarjeta recortada a `min-height:100vh` edge-to-edge (gradiente de fondo cubre toda `.main-content`, se fue la franja blanca). (2) **Dashboard enriquecido** — agenda del calendario (próximos), pipeline de contenido por estado (barras), mix por plataforma (donut conic-gradient), top ángulos/videos, resumen de publicidad + más KPIs (CTR/CPM/CPR en hero). (3) **Publicidad** ahora muestra TODO: hero con 10 KPIs (inversión/impresiones/alcance/clicks/CTR/CPM/resultados/CPR/ingresos/ROAS) y por campaña 13 métricas (+ frecuencia, CPC, conv. rate). (4) **Toggle claro/oscuro solo en Marketing** — paletas `MKT_DARK`/`MKT_LIGHT` (mismos acentos), estado `tema` persistido en localStorage `mkt_tema`, segmented control en el header; todo tokenizado por `U`.
+
 **Pendiente/futuro:** integración real por API (el schema ya lo soporta vía `fuente`/`externo_id`); QA visual en navegador (login marketing@justomakario.app).
 
 ---

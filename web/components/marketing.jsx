@@ -4,13 +4,21 @@
    (violeta #7C3AED + azul #2563EB). Tokenizado en MKT_UI. Data: MKT_DATA.
    Acceso: owner / admin / marketing. ═════════════════════════════════ */
 
-const MKT_UI = {
+const MKT_DARK = {
   bg:'#0B0B12', panel:'#12121C', surface:'rgba(255,255,255,0.045)', surface2:'rgba(255,255,255,0.07)',
   border:'rgba(255,255,255,0.10)', borderHi:'rgba(124,58,237,0.45)',
   ink:'#F2F2F7', inkSoft:'#A6A6B8', inkMuted:'#6C6C80',
   accent:'#7C3AED', accent2:'#2563EB', cyan:'#22D3EE', green:'#22C55E', amber:'#F59E0B', red:'#EF4444', pink:'#EC4899',
   radius:16, mono:"'JetBrains Mono', ui-monospace, monospace",
 };
+const MKT_LIGHT = {
+  bg:'#F5F6FB', panel:'#FFFFFF', surface:'#FFFFFF', surface2:'#EEF0F6',
+  border:'rgba(10,12,30,0.10)', borderHi:'rgba(124,58,237,0.40)',
+  ink:'#10101A', inkSoft:'#52526A', inkMuted:'#8A8AA0',
+  accent:'#7C3AED', accent2:'#2563EB', cyan:'#0891B2', green:'#16A34A', amber:'#D97706', red:'#DC2626', pink:'#DB2777',
+  radius:16, mono:"'JetBrains Mono', ui-monospace, monospace",
+};
+const MKT_UI = MKT_DARK; /* default; MarketingPage elige según el toggle */
 
 /* nº compacto: 1.2K / 3.4M */
 function mNf(n) {
@@ -131,11 +139,19 @@ function MktChip({ U, c, children }) {
 function MktDashboard({ U }) {
   const toast = useToast();
   const [data, setData] = useState(null);
+  const [eventos, setEventos] = useState([]);
+  const [camps, setCamps] = useState([]);
   const [loading, setLoading] = useState(true);
   const cargar = useCallback(async () => {
     setLoading(true);
-    try { setData(await window.MKT_DATA.dashboard()); }
-    catch (e) { toast.error(e && e.message ? e.message : 'No se pudo cargar'); }
+    try {
+      const [d, ev, cp] = await Promise.all([
+        window.MKT_DATA.dashboard(),
+        window.MKT_DATA.eventos().catch(() => []),
+        window.MKT_DATA.campanias().catch(() => []),
+      ]);
+      setData(d); setEventos(ev || []); setCamps(cp || []);
+    } catch (e) { toast.error(e && e.message ? e.message : 'No se pudo cargar'); }
     finally { setLoading(false); }
   }, [toast]);
   useEffect(() => { cargar(); }, [cargar]);
@@ -145,23 +161,95 @@ function MktDashboard({ U }) {
   const topA = (data && data.top_angulos) || [];
   const topV = (data && data.top_videos) || [];
   const maxA = Math.max(1, ...topA.map(a => Number(a.alcance_total) || 0));
+  const hoy = new Date().toISOString().slice(0, 10);
+  const proximos = eventos.filter(e => (e.fecha || '') >= hoy).slice(0, 6);
+  const pipeline = MKT_EV_ESTADOS.map(es => Object.assign({}, es, { n: eventos.filter(e => (e.estado || 'idea') === es.id).length }));
+  const maxPipe = Math.max(1, ...pipeline.map(p => p.n));
+  const platMix = Object.keys(MKT_PLATS).map(pk => ({ k:pk, label:MKT_PLATS[pk].label, c:MKT_PLATS[pk].c, n: eventos.filter(e => e.plataforma === pk).length })).filter(x => x.n > 0);
+  const totalPlat = platMix.reduce((s, x) => s + x.n, 0) || 1;
+  const paid = camps.reduce((a, c) => ({ gasto:a.gasto + (+c.gasto || 0), clicks:a.clicks + (+c.clicks || 0), impres:a.impres + (+c.impresiones || 0), result:a.result + (+c.resultados || 0), ingr:a.ingr + (+c.ingresos || 0) }), { gasto:0, clicks:0, impres:0, result:0, ingr:0 });
+  const paidCtr = paid.impres > 0 ? (paid.clicks / paid.impres * 100).toFixed(2) : 0;
+  const paidCpm = paid.impres > 0 ? Math.round(paid.gasto / paid.impres * 1000) : 0;
+
+  // donut de plataformas (conic-gradient)
+  let acc = 0;
+  const grad = platMix.length ? platMix.map(x => { const s = acc / totalPlat * 360; acc += x.n; const e = acc / totalPlat * 360; return `${x.c} ${s}deg ${e}deg`; }).join(', ') : `${U.surface2} 0deg 360deg`;
 
   return (
     <div>
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(150px, 1fr))', gap:12, marginBottom:14 }}>
+      {/* KPI hero */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:12, marginBottom:12 }}>
         {MktKpi({ U, label:'Alcance', value:mNf(k.alcance), accent:U.accent })}
         {MktKpi({ U, label:'Reproducciones', value:mNf(k.reproducciones), accent:U.accent2 })}
         {MktKpi({ U, label:'Engagement', value:(k.er_promedio || 0) + '%', accent:U.pink })}
         {MktKpi({ U, label:'Hook rate', value:(k.hook_promedio || 0) + '%', accent:U.cyan })}
       </div>
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(150px, 1fr))', gap:12, marginBottom:20 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:12, marginBottom:20 }}>
         {MktKpi({ U, label:'Seguidores', value:'+' + mNf(k.seguidores), accent:U.green })}
-        {MktKpi({ U, label:'Inversión ads', value:mMoney(k.gasto), accent:U.amber })}
-        {MktKpi({ U, label:'ROAS', value:(k.roas || 0) + 'x', sub: k.resultados ? (k.resultados + ' resultados') : null, accent:U.green })}
-        {MktKpi({ U, label:'Videos · Ángulos', value:(k.n_videos || 0) + ' · ' + (k.n_angulos || 0), accent:U.accent })}
+        {MktKpi({ U, label:'Inversión ads', value:mMoney(k.gasto), sub:(paidCtr + '% CTR · ' + mMoney(paidCpm) + ' CPM'), accent:U.amber })}
+        {MktKpi({ U, label:'ROAS', value:(k.roas || 0) + 'x', sub: k.resultados ? (k.resultados + ' resultados · CPR ' + mMoney(k.cpr)) : null, accent:U.green })}
+        {MktKpi({ U, label:'Videos · Ángulos', value:(k.n_videos || 0) + ' · ' + (k.n_angulos || 0), sub:(k.n_campanias || 0) + ' campañas activas', accent:U.accent })}
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(280px, 1fr))', gap:14 }}>
+      {/* fila de paneles */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(330px, 1fr))', gap:14 }}>
+        {/* Agenda próxima */}
+        <MktGlowCard U={U} accent={U.accent2}>
+          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
+            <Icon n="calendar" s={16} c={U.accent2}/><span style={{ fontSize:13, fontWeight:800 }}>Próximo en el calendario</span>
+          </div>
+          {proximos.length === 0 ? <div style={{ fontSize:12, color:U.inkMuted }}>Nada agendado próximamente.</div> :
+            proximos.map((e, i) => (
+              <div key={e.id || i} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 0', borderBottom: i < proximos.length - 1 ? `1px solid ${U.border}` : 'none' }}>
+                <span style={{ width:7, height:7, borderRadius:2, background:mEstadoC(e.estado), flexShrink:0 }}/>
+                <div style={{ minWidth:0, flex:1 }}>
+                  <div style={{ fontSize:12, fontWeight:700, color:U.ink, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{e.titulo}</div>
+                  <div style={{ fontSize:10, color:U.inkMuted }}>{e.fecha} · {(MKT_PLATS[e.plataforma] || {}).label || e.plataforma} · {e.formato}</div>
+                </div>
+              </div>
+            ))}
+        </MktGlowCard>
+
+        {/* Pipeline de contenido */}
+        <MktGlowCard U={U} accent={U.pink}>
+          <div style={{ fontSize:13, fontWeight:800, marginBottom:12 }}>Pipeline de contenido</div>
+          {pipeline.map(p => (
+            <div key={p.id} style={{ marginBottom:9 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', marginBottom:3 }}>
+                <span style={{ fontSize:11, color:U.inkSoft }}>{p.label}</span>
+                <span style={{ fontSize:11, fontFamily:U.mono, color:U.ink }}>{p.n}</span>
+              </div>
+              <div style={{ height:5, background:U.surface2, borderRadius:999, overflow:'hidden' }}>
+                <div style={{ height:'100%', width:(p.n / maxPipe * 100) + '%', background:p.c }}/>
+              </div>
+            </div>
+          ))}
+        </MktGlowCard>
+
+        {/* Mix por plataforma (donut) */}
+        <MktGlowCard U={U} accent={U.cyan}>
+          <div style={{ fontSize:13, fontWeight:800, marginBottom:12 }}>Contenido por plataforma</div>
+          {platMix.length === 0 ? <div style={{ fontSize:12, color:U.inkMuted }}>Sin contenido agendado.</div> : (
+            <div style={{ display:'flex', alignItems:'center', gap:18 }}>
+              <div style={{ width:104, height:104, borderRadius:'50%', background:`conic-gradient(${grad})`, flexShrink:0, position:'relative' }}>
+                <div style={{ position:'absolute', inset:13, borderRadius:'50%', background:U.bg, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <span style={{ fontSize:18, fontWeight:800, fontFamily:U.mono }}>{totalPlat}</span>
+                </div>
+              </div>
+              <div style={{ flex:1 }}>
+                {platMix.map(x => (
+                  <div key={x.k} style={{ display:'flex', alignItems:'center', gap:7, marginBottom:6 }}>
+                    <span style={{ width:9, height:9, borderRadius:3, background:x.c }}/>
+                    <span style={{ fontSize:11.5, color:U.inkSoft, flex:1 }}>{x.label}</span>
+                    <span style={{ fontSize:11.5, fontFamily:U.mono, color:U.ink }}>{x.n} · {Math.round(x.n / totalPlat * 100)}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </MktGlowCard>
+
+        {/* Top ángulos */}
         <MktGlowCard U={U} accent={U.accent}>
           <div style={{ fontSize:13, fontWeight:800, marginBottom:12 }}>Top ángulos por alcance</div>
           {topA.length === 0 ? <div style={{ fontSize:12, color:U.inkMuted }}>Sin datos todavía.</div> :
@@ -178,6 +266,8 @@ function MktDashboard({ U }) {
               </div>
             ))}
         </MktGlowCard>
+
+        {/* Top videos */}
         <MktGlowCard U={U} accent={U.cyan}>
           <div style={{ fontSize:13, fontWeight:800, marginBottom:12 }}>Top videos por engagement</div>
           {topV.length === 0 ? <div style={{ fontSize:12, color:U.inkMuted }}>Sin datos todavía.</div> :
@@ -191,6 +281,21 @@ function MktDashboard({ U }) {
                 <span style={{ fontSize:13, fontWeight:800, fontFamily:U.mono, color:U.pink }}>{v.er_pct || 0}%</span>
               </div>
             ))}
+        </MktGlowCard>
+
+        {/* Publicidad resumen */}
+        <MktGlowCard U={U} accent={U.amber}>
+          <div style={{ fontSize:13, fontWeight:800, marginBottom:12 }}>Publicidad · resumen</div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+            {[['Inversión', mMoney(paid.gasto), U.amber], ['Impresiones', mNf(paid.impres), U.inkSoft],
+              ['Clicks', mNf(paid.clicks), U.accent2], ['CTR', paidCtr + '%', U.cyan],
+              ['Resultados', mNf(paid.result), U.accent2], ['Ingresos', mMoney(paid.ingr), U.green]].map(([l, val, col], i) => (
+              <div key={i}>
+                <div style={{ fontSize:9, fontWeight:800, letterSpacing:'.08em', textTransform:'uppercase', color:U.inkMuted }}>{l}</div>
+                <div style={{ fontSize:17, fontWeight:800, fontFamily:U.mono, color:col, marginTop:3 }}>{val}</div>
+              </div>
+            ))}
+          </div>
         </MktGlowCard>
       </div>
     </div>
@@ -668,17 +773,27 @@ function MktPublicidad({ U }) {
   }, [toast]);
   useEffect(() => { cargar(); }, [cargar]);
 
-  const tot = camps.reduce((a, c) => ({ gasto:a.gasto + (Number(c.gasto) || 0), result:a.result + (Number(c.resultados) || 0), ingr:a.ingr + (Number(c.ingresos) || 0) }), { gasto:0, result:0, ingr:0 });
+  const tot = camps.reduce((a, c) => ({ gasto:a.gasto + (+c.gasto || 0), result:a.result + (+c.resultados || 0), ingr:a.ingr + (+c.ingresos || 0),
+    impres:a.impres + (+c.impresiones || 0), clicks:a.clicks + (+c.clicks || 0), alcance:a.alcance + (+c.alcance || 0) }),
+    { gasto:0, result:0, ingr:0, impres:0, clicks:0, alcance:0 });
   const roas = tot.gasto > 0 ? (tot.ingr / tot.gasto).toFixed(2) : 0;
   const cpr = tot.result > 0 ? Math.round(tot.gasto / tot.result) : 0;
+  const ctrTot = tot.impres > 0 ? (tot.clicks / tot.impres * 100).toFixed(2) : 0;
+  const cpmTot = tot.impres > 0 ? Math.round(tot.gasto / tot.impres * 1000) : 0;
   const estC = (e) => e === 'activa' ? U.green : (e === 'pausada' ? U.amber : U.inkMuted);
 
   return (
     <div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(150px, 1fr))', gap:12, marginBottom:16 }}>
         {MktKpi({ U, label:'Inversión total', value:mMoney(tot.gasto), accent:U.amber })}
+        {MktKpi({ U, label:'Impresiones', value:mNf(tot.impres), accent:U.inkSoft })}
+        {MktKpi({ U, label:'Alcance', value:mNf(tot.alcance), accent:U.accent })}
+        {MktKpi({ U, label:'Clicks', value:mNf(tot.clicks), accent:U.accent2 })}
+        {MktKpi({ U, label:'CTR', value:ctrTot + '%', accent:U.cyan })}
+        {MktKpi({ U, label:'CPM', value:mMoney(cpmTot), accent:U.inkSoft })}
         {MktKpi({ U, label:'Resultados', value:mNf(tot.result), accent:U.accent2 })}
         {MktKpi({ U, label:'Costo / resultado', value:mMoney(cpr), accent:U.pink })}
+        {MktKpi({ U, label:'Ingresos', value:mMoney(tot.ingr), accent:U.green })}
         {MktKpi({ U, label:'ROAS', value:roas + 'x', accent:U.green })}
       </div>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
@@ -702,9 +817,13 @@ function MktPublicidad({ U }) {
                   <MktBtn U={U} small kind="danger" onClick={async () => { if (window.confirm('¿Eliminar campaña?')) { try { await window.MKT_DATA.deleteCampania(c.id); toast.success('Eliminada'); cargar(); } catch (e) { toast.error(e.message); } } }}><Icon n="trash" s={13} c={U.red}/></MktBtn>
                 </div>
               </div>
-              <div style={{ display:'flex', flexWrap:'wrap', gap:18, marginTop:12 }}>
-                {[['Gasto', mMoney(c.gasto), U.amber], ['CPM', mMoney(c.cpm), U.inkSoft], ['CPC', mMoney(c.cpc), U.inkSoft],
-                  ['CTR', (c.ctr || 0) + '%', U.cyan], ['Resultados', mNf(c.resultados), U.accent2], ['CPR', mMoney(c.cpr), U.pink], ['ROAS', (c.roas || 0) + 'x', U.green]].map(([l, v, col], i) => (
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(82px, 1fr))', gap:12, marginTop:12 }}>
+                {[['Gasto', mMoney(c.gasto), U.amber], ['Impresiones', mNf(c.impresiones), U.inkSoft], ['Alcance', mNf(c.alcance), U.inkSoft],
+                  ['Frecuencia', (c.frecuencia != null ? Number(c.frecuencia).toFixed(1) : '—'), U.inkSoft], ['Clicks', mNf(c.clicks), U.accent2],
+                  ['CTR', (c.ctr || 0) + '%', U.cyan], ['CPM', mMoney(c.cpm), U.inkSoft], ['CPC', mMoney(c.cpc), U.inkSoft],
+                  ['Resultados', mNf(c.resultados), U.accent2], ['CPR', mMoney(c.cpr), U.pink],
+                  ['Conv.', (Number(c.clicks) > 0 ? (Number(c.resultados) / Number(c.clicks) * 100).toFixed(1) : '0') + '%', U.cyan],
+                  ['Ingresos', mMoney(c.ingresos), U.green], ['ROAS', (c.roas || 0) + 'x', U.green]].map(([l, v, col], i) => (
                   <div key={i}><div style={{ fontSize:14, fontWeight:800, fontFamily:U.mono, color:col }}>{v}</div><div style={{ fontSize:8.5, color:U.inkMuted, textTransform:'uppercase', letterSpacing:'.06em' }}>{l}</div></div>
                 ))}
               </div>
@@ -866,10 +985,14 @@ function MktPrioridadModal({ U, onClose, onSaved, toast }) {
 
 /* ════════════ HUB ════════════ */
 function MarketingPage() {
-  const U = MKT_UI;
   const M = window.useMockData ? window.useMockData() : { user:{} };
   const role = ((M.user || {}).role || '').toLowerCase();
   const [tab, setTab] = useState('dashboard');
+  const [tema, setTema] = useState(() => {
+    try { return localStorage.getItem('mkt_tema') || 'dark'; } catch (e) { return 'dark'; }
+  });
+  const U = tema === 'light' ? MKT_LIGHT : MKT_DARK;
+  const setTemaP = (t) => { setTema(t); try { localStorage.setItem('mkt_tema', t); } catch (e) {} };
 
   const TABS = [
     { id:'dashboard', label:'Dashboard', icon:'chart' },
@@ -884,42 +1007,54 @@ function MarketingPage() {
   }
 
   return (
-    <div style={{ padding:'0 24px 28px' }}>
-      <div style={{ background:`radial-gradient(1200px 400px at 0% -10%, ${U.accent}22, transparent), ${U.bg}`,
-        border:`1px solid ${U.border}`, borderRadius:20, padding:'20px 22px', color:U.ink, marginTop:8 }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16, flexWrap:'wrap', gap:10 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:11 }}>
-            <span style={{ width:38, height:38, borderRadius:11, display:'flex', alignItems:'center', justifyContent:'center',
-              background:`linear-gradient(135deg, ${U.accent}, ${U.accent2})`, boxShadow:`0 8px 24px ${U.accent}55` }}>
-              <Icon n="megaphone" s={20} c="#fff"/>
-            </span>
-            <div>
-              <div style={{ fontSize:17, fontWeight:800, letterSpacing:'.01em' }}>Marketing</div>
-              <div style={{ fontSize:10.5, fontWeight:700, letterSpacing:'.16em', textTransform:'uppercase', color:U.inkMuted }}>Command Center</div>
-            </div>
+    <div style={{ minHeight:'100vh', boxSizing:'border-box', color:U.ink, padding:'20px 26px 40px',
+      background:`radial-gradient(1100px 520px at 0% -8%, ${U.accent}26, transparent), radial-gradient(950px 480px at 100% -4%, ${U.accent2}1c, transparent), ${U.bg}` }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:18, flexWrap:'wrap', gap:10 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+          <span style={{ width:40, height:40, borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center',
+            background:`linear-gradient(135deg, ${U.accent}, ${U.accent2})`, boxShadow:`0 8px 26px ${U.accent}55` }}>
+            <Icon n="megaphone" s={21} c="#fff"/>
+          </span>
+          <div>
+            <div style={{ fontSize:18, fontWeight:800, letterSpacing:'.01em' }}>Marketing</div>
+            <div style={{ fontSize:10.5, fontWeight:700, letterSpacing:'.18em', textTransform:'uppercase', color:U.inkMuted }}>Command Center</div>
           </div>
         </div>
-        <div style={{ display:'flex', gap:7, marginBottom:20, flexWrap:'wrap' }}>
-          {TABS.map(t => {
-            const on = tab === t.id;
+        <div style={{ display:'flex', gap:4, background:U.surface, border:`1px solid ${U.border}`, borderRadius:10, padding:3 }}>
+          {[['dark', 'Oscuro', 'eye-off'], ['light', 'Claro', 'eye']].map(opt => {
+            const on = tema === opt[0];
             return (
-              <button key={t.id} onClick={() => setTab(t.id)}
-                style={{ border:`1px solid ${on ? U.borderHi : U.border}`, cursor:'pointer', borderRadius:11,
-                  padding:'9px 14px', display:'inline-flex', alignItems:'center', gap:7, fontSize:12.5, fontWeight: on ? 800 : 600,
-                  color: on ? '#fff' : U.inkSoft,
-                  background: on ? `linear-gradient(135deg, ${U.accent}, ${U.accent2})` : U.surface,
-                  boxShadow: on ? `0 6px 20px ${U.accent}44` : 'none', transition:'all .15s ease' }}>
-                <Icon n={t.icon} s={15} c={on ? '#fff' : U.inkMuted}/> {t.label}
+              <button key={opt[0]} onClick={() => setTemaP(opt[0])}
+                style={{ border:'none', cursor:'pointer', borderRadius:8, padding:'6px 12px', fontSize:11.5, fontWeight:700,
+                  display:'inline-flex', alignItems:'center', gap:6,
+                  background: on ? `linear-gradient(135deg, ${U.accent}, ${U.accent2})` : 'transparent',
+                  color: on ? '#fff' : U.inkSoft }}>
+                <Icon n={opt[2]} s={13} c={on ? '#fff' : U.inkMuted}/> {opt[1]}
               </button>
             );
           })}
         </div>
-        {tab === 'dashboard' ? <MktDashboard U={U}/> :
-         tab === 'calendario' ? <MktCalendario U={U}/> :
-         tab === 'angulos' ? <MktAngulos U={U}/> :
-         tab === 'publicidad' ? <MktPublicidad U={U}/> :
-         <MktPrioridades U={U}/>}
       </div>
+      <div style={{ display:'flex', gap:7, marginBottom:22, flexWrap:'wrap' }}>
+        {TABS.map(t => {
+          const on = tab === t.id;
+          return (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              style={{ border:`1px solid ${on ? U.borderHi : U.border}`, cursor:'pointer', borderRadius:11,
+                padding:'10px 16px', display:'inline-flex', alignItems:'center', gap:8, fontSize:13, fontWeight: on ? 800 : 600,
+                color: on ? '#fff' : U.inkSoft,
+                background: on ? `linear-gradient(135deg, ${U.accent}, ${U.accent2})` : U.surface,
+                boxShadow: on ? `0 6px 20px ${U.accent}44` : 'none', transition:'all .15s ease' }}>
+              <Icon n={t.icon} s={15} c={on ? '#fff' : U.inkMuted}/> {t.label}
+            </button>
+          );
+        })}
+      </div>
+      {tab === 'dashboard' ? <MktDashboard U={U}/> :
+       tab === 'calendario' ? <MktCalendario U={U}/> :
+       tab === 'angulos' ? <MktAngulos U={U}/> :
+       tab === 'publicidad' ? <MktPublicidad U={U}/> :
+       <MktPrioridades U={U}/>}
     </div>
   );
 }
