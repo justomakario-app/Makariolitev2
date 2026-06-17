@@ -41,6 +41,9 @@ window.LP_DATA = window.LP_DATA || (function () {
     resumenDia:        () => sel('prod_v_resumen_dia', 'producto_sku, nombre, color, pendiente', q => q.order('pendiente', { ascending: false })),
     prioridadMelamina: () => sel('prod_v_prioridad_melamina', 'pieza_sku, demanda, stock_propio, falta, crudo_cnc', q => q.order('falta', { ascending: false })),
     demandaTap:        () => sel('prod_v_demanda_tap', 'pieza_sku, demanda', q => q.order('demanda', { ascending: false })),
+    // Fase 5.5: lista de compras (materia prima con falta, en unidades) y orden por sector (cola de cada sector).
+    compras:           () => sel('prod_v_compras', 'sku, nombre, categoria, unidad, necesita, stock, falta', q => q.order('falta', { ascending: false })),
+    ordenSector:       () => sel('prod_v_orden_sector', 'sector, sku, nombre, cantidad', q => q.order('cantidad', { ascending: false })),
 
     // ── CNC ──
     // Plan de corte óptimo (Fase 5b): minimiza cantidad de placas (y a igualdad,

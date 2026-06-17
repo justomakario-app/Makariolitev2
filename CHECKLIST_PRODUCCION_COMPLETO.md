@@ -336,8 +336,8 @@
 - [x] 📊 Demanda explotada completa (todos los niveles del árbol) — **`prod_v_explosion`**
 - [x] 📊 Demanda de piezas de corte (tapas + patas) — **`prod_v_demanda_corte`**
 - [x] 📊 Materia prima a reponer (insumos vs stock) — **`prod_v_materia_prima`**
-- [ ] 📊 Compras (materia prima convertida a unidades de compra) → **Fase 6** (unidad de compra)
-- [ ] 📊 Orden por sector (demanda repartida en colas de cada sector) → derivable de la explosión (pendiente)
+- [x] 📊 Compras → **`prod_v_compras` (0088)**: materia prima con falta, en **unidades de consumo** (Seba: NO se convierte a cajas; "qué se necesita y listo"). 10 ítems.
+- [x] 📊 Orden por sector → **`prod_v_orden_sector` (0088)**: cola de cada sector derivada de la explosión (CNC 22 · Melamina 34 · Pino 2 · Embalaje 16). Helpers `lp-data.compras()`/`ordenSector()`.
 
 ---
 

@@ -80,6 +80,21 @@
 
 ---
 
+### [2026-06-14] Producción — Fase 5.5: vistas Compras + Orden por sector (cierre capa de vistas)
+
+**Qué se hizo:** las 2 vistas que faltaban de §5.5 (las demás ya existían).
+
+**`0088_prod_fase5_vistas_compras_orden_sector.sql` (APLICADA + verificada):**
+- **`prod_v_compras`** — lista de compras en **unidades de consumo** (Seba: NO se convierte a cajas/rollos; "qué se necesita y listo"). Es `prod_v_materia_prima` con `falta > 0`. Prod: 10 ítems (TOR002 33.324, TOR001 14.804, SOP001 14.268…). Los números reflejan el BOM ya completo (kits + patas + varilla).
+- **`prod_v_orden_sector`** — cola de cada sector hoy, derivada de la explosión (reusa las vistas por sector, sin recalcular): CNC corta tapas · Melamina termina (falta vs su stock) · Pino patas · Embalaje productos finales. Prod: cnc 22 · melamina 34 · pino 2 · embalaje 16.
+- Ambas solo lectura, derivadas, GRANT SELECT anon+authenticated (igual que el resto de prod_v_*).
+
+**Frontend — `lp-data.jsx` (web+mobile, v10→v11):** helpers `compras()` y `ordenSector()` para consumir las vistas. *(Todavía ninguna pantalla las muestra — pendiente de decisión: surfacearlas en el panel del Encargado.)*
+
+**Estado:** la capa de vistas de §5.5 queda cerrada. El desglose de la cola por canal es refinamiento, no pendiente.
+
+---
+
 ### [2026-06-14] Producción — Fase 5.0: atributos de SKU + fix de KITs (Yori/Hikari) + causa raíz
 
 **Qué se hizo:** los dos puntos pendientes de §5.0 del checklist + un fix de integridad del BOM.
