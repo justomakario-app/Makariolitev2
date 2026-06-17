@@ -80,6 +80,20 @@
 
 ---
 
+### [2026-06-14] Producción — Fase 6.2: consumo de insumos al embalar (cierre del loop de stock)
+
+**Qué se hizo:** el descuento automático de insumos al embalar, único pendiente real de Fase 6 (el resto ya estaba o lo resolvió la llamada de Seba: 6.1 conversión a cajas = NO se hace).
+
+**`0089_prod_fase6_consumo_insumos.sql` (APLICADA + verificada):**
+- TRIGGER `prod_embalaje_consumo` AFTER INSERT en `prod_embalaje` → función `prod_tg_embalaje_consumo` (SECURITY DEFINER). Explota el BOM del producto (CTE recursiva, guarda lvl<20) a sus **hojas atómicas**, las junta con `prod_insumo` y descuenta `stock_actual -= qty × unidades`.
+- **No toca la RPC core** (`prod_rpc_registrar_embalaje`): es aditivo. El join a `prod_insumo` deja afuera tapas/patas (viven en `prod_stock_*`) → sin doble descuento. El trigger `prod_insumo_alerta` existente dispara las alertas solo. Permite stock negativo (déficit honesto).
+- **Smoke (rolled back):** embalar 10× MAD061 (SET GOTA) descontó CAJ001 −10, SOP001 −60, TOR001 −40, TOR002 −100 (exacto vs BOM). Patas intactas. Verificación prod: función + trigger existen.
+- **Limitación conocida:** descuento solo al INSERT (la edición de unidades no reajusta el consumo — raro, dentro de 24h; se concilia aparte si hace falta).
+
+**Cierre Fase 6:** remito suma (0084) → embalaje descuenta (0089). 6.1 conversión a cajas = no se hace (Seba); schema unidad_compra/contenido_compra en 0086; reposición/faltante via prod_v_materia_prima + prod_v_compras. **Fase 6 cerrada de punta a punta.**
+
+---
+
 ### [2026-06-14] Producción — Fase 5.5: vistas Compras + Orden por sector (cierre capa de vistas)
 
 **Qué se hizo:** las 2 vistas que faltaban de §5.5 (las demás ya existían).

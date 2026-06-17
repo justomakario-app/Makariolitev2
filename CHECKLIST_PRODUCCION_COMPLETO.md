@@ -343,20 +343,20 @@
 
 # FASE 6 — STOCK, MATERIA PRIMA Y COMPRAS (Brief 1 · sección 8)
 
-## 6.1 Unidad de compra ≠ unidad de consumo
-- [ ] Cada SKU guarda unidad de compra + cuántas unidades de consumo trae
-- [ ] ⚙️ Conversión: filo metros→rollos (50m), listón unidad→palet (600-700), tornillos→cajas
-- [ ] ⚙️ Redondeo para arriba (no se compra fraccionado): 120m de filo = 3 rollos
+## 6.1 Unidad de compra ≠ unidad de consumo — **Seba (llamada): NO se convierte; se trabaja en unidades**
+- [x] Cada SKU guarda unidad de compra + contenido — schema en **0086** (`unidad_compra` bool, `contenido_compra`); filo `contenido_compra=50`
+- [~] ⚙️ Conversión: **tornillos→cajas NO se hace** (Seba, explícito); filo metros→rollos (50m) queda como dato (`contenido_compra`) para cuando filo entre al BOM; listón→palet espera el material (no es SKU aún)
+- [x] ⚙️ Redondeo — n/a: al trabajar en unidades de consumo no se compra fraccionado por definición
 
 ## 6.0 Poblar insumos — ✅ `0083` (aplicado 2026-06-14)
 - [x] `prod_insumo` poblado derivando de `prod_pieza`: 35 insumos (TOR/CAJ/SOP/AGU/FIL/VAR) con categoría/sector/unidad. La vista materia prima ya muestra nombre/unidad.
 
 ## 6.2 Flujo de stock
 - [x] Ingreso: encargado carga mercadería como materia prima → ⚙️ suma stock + registra entrada — **`prod_rpc_ingresar_remito` (0084)** + cabecera en `prod_remito`
-- [ ] ⚙️ Consumo: al producir/cortar, descuenta insumos + registra cada salida *(las RPCs registrar_* descuentan stock de piezas/patas; descuento de insumos materia prima = pendiente)*
-- [ ] ⚙️ Reposición: compara necesidad de jornada vs stock → calcula faltante *(la vista `prod_v_materia_prima` ya da necesita/stock/falta)*
-- [ ] 📊 Faltante convertido a unidades de compra = lista de compras → **espera "tornillos por caja" de Seba (Fase 6.1)**
-- [~] ⚙️ Trazabilidad: la entrada queda en `prod_remito` (proveedor/nro/fecha/items/quién); salidas = pendiente
+- [x] ⚙️ Consumo: al embalar descuenta los insumos del BOM → **trigger `prod_embalaje_consumo` (0089)**. Smoke: 10× SET GOTA → CAJ001 −10, SOP001 −60, TOR001 −40, TOR002 −100. *(registrar_* ya descontaba piezas/patas; ahora también los insumos)*
+- [x] ⚙️ Reposición: `prod_v_materia_prima` da necesita/stock/falta
+- [x] 📊 Faltante = lista de compras → **`prod_v_compras` (0088)** en unidades (Seba: sin conversión a cajas)
+- [~] ⚙️ Trazabilidad: entrada en `prod_remito`; salida derivable de `prod_embalaje` + BOM (registro explícito de salida = refinamiento)
 
 ## 6.3 Pantalla de ingreso de materia prima
 - [x] Pantalla "Ingreso de materia prima" — modal `EncRemitoModal` en Encargado → Stock (selector agrupado + cantidades + historial "Últimos remitos"), suma stock vía RPC
