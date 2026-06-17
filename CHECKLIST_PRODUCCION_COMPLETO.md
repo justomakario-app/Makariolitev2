@@ -493,7 +493,7 @@
 - [ ] ⚠️ **Hub Producción → tab "De fábrica"** — stub sin definir alcance. Decidir contenido con el negocio.
 
 ## Otras áreas (módulo Gestión)
-- [ ] **Marketing — falta construirla COMPLETA.** 2 tabs vacías: `Calendario de actividades`, `Reportes`. (`web/components/marketing.jsx`, solo owner.)
+- [x] **Marketing — CONSTRUIDA COMPLETA (2026-06-17).** Cockpit futurista con 5 módulos: Dashboard · Calendario (grilla mensual) · Ángulos de venta (drill-down ángulo→video→métricas) · Publicidad (CPM/CPC/CTR/CPR/ROAS) · Prioridades (con notificación). Backend 0090-0094 (7 tablas, 3 vistas, 14 RPCs, API-ready). Cuenta `marketing@justomakario.app`. Acceso por rol `marketing`/admin/owner.
 - [ ] **Ventas — faltan 3 de 9 tabs:** `Facturación`, `Ventas ML`, `Ventas tienda`. (Las otras 6 ✅: Alta clientes, Cta cte, Presupuestos, Remitos, Clientes mayoristas, Base de productos.)
 - [ ] **Finanzas — falta 1 tab:** `Plan de cuentas`. (Cash Flow / Egresos / Cheques ✅.)
 - [ ] **Sistema (Config) — `Backup y exportación`** próximamente (hoy se hace desde Supabase Studio).

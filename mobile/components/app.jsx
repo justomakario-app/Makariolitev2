@@ -79,6 +79,11 @@ function App() {
     if (p === 'produccion')  return <ProduccionPage/>;
     if (p === 'notificaciones') return <NotificacionesPage/>;
     if (p === 'perfil')      return <PerfilPage onLogout={handleLogout}/>;
+    if (p === 'marketing') {
+      const role = (M.user.role || '').toLowerCase();
+      if (['owner','admin','marketing'].indexOf(role) < 0) return <DashboardPage onNav={setPage}/>;
+      return window.MarketingPage ? <window.MarketingPage/> : <DashboardPage onNav={setPage}/>;
+    }
     if (['colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino'].includes(p))
       return <CarrierPage channel={p} onBack={() => setPage('dashboard')}/>;
     if (p === 'stock') {

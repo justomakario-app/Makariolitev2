@@ -80,6 +80,30 @@
 
 ---
 
+### [2026-06-17] MARKETING — Módulo completo (5 sub-áreas, cockpit futurista)
+
+**Qué se hizo:** el módulo de Marketing entero, de cero, en un "command center" oscuro/futurista con los acentos de marca (violeta #7C3AED + azul #2563EB). Pedido del Jefe: manual ahora pero **API-ready**, 4 plataformas (Meta Ads/IG/TikTok/YouTube), moderno/premium.
+
+**Cuenta creada:** `marketing@justomakario.app` / `Makario2026` (rol `marketing`) — ver [[reference-cuentas-produccion]].
+
+**Backend (migraciones 0090-0094, aplicadas + verificadas en prod — 7 tablas, 3 vistas, 14 RPCs):**
+- **0090 Ángulos:** `mkt_angulo`, `mkt_video`, `mkt_video_metrica` (snapshots con `fuente` manual/api + `externo_id` → API-ready). Vistas `mkt_v_video_resumen` (ER%, hook rate calculados) y `mkt_v_angulo_resumen` (agregados). `security_invoker` + RLS owner/admin/marketing. RPCs upsert/delete ángulo+video, cargar_metrica.
+- **0091 Calendario:** `mkt_evento` (fecha, plataforma, formato, objetivo, **angulo_id**, material/copy/arte/notas, estado pipeline idea→publicado). RPCs upsert/delete.
+- **0092 Publicidad:** `mkt_campania` + `mkt_campania_metrica`; vista `mkt_v_campania_resumen` calcula **CPM/CPC/CTR/CPR/ROAS**. RPCs upsert/delete campaña + cargar_metrica.
+- **0093 Prioridades:** `mkt_prioridad`; `mkt_rpc_crear_prioridad` inserta + **notifica** (tabla `notifications`, tipo 'sistema') al owner + encargado de marketing. RPCs gestionar/delete.
+- **0094 Dashboard:** RPC `mkt_rpc_dashboard` agrega orgánico + pago + ángulos (KPIs + top ángulos/videos).
+- Smoke (rolled back): ER%/hook/CPM/CPC/CTR/CPR/ROAS exactos, notificados=3 (owners), dashboard ok.
+
+**Frontend (web+mobile, espejo salvo padding; transpila con babel standalone):**
+- **`mkt-data.jsx` (v1, nuevo):** `window.MKT_DATA` — helpers de los 5 módulos.
+- **`marketing.jsx` (v2, reescrito):** cockpit oscuro tokenizado `MKT_UI`. Hub con 5 tabs pill (glow). **Dashboard** (KPI hero + top ángulos/videos), **Calendario** (grilla mensual real con chips por estado/plataforma + modal de contenido), **Ángulos** (drill-down ángulo→video→métricas con 3 niveles + modales + mini-chart de evolución), **Publicidad** (campañas + CPM/CPC/CTR/CPR/ROAS + modales), **Prioridades** (tablero 3 columnas + crear/notificar).
+- **Acceso:** `data.js` ROLE_NAV del rol `marketing` → landing `marketing` + item `marketing` (web+mobile). app.jsx web ya ruteaba por `canSee('marketing')`; **mobile app.jsx** ahora rutea `marketing` (owner/admin/marketing).
+- Verificación: 6 archivos transpilando; dashboard RPC live ok; backend smoke completo.
+
+**Pendiente/futuro:** integración real por API (el schema ya lo soporta vía `fuente`/`externo_id`); QA visual en navegador (login marketing@justomakario.app).
+
+---
+
 ### [2026-06-14] Producción — Fase 6.2: consumo de insumos al embalar (cierre del loop de stock)
 
 **Qué se hizo:** el descuento automático de insumos al embalar, único pendiente real de Fase 6 (el resto ya estaba o lo resolvió la llamada de Seba: 6.1 conversión a cajas = NO se hace).
