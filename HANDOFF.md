@@ -80,6 +80,18 @@
 
 ---
 
+### [2026-06-18] Producción — notificaciones de la cadena de mantenimiento (Fase 8)
+
+**Qué se hizo:** cerrar el cabo "Director escucha prod_mantenimiento (recibido_director)". El panel del director (owner/admin → Panel del Encargado) ya escuchaba `prod_mantenimiento` en vivo, pero **no le llegaba notificación** al escalársele. Se agregó la cadena.
+
+**`0095_prod_mantenimiento_notificaciones.sql` (APLICADA + verificada, aditivo sobre las RPCs existentes):**
+- `prod_rpc_reportar_mantenimiento`: al reportar (cualquier sector) → INSERT en `notifications` (tipo `produccion`) a **owner+admin+encargado** (menos el que reporta). Título con urgencia + sector; link `produccion-hub`.
+- `prod_rpc_gestionar_mantenimiento`: al pasar a `aprobado_coord` (encargado aprueba) → notifica a **owner/admin (director)** que hay un mantenimiento para recibir.
+- Smoke (rolled back): reporte → 9 notificaciones (3 owner + 5 admin + 1 encargado); aprobar coord → +8 al director. Verificación prod: ambas RPCs contienen el INSERT.
+- Sin frontend: usa la campanita/Notificaciones existente.
+
+---
+
 ### [2026-06-17] Producción — tab "De fábrica" (panorama operativo)
 
 **Qué se hizo:** la tab "De fábrica" del Hub de Producción era un stub sin definir. Los 2 briefs NO la especificaban (lo confirmé), así que el alcance se definió por lógica: **panorama operativo de la fábrica hoy**, que además surfacea las 2 vistas de §5.5 que estaban construidas pero sin pantalla.

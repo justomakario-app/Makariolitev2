@@ -291,7 +291,7 @@
 - [x] 🔴 Embalaje escucha prod_stock_melamina + prod_stock_patas + prod_embalaje + prod_jornada
 - [x] 🔴 CNC escucha prod_corte + prod_jornada · Pino escucha prod_stock_patas + prod_pino + prod_jornada
 - [x] 🔴 Encargado escucha los 4 sectores + 4 stocks + prod_alerta + prod_mantenimiento + prod_jornada (centro de control en vivo)
-- [ ] 🔴 Director escucha prod_mantenimiento (estado recibido_director) → **Fase 8** (el panel del director aún no existe)
+- [x] 🔴 Director escucha prod_mantenimiento — **RESUELTO (0095):** el panel del director (owner/admin → Panel del Encargado) ya escuchaba `prod_mantenimiento` en vivo; ahora además **le llega notificación**: al reportar → encargado+dirección; al aprobar coord (`aprobado_coord`) → al director (owner/admin). Tabla `notifications` (tipo `produccion`).
 - [~] 🔴 Todos los sectores escuchan cambios en pedidos (resumen del día) — hoy el resumen se re-fetchea ante cualquier cambio `prod_*`; escuchar `orders`/`carrier_state` directo (tablas existentes) requiere revisar su RLS para los roles de sector → **refinamiento diferido**
 
 ---
