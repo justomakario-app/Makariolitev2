@@ -80,6 +80,21 @@
 
 ---
 
+### [2026-06-17] Producción — tab "De fábrica" (panorama operativo)
+
+**Qué se hizo:** la tab "De fábrica" del Hub de Producción era un stub sin definir. Los 2 briefs NO la especificaban (lo confirmé), así que el alcance se definió por lógica: **panorama operativo de la fábrica hoy**, que además surfacea las 2 vistas de §5.5 que estaban construidas pero sin pantalla.
+
+**Frontend (`produccion-hub.jsx` web v7→v8 + mobile; componente `DeFabrica`):**
+- **KPIs del día:** Listos para despacho (`stock_terminado`), Pendiente de producir (`prod_v_resumen_dia`), Ítems a comprar (`prod_v_compras`), Alertas (`prod_alerta`).
+- **Orden por sector:** `prod_v_orden_sector` agrupado por CNC/Melamina/Pino/Embalaje (qué le toca producir hoy a cada uno) con total por sector.
+- **Lista de compras:** `prod_v_compras` (necesita/stock/falta, en unidades).
+- Read-only, **realtime** (subscribe a prod_corte/melamina/pino/embalaje/stock_terminado/alerta/insumo), tema claro integrado a la plataforma. Reusa `window.LP_DATA` (helpers `ordenSector()`/`compras()` ya existían sin consumidor).
+- Verificación: ambos hub transpilando; las vistas ya verificadas en prod (orden_sector cnc 22/melamina 34/pino 2/embalaje 16 · compras 10 ítems). Cache-buster v8.
+
+**Nota:** la tab es web (el mobile rutea `produccion`→`ProduccionPage`, no el hub), pero se mirroreó el componente a mobile por consistencia.
+
+---
+
 ### [2026-06-17] MARKETING — Módulo completo (5 sub-áreas, cockpit futurista)
 
 **Qué se hizo:** el módulo de Marketing entero, de cero, en un "command center" oscuro/futurista con los acentos de marca (violeta #7C3AED + azul #2563EB). Pedido del Jefe: manual ahora pero **API-ready**, 4 plataformas (Meta Ads/IG/TikTok/YouTube), moderno/premium.

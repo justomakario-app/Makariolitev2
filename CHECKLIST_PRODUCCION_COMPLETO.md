@@ -172,7 +172,7 @@
 > Mobile-first ~390px, dark mode, color por sector. Construir CNC primero (valida patrón), replicar el resto.
 > **Dónde vive:** `web/components/produccion-hub.jsx` + espejo `mobile/`. El hub tiene 4 tabs; hoy 2 son stub `Próximamente`:
 > - **"Línea productiva"** → ES esta FASE 3 (frontend por sector). Hoy renderiza `ProximamentePlaceholder`.
-> - **"De fábrica"** → ⚠️ stub sin definir. Pendiente: decidir con el negocio QUÉ va adentro (¿vista consolidada de lo fabricado/despachado? ¿pedidos de fábrica?) antes de construir. Anotado en CABOS ABIERTOS.
+> - **"De fábrica"** → ✅ CONSTRUIDA (2026-06-17): panorama operativo (KPIs + orden por sector `prod_v_orden_sector` + lista de compras `prod_v_compras`). Componente `DeFabrica`.
 
 ## 3.0 Esqueleto común
 - [x] 🔒 Topbar: pill del sector (color + indicador 🔴 "en vivo"), reloj, nombre sector, estado de jornada *(CNC ✅)*
@@ -490,7 +490,7 @@
 
 ## Dentro de Producción (foco actual)
 - [x] **Hub Producción → tab "Línea productiva"** — frontend por sector (FASE 3) construido **e integrado a la plataforma** (2026-06-13): las 5 pantallas (4 sectores + Encargado) pasaron de "teléfono dark flotante" a secciones nativas claras (full width, tabs arriba, acento por sector), en web y mobile, en todas las cuentas.
-- [ ] ⚠️ **Hub Producción → tab "De fábrica"** — stub sin definir alcance. Decidir contenido con el negocio.
+- [x] **Hub Producción → tab "De fábrica"** — CONSTRUIDA (2026-06-17): panorama operativo de la fábrica hoy. KPIs (listos despacho / pendiente producir / ítems a comprar / alertas) + **Orden por sector** (`prod_v_orden_sector`, agrupado CNC/Melamina/Pino/Embalaje) + **Lista de compras** (`prod_v_compras`, en unidades). Read-only, realtime, tema claro. Componente `DeFabrica` en `produccion-hub.jsx`. *(Los briefs no la definían → alcance por lógica: surfacea las 2 vistas de §5.5 que estaban sin pantalla.)*
 
 ## Otras áreas (módulo Gestión)
 - [x] **Marketing — CONSTRUIDA COMPLETA (2026-06-17).** Cockpit futurista con 5 módulos: Dashboard · Calendario (grilla mensual) · Ángulos de venta (drill-down ángulo→video→métricas) · Publicidad (CPM/CPC/CTR/CPR/ROAS) · Prioridades (con notificación). Backend 0090-0094 (7 tablas, 3 vistas, 14 RPCs, API-ready). Cuenta `marketing@justomakario.app`. Acceso por rol `marketing`/admin/owner.
