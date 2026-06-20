@@ -331,6 +331,14 @@ function DashboardPage({ onNav }) {
   const activa       = abiertas.find(j => j.id === activaId);
   const viendoOtra   = !!(seleccionada && activa && seleccionada.id !== activa.id);
 
+  // Contadores de estado (spec ML): A despachar = faltante (ya en hero); Canceladas
+  // y Reprogramadas = suma de unidades de la jornada seleccionada. Reprogramadas hoy
+  // da 0 (Fase B la llena). Usa los helpers de data.js (no recalcula nada del Excel).
+  const cancUnidades = (seleccionada && window.getCancellationsForJornada)
+    ? window.getCancellationsForJornada(seleccionada.id).reduce((s, c) => s + (Number(c.cantidad) || 0), 0) : 0;
+  const reprogUnidades = (seleccionada && window.getReprogramadasForJornada)
+    ? window.getReprogramadasForJornada(seleccionada.id).reduce((s, c) => s + (Number(c.cantidad) || 0), 0) : 0;
+
   // Fecha de la jornada SELECCIONADA, formato largo en mayúsculas (protagonista del hero).
   const fechaJornadaTxt = seleccionada
     ? window.parseLocalDate(seleccionada.fecha)
@@ -538,8 +546,16 @@ function DashboardPage({ onNav }) {
           </div>
           <div className="dash-hero-right">
             <div className="dash-hero-stat">
-              <span className="dash-hero-stat-label">Pendientes</span>
+              <span className="dash-hero-stat-label">A despachar</span>
               <span className="dash-hero-stat-val">{M.prod.todos.kpis.faltante}</span>
+            </div>
+            <div className="dash-hero-stat">
+              <span className="dash-hero-stat-label">Canceladas</span>
+              <span className="dash-hero-stat-val" style={{color: cancUnidades ? '#f87171' : undefined}}>{cancUnidades}</span>
+            </div>
+            <div className="dash-hero-stat">
+              <span className="dash-hero-stat-label">Reprogramadas</span>
+              <span className="dash-hero-stat-val" style={{color: reprogUnidades ? '#fbbf24' : undefined}}>{reprogUnidades}</span>
             </div>
             <div className="dash-hero-stat">
               <span className="dash-hero-stat-label">Producido</span>

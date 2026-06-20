@@ -27,6 +27,13 @@ function CarrierPage({ channel, onBack }) {
   const featurePedidos = !!window.FEATURE_PEDIDOS_MANUALES && channel !== 'distribuidor';
   const puedeCargarManual = featurePedidos && ['owner','admin','encargado'].includes(userRole);
 
+  // Estados informativos del canal (spec ML): canceladas (existentes) + reprogramadas (Fase B).
+  const selJornadaId = M.jornadas?.seleccionadaId || M.jornadas?.activaId || null;
+  const cancelChannel = (selJornadaId && window.getCancellationsForJornada)
+    ? window.getCancellationsForJornada(selJornadaId).filter(c => c.canal === channel) : [];
+  const reprogChannel = (selJornadaId && window.getReprogramadasForJornada)
+    ? window.getReprogramadasForJornada(selJornadaId).filter(c => c.canal === channel) : [];
+
   // Pedidos individuales agrupados por order_number (paridad con web)
   const ordersAgrupados = (() => {
     if (!featurePedidos) return [];
@@ -283,6 +290,48 @@ function CarrierPage({ channel, onBack }) {
                   >
                     <Icon n="trash" s={15}/>
                   </button>
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+
+        {/* Canceladas — informativo · acumulable (datos existentes) */}
+        {cancelChannel.length > 0 && (
+          <>
+            <div style={{display:'flex', alignItems:'center', gap:8, margin:'18px 0 8px'}}>
+              <span style={{fontSize:10, fontWeight:700, color:'var(--red)', textTransform:'uppercase', letterSpacing:'.1em'}}>✕ Canceladas · {cancelChannel.length}</span>
+              <span style={{fontSize:8.5, fontWeight:700, textTransform:'uppercase', color:'var(--red)', background:'var(--red-bg)', border:'1px solid rgba(220,38,38,.32)', borderRadius:999, padding:'2px 6px'}}>Informativo · acumulable</span>
+            </div>
+            {cancelChannel.map((c, i) => (
+              <div key={(c.numero||'')+'|'+(c.sku||'')+i} className="m-prod-card" style={{padding:'10px 14px'}}>
+                <div style={{display:'flex', alignItems:'center', gap:10}}>
+                  <div style={{flex:1, minWidth:0}}>
+                    <div style={{fontSize:12, fontWeight:600, color:'var(--ink)'}}>{c.modelo} <span style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--ink-muted)'}}>{c.sku}</span></div>
+                    <div style={{fontSize:11, color:'var(--ink-muted)', marginTop:2}}>#{c.numero}{c.motivo ? ` · ${c.motivo}` : ''}</div>
+                  </div>
+                  <span className="cell-color-num" style={{color:'var(--red)'}}>{c.cantidad}</span>
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+
+        {/* Reprogramadas — informativo · acumulable (Fase B) */}
+        {reprogChannel.length > 0 && (
+          <>
+            <div style={{display:'flex', alignItems:'center', gap:8, margin:'18px 0 8px'}}>
+              <span style={{fontSize:10, fontWeight:700, color:'var(--amber)', textTransform:'uppercase', letterSpacing:'.1em'}}>↺ Reprogramadas · {reprogChannel.length}</span>
+              <span style={{fontSize:8.5, fontWeight:700, textTransform:'uppercase', color:'var(--amber)', background:'var(--amber-bg)', border:'1px solid rgba(217,119,6,.32)', borderRadius:999, padding:'2px 6px'}}>Informativo · acumulable</span>
+            </div>
+            {reprogChannel.map((c, i) => (
+              <div key={(c.numero||'')+'|'+(c.sku||'')+i} className="m-prod-card" style={{padding:'10px 14px'}}>
+                <div style={{display:'flex', alignItems:'center', gap:10}}>
+                  <div style={{flex:1, minWidth:0}}>
+                    <div style={{fontSize:12, fontWeight:600, color:'var(--ink)'}}>{c.modelo} <span style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--ink-muted)'}}>{c.sku}</span></div>
+                    <div style={{fontSize:11, color:'var(--ink-muted)', marginTop:2}}>#{c.numero}{c.fecha ? ` · ${c.fecha}` : ''}</div>
+                  </div>
+                  <span className="cell-color-num" style={{color:'var(--amber)'}}>{c.cantidad}</span>
                 </div>
               </div>
             ))}

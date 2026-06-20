@@ -21,6 +21,8 @@ function CarrierPage({ channel, onBack, onNav }) {
   const [openOrders, setOpenOrders]   = useState(false);
   const [openLotes, setOpenLotes]     = useState(false);
   const [openCierres, setOpenCierres] = useState(false);
+  const [openCancel, setOpenCancel]   = useState(false);  // sección Canceladas (informativo)
+  const [openReprog, setOpenReprog]   = useState(false);  // sección Reprogramadas (informativo)
   const [loteAEliminar, setLoteAEliminar] = useState(null);  // lote pendiente de borrar
   const [borrando, setBorrando] = useState(false);
   // Carga manual + edición (feature flag protege visibilidad)
@@ -36,6 +38,23 @@ function CarrierPage({ channel, onBack, onNav }) {
   const userRole = window.MOCK.user.role;
   const puedeEliminarLote = ['owner','admin','encargado'].includes(userRole);
   const puedeMoverStock = puedeEliminarLote;  // mismo set de roles
+
+  // Estados informativos del canal (spec ML): canceladas (ya existen) +
+  // reprogramadas (Fase B). Filtrados a ESTE canal en la jornada seleccionada.
+  const selJornadaId = M.jornadas?.seleccionadaId || M.jornadas?.activaId || null;
+  const cancelChannel = (selJornadaId && window.getCancellationsForJornada)
+    ? window.getCancellationsForJornada(selJornadaId).filter(c => c.canal === channel) : [];
+  const reprogChannel = (selJornadaId && window.getReprogramadasForJornada)
+    ? window.getReprogramadasForJornada(selJornadaId).filter(c => c.canal === channel) : [];
+  const exportEstado = (rows, tipo) => {
+    if (!window.XLSX || !rows || !rows.length) return;
+    const aoa = [['# venta', 'SKU', 'Producto', 'Cantidad', tipo === 'cancel' ? 'Motivo' : 'Reprogramada']];
+    rows.forEach(r => aoa.push([r.numero, r.sku, r.modelo, r.cantidad, tipo === 'cancel' ? (r.motivo || '') : (r.reprogramadaAt || '')]));
+    const ws = window.XLSX.utils.aoa_to_sheet(aoa);
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, tipo === 'cancel' ? 'Canceladas' : 'Reprogramadas');
+    window.XLSX.writeFile(wb, `${tipo === 'cancel' ? 'canceladas' : 'reprogramadas'}-${channel}.xlsx`);
+  };
 
   if (!data) return null;
 
@@ -380,6 +399,74 @@ function CarrierPage({ channel, onBack, onNav }) {
                                 </button>
                               )}
                             </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Canceladas — informativo · acumulable (datos existentes: status='cancelado') */}
+            {cancelChannel.length > 0 && (
+              <div className="collapsible">
+                <div className="collapsible-header" onClick={() => setOpenCancel(o => !o)}>
+                  <div className="collapsible-title" style={{display:'flex', alignItems:'center', gap:8}}>
+                    <span style={{color:'var(--red)'}}>Canceladas · {cancelChannel.length}</span>
+                    <span style={{fontSize:9, fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', color:'var(--red)', background:'var(--red-bg)', border:'1px solid rgba(220,38,38,.32)', borderRadius:999, padding:'2px 7px'}}>Informativo · acumulable</span>
+                  </div>
+                  <span style={{display:'flex', alignItems:'center', gap:8}}>
+                    <button className="btn-ghost" style={{fontSize:10, padding:'3px 8px', color:'var(--red)', borderColor:'rgba(220,38,38,.32)'}}
+                      onClick={e => { e.stopPropagation(); exportEstado(cancelChannel, 'cancel'); }}><Icon n="download" s={11}/> Exportar</button>
+                    <span className={`collapsible-arrow ${openCancel?'open':''}`}><Icon n="chev-down" s={14}/></span>
+                  </span>
+                </div>
+                {openCancel && (
+                  <div className="collapsible-body" style={{padding:0}}>
+                    <table className="data-table">
+                      <thead><tr><th>SKU</th><th>Producto / Orden</th><th style={{textAlign:'right'}}>Cant.</th><th>Motivo</th></tr></thead>
+                      <tbody>
+                        {cancelChannel.map((c, i) => (
+                          <tr key={(c.numero||'')+'|'+(c.sku||'')+i}>
+                            <td><span className="order-num" style={{fontSize:10}}>{c.sku}</span></td>
+                            <td><div style={{fontSize:12, color:'var(--ink)'}}>{c.modelo}</div><div style={{fontSize:10, color:'var(--ink-muted)'}}>#{c.numero}</div></td>
+                            <td style={{textAlign:'right'}}><span className="cell-color-num">{c.cantidad}</span></td>
+                            <td style={{fontSize:11, color:'var(--ink-soft)'}}>{c.motivo || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Reprogramadas — informativo · acumulable (se llena en Fase B: ML "demorado") */}
+            {reprogChannel.length > 0 && (
+              <div className="collapsible">
+                <div className="collapsible-header" onClick={() => setOpenReprog(o => !o)}>
+                  <div className="collapsible-title" style={{display:'flex', alignItems:'center', gap:8}}>
+                    <span style={{color:'var(--amber)'}}>Reprogramadas · {reprogChannel.length}</span>
+                    <span style={{fontSize:9, fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', color:'var(--amber)', background:'var(--amber-bg)', border:'1px solid rgba(217,119,6,.32)', borderRadius:999, padding:'2px 7px'}}>Informativo · acumulable</span>
+                  </div>
+                  <span style={{display:'flex', alignItems:'center', gap:8}}>
+                    <button className="btn-ghost" style={{fontSize:10, padding:'3px 8px', color:'var(--amber)', borderColor:'rgba(217,119,6,.32)'}}
+                      onClick={e => { e.stopPropagation(); exportEstado(reprogChannel, 'reprog'); }}><Icon n="download" s={11}/> Exportar</button>
+                    <span className={`collapsible-arrow ${openReprog?'open':''}`}><Icon n="chev-down" s={14}/></span>
+                  </span>
+                </div>
+                {openReprog && (
+                  <div className="collapsible-body" style={{padding:0}}>
+                    <table className="data-table">
+                      <thead><tr><th>SKU</th><th>Producto / Orden</th><th style={{textAlign:'right'}}>Cant.</th><th>Fecha</th></tr></thead>
+                      <tbody>
+                        {reprogChannel.map((c, i) => (
+                          <tr key={(c.numero||'')+'|'+(c.sku||'')+i}>
+                            <td><span className="order-num" style={{fontSize:10}}>{c.sku}</span></td>
+                            <td><div style={{fontSize:12, color:'var(--ink)'}}>{c.modelo}</div><div style={{fontSize:10, color:'var(--ink-muted)'}}>#{c.numero}</div></td>
+                            <td style={{textAlign:'right'}}><span className="cell-color-num">{c.cantidad}</span></td>
+                            <td style={{fontSize:11, color:'var(--ink-soft)'}}>{c.fecha || '—'}</td>
                           </tr>
                         ))}
                       </tbody>

@@ -287,6 +287,13 @@ function DashboardPage({ onNav }) {
   const activa       = abiertas.find(j => j.id === activaId);
   const viendoOtra   = !!(seleccionada && activa && seleccionada.id !== activa.id);
 
+  // Contadores de estado (spec ML): Canceladas + Reprogramadas (unidades) de la
+  // jornada seleccionada. Reprogramadas da 0 hasta Fase B. Usa helpers de data.js.
+  const cancUnidades = (seleccionada && window.getCancellationsForJornada)
+    ? window.getCancellationsForJornada(seleccionada.id).reduce((s, c) => s + (Number(c.cantidad) || 0), 0) : 0;
+  const reprogUnidades = (seleccionada && window.getReprogramadasForJornada)
+    ? window.getReprogramadasForJornada(seleccionada.id).reduce((s, c) => s + (Number(c.cantidad) || 0), 0) : 0;
+
   // Fecha de la jornada seleccionada (protagonista del hero).
   const fechaJornadaTxt = seleccionada
     ? window.parseLocalDate(seleccionada.fecha)
@@ -477,10 +484,18 @@ function DashboardPage({ onNav }) {
               Hoy · {todayCtx.toUpperCase()}
             </div>
             <div className="m-hero-number">{total}</div>
-            <div style={{display:'flex', gap:18, marginTop:10}}>
+            <div style={{display:'flex', gap:16, marginTop:10, flexWrap:'wrap'}}>
               <div>
-                <div className="m-hero-stat-label">Pendientes</div>
+                <div className="m-hero-stat-label">A despachar</div>
                 <div className="m-hero-stat-val">{M.prod.todos.kpis.faltante}</div>
+              </div>
+              <div>
+                <div className="m-hero-stat-label">Canceladas</div>
+                <div className="m-hero-stat-val" style={{color: cancUnidades ? '#f87171' : undefined}}>{cancUnidades}</div>
+              </div>
+              <div>
+                <div className="m-hero-stat-label">Reprog.</div>
+                <div className="m-hero-stat-val" style={{color: reprogUnidades ? '#fbbf24' : undefined}}>{reprogUnidades}</div>
               </div>
               <div>
                 <div className="m-hero-stat-label">Producido</div>

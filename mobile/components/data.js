@@ -657,6 +657,27 @@ function getCancellationsForJornada(jornadaId) {
 }
 window.getCancellationsForJornada = getCancellationsForJornada;
 
+/* getReprogramadasForJornada — reprogramadas (ML "demorado") por jornada.
+   Espeja getCancellationsForJornada pero por el flag `reprogramadaAt` (Fase B).
+   Hasta entonces los orders no lo traen → devuelve []. Distinto de `arrastrado`. */
+function getReprogramadasForJornada(jornadaId) {
+  if (!jornadaId) return [];
+  const out = [];
+  for (const cid of Object.keys(window.MOCK.carriers)) {
+    for (const o of window.MOCK.carriers[cid].orders || []) {
+      if (!o.reprogramadaAt) continue;
+      if (o.reprogramadaInJornadaId && o.reprogramadaInJornadaId !== jornadaId) continue;
+      out.push({
+        canal: cid, numero: o.numero, sku: o.sku, modelo: window.skuName(o.sku),
+        cantidad: o.cantidad, fecha: o.fecha, reprogramadaAt: o.reprogramadaAt, motivo: o.reprogramadaMotivo || '',
+      });
+    }
+  }
+  out.sort((a, b) => { if (a.canal !== b.canal) return a.canal.localeCompare(b.canal); return (a.sku || '').localeCompare(b.sku || ''); });
+  return out;
+}
+window.getReprogramadasForJornada = getReprogramadasForJornada;
+
 /* ─────────────────────────────────────────────────────────────────
    applySelectedJornadaToCarriers — SIEMPRE recomputa table/kpis/allDone
    de MOCK.carriers + MOCK.prod.todos desde orders+prodLogs filtrados por

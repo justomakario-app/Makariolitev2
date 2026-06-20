@@ -80,6 +80,22 @@
 
 ---
 
+### [2026-06-20] Ventas — estados ML (A despachar / Canceladas / Reprogramadas) · FASE A (frontend)
+
+**Contexto:** spec `especificacion_tecnica_v2.md` + mock `dash_principal_vs_secundario_estados.html`. Plan por fases aprobado por el Jefe. **Fase A = solo frontend, riesgo cero, mismo branding** (no rediseñar; conectar datos existentes). Decisiones cerradas: SKU vacío→tabla mapeo Título+Variante (Fase C); reprogramada→**flag** (no enum nuevo); detección por substring "demorado".
+
+**Qué se hizo (Fase A, sin migración):**
+- **`data.js` (web+mobile):** nuevo `getReprogramadasForJornada(jornadaId)` — espeja `getCancellationsForJornada` pero por flag `reprogramadaAt`. Hasta Fase B los orders no traen el flag → devuelve `[]` (contadores en 0, sin romper). `reprogramada` (ML "demorado") ≠ `arrastrado` (carry-over interno).
+- **`dashboard.jsx` (web+mobile):** hero ahora muestra **A despachar · Canceladas · Reprogramadas · Producido** (antes Pendientes/Producido). Canceladas/Reprogramadas = suma de unidades de la jornada vía los helpers. Mismo componente `dash-hero-stat`/`m-hero-stat`, acentos `#f87171`/`#fbbf24`.
+- **`carrier.jsx` (web+mobile):** 2 secciones nuevas por canal debajo de "Lotes importados" — **Canceladas** (SKU/orden/cant/motivo) y **Reprogramadas** (SKU/orden/cant/fecha), etiqueta "Informativo · acumulable" + botón Exportar (XLSX). Filtradas al canal+jornada. Mismo estilo (`collapsible` web / `m-prod-card` mobile).
+- **NO se tocó** lo que funciona: canceladas backend, idempotencia, derivación de canal, la sección "Cancelaciones del día" existente.
+
+**Verificación:** 6 archivos transpilando/parseando OK; web/mobile con su layout propio (divergentes, cambios equivalentes en cada uno); cache-busters bumpeados (web data v44/dash v20/carrier v25 · mobile data v43/dash v10/carrier v10). *Nota:* hoy hay 0 `cancelado` en prod → los contadores muestran 0 con datos reales hasta que entre una cancelación.
+
+**Pendiente (decisiones ya cerradas):** Fase B (backend: detectar "demorado" en `rpc_import_batch` → flag `reprogramada_at` + motivo + historial; mapear `reprogramadaAt` en loadOrders; guardar motivo de cancelación de `Descripción del estado`). Fase C (resolución de SKU vacío con tabla mapeo Título+Variante — hoy el parser descarta ~28% de filas sin SKU).
+
+---
+
 ### [2026-06-18] Producción — notificaciones de la cadena de mantenimiento (Fase 8)
 
 **Qué se hizo:** cerrar el cabo "Director escucha prod_mantenimiento (recibido_director)". El panel del director (owner/admin → Panel del Encargado) ya escuchaba `prod_mantenimiento` en vivo, pero **no le llegaba notificación** al escalársele. Se agregó la cadena.
