@@ -80,6 +80,19 @@
 
 ---
 
+### [2026-06-21] Ventas — detección ROBUSTA de canceladas (crítico) · 0097
+
+**Por qué:** una cancelada NO detectada entra como `pendiente` → demanda fantasma → rompe el sistema (pedido del Jefe: "las canceladas nunca pasen, busquen todas las maneras"). La detección anterior (`%cancelada%`) se quedaba corta (no agarraba "cancelado" masculino, ni "No despaches" sin "cancelada", ni "anulado").
+
+**`0097_canceladas_deteccion_robusta.sql` (APLICADA + verificada en prod):**
+- **`es_venta_cancelada(text)`** (IMMUTABLE): detecta `'%cancel%'` (cancelada/cancelado/cancelación/cancelar) · `'%no despaches%'` (instrucción ML, exacto para NO chocar con "no despachado"=activo) · `'%anulad%'`. + `es_venta_reprogramada(text)` (`'%demorado%'`) por simetría.
+- **`estado_ml`** columna nueva en `orders` (texto crudo de ML por trazabilidad — ante un "se coló", se ve qué dijo ML). Se guarda en todos los paths del import.
+- `rpc_import_batch` (CREATE OR REPLACE) usa los clasificadores; toda la lógica previa intacta.
+- **Smoke (batería + funcional):** "Pedido cancelado"/"anulado"/"No despaches." → cancelada ✓; "Listo para recolección"/"Aún no despachado" → NO cancelada (sin falso positivo) ✓; import de "Pedido cancelado" → status=cancelado, 0 insertadas como pendiente ✓. Verificación prod: columna + RPC usa el clasificador.
+- **Forward-looking:** clasifica bien en cada import nuevo; si una se coló antes, al reaparecer queda agarrada. **Devoluciones** (logística inversa) quedan FUERA a propósito (Q3 del spec, decisión separada). Solo backend.
+
+---
+
 ### [2026-06-21] Ventas — estados ML · FASE B (backend reprogramada + motivo cancelación)
 
 **`0096_ventas_reprogramada_y_motivo.sql` (APLICADA + verificada en prod):**
