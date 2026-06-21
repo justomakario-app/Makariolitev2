@@ -472,6 +472,7 @@ function ImportModal({ open, onClose, channel: defaultChannel }) {
           cliente: o.cliente,
           fecha_pedido: o.fecha,
           estado: o.estado,
+          descripcion: o.descripcion,
         }));
       const ignorados = orders.length - items.length;
       setProgress(50);

@@ -171,6 +171,7 @@ window.extractOrders = function(rows) {
     else if (norm === 'comprador' || norm === 'cliente') colMap.cliente = letra;
     else if (/forma de entrega/i.test(val)) colMap.entrega = letra;
     else if (/canal de venta/i.test(val)) colMap.canalVenta = letra;
+    else if (/descripci[oó]n del estado/i.test(val)) colMap.descripcion = letra;
     else if (norm === 'estado') colMap.estado = letra;
   }
   if (!colMap.sku || !colMap.cantidad) return { orders: [], canalDetectado: null, tipo: 'desconocido' };
@@ -199,6 +200,7 @@ window.extractOrders = function(rows) {
       fecha:  colMap.fecha  ? (r.cells[colMap.fecha]  || '').toString() : '',
       cliente:colMap.cliente? (r.cells[colMap.cliente]|| '').toString() : '',
       estado: colMap.estado ? (r.cells[colMap.estado] || '').toString() : '',
+      descripcion: colMap.descripcion ? (r.cells[colMap.descripcion] || '').toString() : '',
       canal,
     });
   }

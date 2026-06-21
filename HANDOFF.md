@@ -80,6 +80,25 @@
 
 ---
 
+### [2026-06-21] Ventas — estados ML · FASE B (backend reprogramada + motivo cancelación)
+
+**`0096_ventas_reprogramada_y_motivo.sql` (APLICADA + verificada en prod):**
+- `orders` += `reprogramada_at`, `reprogramada_motivo`, `reprogramada_in_jornada_id`, `cancelacion_motivo` (aditivas, nullable).
+- `rpc_import_batch` (CREATE OR REPLACE, preserva TODA la lógica previa) ahora clasifica 3 ramas: cancelada (`%cancelada%`, ya existía) → guarda `cancelacion_motivo` de "Descripción del estado"; **reprogramada (`%demorado%`, NUEVO) → flag** `reprogramada_at`+motivo (texto ML completo)+jornada, la orden **sigue `pendiente`** (no sale de producción); a despachar (resto). Devuelve `reprogramada_count`.
+- **Idempotencia preservada:** reprogramada usa `ON CONFLICT DO UPDATE ... WHERE reprogramada_at IS NULL` → reimport = 0 cambios. Smoke (rolled back): reprogramada flag+pendiente, cancelación motivo, reimport 0 nuevos.
+
+**Frontend (web+mobile):**
+- `xlsx.js`: parser manda `estado` + `descripcion` ("Descripción del estado"). **El mobile estaba viejo (no mandaba ni `estado`) → puesto a la par.**
+- `modals.jsx` + `data.js` (normalizedItems): pasan `descripcion` al RPC.
+- `data.js` loadOrders: mapea `reprogramadaAt/Motivo/InJornadaId` + `cancelacionMotivo`. `getCancellationsForJornada` ahora devuelve `motivo` → la sección Canceladas muestra el motivo real; la de Reprogramadas + su contador se prenden con datos reales (Fase A ya tenía la UI lista).
+- Cache-busters: web data v45/xlsx v12/modals v31 · mobile data v44/xlsx v12/modals v31.
+
+**Decisión:** `reprogramada` (ML "demorado") ≠ `arrastrado` (carry-over interno) — separados a propósito. Historial embebido (jsonb) = refinamiento futuro; el flag+motivo+jornada ya sirve para el informe mensual.
+
+**Pendiente:** Fase C (resolución de SKU vacío con tabla mapeo Título+Variante — el parser hoy descarta ~28% de filas sin SKU).
+
+---
+
 ### [2026-06-20] Ventas — estados ML (A despachar / Canceladas / Reprogramadas) · FASE A (frontend)
 
 **Contexto:** spec `especificacion_tecnica_v2.md` + mock `dash_principal_vs_secundario_estados.html`. Plan por fases aprobado por el Jefe. **Fase A = solo frontend, riesgo cero, mismo branding** (no rediseñar; conectar datos existentes). Decisiones cerradas: SKU vacío→tabla mapeo Título+Variante (Fase C); reprogramada→**flag** (no enum nuevo); detección por substring "demorado".

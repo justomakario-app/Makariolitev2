@@ -443,6 +443,10 @@ async function loadOrders() {
       status:                o.status,
       cancelledAt:           o.cancelled_at || null,
       cancelledInJornadaId:  o.cancelled_in_jornada_id || null,
+      cancelacionMotivo:     o.cancelacion_motivo || null,
+      reprogramadaAt:           o.reprogramada_at || null,
+      reprogramadaMotivo:       o.reprogramada_motivo || null,
+      reprogramadaInJornadaId:  o.reprogramada_in_jornada_id || null,
     });
   }
 
@@ -646,6 +650,7 @@ function getCancellationsForJornada(jornadaId) {
         fecha:       o.fecha,
         cliente:     o.cliente,
         cancelledAt: o.cancelledAt,
+        motivo:      o.cancelacionMotivo || '',
       });
     }
   }
@@ -1091,6 +1096,7 @@ window.MOCK_ACTIONS = {
       if (it.order_number) cleaned.order_number = String(it.order_number).trim();
       if (it.cliente)      cleaned.cliente      = String(it.cliente).trim();
       if (it.estado)       cleaned.estado       = String(it.estado).trim();  // el RPC decide
+      if (it.descripcion)  cleaned.descripcion  = String(it.descripcion).trim();  // motivo (cancelación)
       if (fecha)           cleaned.fecha_pedido = fecha;  // omit si null → RPC usa current_date
       return cleaned;
     }).filter(it => it.sku && it.cantidad > 0);
