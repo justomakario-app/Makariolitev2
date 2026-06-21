@@ -463,8 +463,10 @@ function ImportModal({ open, onClose, channel: defaultChannel }) {
     try {
       // Filtrar SKUs reconocidos para no romper la FK del backend.
       // Pasamos `estado` para que importarLote filtre cancelados.
+      // Filas con SKU conocido, O sin SKU pero con Título (el backend lo resuelve
+      // por Título+Variante / lo manda a la cola de revisión — nunca se pierden).
       const items = orders
-        .filter(o => window.SKU_DB[o.sku])
+        .filter(o => window.SKU_DB[o.sku] || (!o.sku && o.titulo))
         .map(o => ({
           sku: o.sku,
           cantidad: o.cantidad,
@@ -473,6 +475,8 @@ function ImportModal({ open, onClose, channel: defaultChannel }) {
           fecha_pedido: o.fecha,
           estado: o.estado,
           descripcion: o.descripcion,
+          titulo: o.titulo,
+          variante: o.variante,
         }));
       const ignorados = orders.length - items.length;
       setProgress(50);
@@ -491,8 +495,12 @@ function ImportModal({ open, onClose, channel: defaultChannel }) {
         toast.success(`${file.name} · ${cancelados} saltado(s) por cancelados · archivo no procesado`);
       } else {
         const aplicados = result?.unidades_count ?? items.reduce((s, o) => s + o.cantidad, 0);
+        const resueltos = result?.sku_resueltos_count ?? 0;
+        const sinSku = result?.sin_sku_count ?? 0;
         const partes = [`${file.name} importado · ${aplicados} uds. aplicadas a ${canalLabel}`];
         if (cancelados > 0) partes.push(`${cancelados} saltado(s) por cancelados`);
+        if (resueltos > 0)  partes.push(`${resueltos} SKU resuelto(s) por título`);
+        if (sinSku > 0)     partes.push(`${sinSku} sin SKU (en revisión)`);
         if (ignorados > 0)  partes.push(`${ignorados} con SKU desconocido`);
         toast.success(partes.join(' · '));
       }

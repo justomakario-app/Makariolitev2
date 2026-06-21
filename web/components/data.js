@@ -1129,9 +1129,11 @@ window.MOCK_ACTIONS = {
       if (it.cliente)      cleaned.cliente      = String(it.cliente).trim();
       if (it.estado)       cleaned.estado       = String(it.estado).trim();  // el RPC decide
       if (it.descripcion)  cleaned.descripcion  = String(it.descripcion).trim();  // motivo (cancelación)
+      if (it.titulo)       cleaned.titulo       = String(it.titulo).trim();   // Fase C: resolución SKU vacío
+      if (it.variante)     cleaned.variante     = String(it.variante).trim();
       if (fecha)           cleaned.fecha_pedido = fecha;  // omit si null → RPC usa current_date
       return cleaned;
-    }).filter(it => it.sku && it.cantidad > 0);
+    }).filter(it => (it.sku || it.titulo) && it.cantidad > 0);
 
     // 2) Hash idempotente — sobre los items YA normalizados.
     let p_file_hash = (fileHash || '').toString().toLowerCase();

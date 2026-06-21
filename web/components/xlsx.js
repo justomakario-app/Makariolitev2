@@ -172,18 +172,26 @@ window.extractOrders = function(rows) {
     else if (/forma de entrega/i.test(val)) colMap.entrega = letra;
     else if (/canal de venta/i.test(val)) colMap.canalVenta = letra;
     else if (/descripci[oó]n del estado/i.test(val)) colMap.descripcion = letra;
+    else if (/t[ií]tulo de la publicaci[oó]n/i.test(val)) colMap.titulo = letra;
+    else if (norm === 'variante') colMap.variante = letra;
     else if (norm === 'estado') colMap.estado = letra;
   }
-  if (!colMap.sku || !colMap.cantidad) return { orders: [], canalDetectado: null, tipo: 'desconocido' };
+  // SKU puede faltar (~28% de filas de ML): se resuelve por Título+Variante en el
+  // backend. Solo exigimos la columna cantidad; el SKU puede estar vacío por fila.
+  if (!colMap.cantidad) return { orders: [], canalDetectado: null, tipo: 'desconocido' };
 
   // Extraer pedidos (filas posteriores al header)
   const orders = [];
   let canalDetectado = null;
   for (const r of rows) {
     if (r.rowNum <= headerRow.rowNum) continue;
-    const sku = (r.cells[colMap.sku] || '').toString().trim();
+    const sku = colMap.sku ? (r.cells[colMap.sku] || '').toString().trim() : '';
     const cantStr = (r.cells[colMap.cantidad] || '').toString().trim();
-    if (!sku || !cantStr) continue;
+    const titulo = colMap.titulo ? (r.cells[colMap.titulo] || '').toString().trim() : '';
+    // SKU vacío NO se descarta: el backend lo resuelve por Título+Variante.
+    // Solo se salta si no hay cantidad, o si no hay NI sku NI título (irreconocible).
+    if (!cantStr) continue;
+    if (!sku && !titulo) continue;
     const cantidad = parseFloat(cantStr);
     if (!cantidad || isNaN(cantidad)) continue;
 
@@ -201,6 +209,8 @@ window.extractOrders = function(rows) {
       cliente:colMap.cliente? (r.cells[colMap.cliente]|| '').toString() : '',
       estado: colMap.estado ? (r.cells[colMap.estado] || '').toString() : '',
       descripcion: colMap.descripcion ? (r.cells[colMap.descripcion] || '').toString() : '',
+      titulo,
+      variante: colMap.variante ? (r.cells[colMap.variante] || '').toString().trim() : '',
       canal,
     });
   }

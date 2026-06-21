@@ -80,6 +80,25 @@
 
 ---
 
+### [2026-06-21] Ventas — estados ML · FASE C: resolución de SKU vacío
+
+**Bug que resuelve:** el parser descartaba en silencio ~28% de filas del Excel de ML (SKU vacío pero con Título+Variante). Decisión del Jefe: opción (a) mapeo Título+Variante→SKU exacto.
+
+**`0098_sku_vacio_resolucion.sql` (APLICADA + verificada en prod):**
+- `ml_norm(text)` (lower+trim+colapsa espacios). `ml_sku_map (titulo_norm, variante_norm)→sku` PK, **autoaprendido**. `orders_sin_sku` (cola de revisión, UNIQUE channel/order/titulo/variante, `resuelto` bool). RLS owner/admin/encargado SELECT.
+- `rpc_import_batch` (CREATE OR REPLACE): **PASS 1** aprende mapeos de las filas con SKU activo → **PASS 2** resuelve los SKU vacíos por Título+Variante; si no resuelve, inserta en `orders_sin_sku` (no se pierde) + `CONTINUE`; al resolver una que estaba en cola la marca `resuelto`. Devuelve `sku_resueltos_count` + `sin_sku_count`. Todo lo previo (canceladas robustas, reprog, idempotencia) intacto.
+- **Smoke:** fila vacía del mismo producto que una con SKU → resuelta a su SKU (pedido normal); desconocida → cola; contadores ok.
+
+**Frontend (web+mobile):**
+- `xlsx.js`: parser captura **Título de la publicación** + **Variante**; **deja de descartar** filas sin SKU (solo salta si no hay ni SKU ni título; antes exigía SKU).
+- `modals.jsx`: filtro pasa filas con SKU conocido O (sin SKU + título); pasa `titulo`/`variante`; toast muestra "N SKU resueltos por título · M sin SKU (en revisión)".
+- `data.js` normalizedItems: incluye `titulo`/`variante`, filtro `(sku || titulo)`.
+- Cache: web data v46/xlsx v13/modals v32 · mobile data v45/xlsx v13/modals v32.
+
+**Plan de 3 fases COMPLETO** (A dashboard + B reprogramada + C SKU vacío). **Pendiente acordado:** contabilizar **devoluciones** (logística inversa) para que tampoco generen producción — próximo paso.
+
+---
+
 ### [2026-06-21] Ventas — detección ROBUSTA de canceladas (crítico) · 0097
 
 **Por qué:** una cancelada NO detectada entra como `pendiente` → demanda fantasma → rompe el sistema (pedido del Jefe: "las canceladas nunca pasen, busquen todas las maneras"). La detección anterior (`%cancelada%`) se quedaba corta (no agarraba "cancelado" masculino, ni "No despaches" sin "cancelada", ni "anulado").
