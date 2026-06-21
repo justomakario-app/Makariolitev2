@@ -80,6 +80,19 @@
 
 ---
 
+### [2026-06-21] Ventas — fix de 2 bugs del import (auditoría de producción) · 0099
+
+Investigación de bugs (pedido del Jefe). 2 bugs **reproducidos empíricamente** en `rpc_import_batch` (smokes en transacción) y corregidos.
+
+**`0099_fix_import_bugs.sql` (APLICADA + verificada en prod):**
+- **BUG 1 — pérdida silenciosa en la cola de revisión:** el marcado `resuelto=true` en `orders_sin_sku` matcheaba solo por `(channel, order_number)` → al resolver UNA línea marcaba como resueltas a las **hermanas no resueltas** de la misma orden → se perdían de la cola. Fix: marcar SOLO la entrada exacta `(channel, order_number, titulo, variante)`, para cualquier fila con título que ya tenga SKU (resuelto u original).
+- **BUG 2 — doble conteo cancelada+reprogramada:** al cancelar no se limpiaba `reprogramada_at`, y se podía flaguear una orden ya cancelada → contada en canceladas Y reprogramadas. Fix: al cancelar limpiar el flag reprogramada; `WHERE status <> 'cancelado'` en la rama reprogramada; + **limpieza one-shot** de datos existentes (`UPDATE ... WHERE status='cancelado' AND reprogramada_at IS NOT NULL`).
+- **Frontend (defensa extra):** `getReprogramadasForJornada` (web+mobile) excluye `status='cancelado'`.
+- **Verificado:** smokes confirman ambos fixes (A resuelto / B sigue en cola; cancelada con flag limpio). Prod: fix1 ✓ fix2 ✓ · 0 canceladas-con-flag-reprog restantes. Cache web data v47 / mobile v46.
+- **Verificado OK (sin bug):** cancelar siempre gana sin importar el orden de filas; cancelada con SKU irresoluble → cola, no entra como pendiente. *Faltante (no bug):* la cola `orders_sin_sku` aún no tiene pantalla de revisión (solo contador en el toast).
+
+---
+
 ### [2026-06-21] Ventas — estados ML · FASE C: resolución de SKU vacío
 
 **Bug que resuelve:** el parser descartaba en silencio ~28% de filas del Excel de ML (SKU vacío pero con Título+Variante). Decisión del Jefe: opción (a) mapeo Título+Variante→SKU exacto.

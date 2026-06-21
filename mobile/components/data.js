@@ -671,6 +671,7 @@ function getReprogramadasForJornada(jornadaId) {
   for (const cid of Object.keys(window.MOCK.carriers)) {
     for (const o of window.MOCK.carriers[cid].orders || []) {
       if (!o.reprogramadaAt) continue;
+      if (o.status === 'cancelado') continue;   // una cancelada nunca cuenta como reprogramada
       if (o.reprogramadaInJornadaId && o.reprogramadaInJornadaId !== jornadaId) continue;
       out.push({
         canal: cid, numero: o.numero, sku: o.sku, modelo: window.skuName(o.sku),
