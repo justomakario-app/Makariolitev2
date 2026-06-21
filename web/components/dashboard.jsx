@@ -544,23 +544,27 @@ function DashboardPage({ onNav }) {
               </div>
             </div>
           </div>
-          <div className="dash-hero-right">
-            <div className="dash-hero-stat">
-              <span className="dash-hero-stat-label">A despachar</span>
-              <span className="dash-hero-stat-val">{M.prod.todos.kpis.faltante}</span>
-            </div>
-            <div className="dash-hero-stat">
-              <span className="dash-hero-stat-label">Canceladas</span>
-              <span className="dash-hero-stat-val" style={{color: cancUnidades ? '#f87171' : undefined}}>{cancUnidades}</span>
-            </div>
-            <div className="dash-hero-stat">
-              <span className="dash-hero-stat-label">Reprogramadas</span>
-              <span className="dash-hero-stat-val" style={{color: reprogUnidades ? '#fbbf24' : undefined}}>{reprogUnidades}</span>
-            </div>
-            <div className="dash-hero-stat">
-              <span className="dash-hero-stat-label">Producido</span>
-              <span className="dash-hero-stat-val">{M.prod.todos.producidoHoy}</span>
-            </div>
+          <div className="dash-hero-right" style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, alignItems:'stretch'}}>
+            {[
+              { l:'A despachar',   v:M.prod.todos.kpis.faltante, c:'#818cf8', icon:'truck' },
+              { l:'Canceladas',    v:cancUnidades,               c:'#f87171', icon:'x' },
+              { l:'Reprogramadas', v:reprogUnidades,             c:'#fbbf24', icon:'refresh' },
+              { l:'Producido',     v:M.prod.todos.producidoHoy,  c:'#4ade80', icon:'check-circle' },
+            ].map((s, i) => (
+              <div key={i} style={{
+                position:'relative', minWidth:130, overflow:'hidden',
+                background: `linear-gradient(135deg, ${s.c}18, rgba(255,255,255,0.03))`,
+                border:`1px solid ${s.c}33`, borderRadius:13, padding:'11px 14px',
+                boxShadow:`inset 0 1px 0 rgba(255,255,255,0.05)`,
+              }}>
+                <div style={{position:'absolute', top:0, left:0, bottom:0, width:3, background:s.c, boxShadow:`0 0 12px ${s.c}99`}}/>
+                <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:8}}>
+                  <span style={{fontSize:9, fontWeight:800, letterSpacing:'.13em', textTransform:'uppercase', color:'rgba(255,255,255,.5)'}}>{s.l}</span>
+                  <Icon n={s.icon} s={13} c={s.c}/>
+                </div>
+                <div style={{fontFamily:'var(--mono)', fontSize:25, fontWeight:800, letterSpacing:'-.02em', color:'#fff', marginTop:5, lineHeight:1}}>{s.v}</div>
+              </div>
+            ))}
           </div>
         </div>
       )}
