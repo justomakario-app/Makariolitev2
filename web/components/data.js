@@ -154,7 +154,7 @@ window.MOCK = {
     logistica: { landing:'produccion-hub',   items:['produccion-hub','registrar','perfil'] },
     ventas:    { landing:'dashboard',        items:['dashboard','colecta','flex','tiendanube','distribuidor','catalogo','notificaciones','perfil'] },
     carpinteria:{ landing:'produccion-hub',  items:['produccion-hub','registrar','perfil'] },
-    marketing: { landing:'marketing',        items:['marketing','dashboard','catalogo','notificaciones','perfil'] },
+    marketing: { landing:'marketing',        items:['marketing','notificaciones','perfil'] },
   },
 };
 
