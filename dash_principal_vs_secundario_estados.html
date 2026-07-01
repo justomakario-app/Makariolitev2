@@ -1,0 +1,395 @@
+
+<h2 class="sr-only">Dashboard principal simplificado y vista de producción con canceladas y reprogramadas como registro informativo</h2>
+
+<style>
+.dc{background:var(--color-background-primary);border-radius:var(--border-radius-md);padding:13px;display:flex;flex-direction:column;}
+.bg{background:var(--color-background-success);color:var(--color-text-success);font-size:11px;border-radius:4px;padding:2px 7px;display:block;margin:2px 0;}
+.br{background:var(--color-background-danger);color:var(--color-text-danger);font-size:11px;border-radius:4px;padding:2px 7px;}
+.bw{background:var(--color-background-warning);color:var(--color-text-warning);font-size:11px;border-radius:4px;padding:2px 7px;display:block;margin:2px 0;}
+.lbl{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;}
+.num{font-size:30px;font-weight:500;color:var(--color-text-primary);line-height:1;margin-bottom:3px;}
+.sub{font-size:11px;color:var(--color-text-secondary);margin-bottom:10px;}
+.tab-row{padding:8px 14px;border-bottom:0.5px solid var(--color-border-tertiary);display:flex;align-items:center;justify-content:space-between;cursor:pointer;}
+.tab-row:last-child{border:none;}
+.exp-section{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);overflow:hidden;margin-bottom:8px;}
+.sec-hdr{padding:10px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;}
+.si{padding:7px 14px;border-top:0.5px solid var(--color-border-tertiary);}
+.chip{font-size:10px;padding:2px 6px;border-radius:4px;}
+</style>
+
+<div id="app" style="font-family:var(--font-sans);">
+
+<!-- ══════════════════════════════════════
+     VISTA PRINCIPAL
+══════════════════════════════════════ -->
+<div id="view-main">
+
+  <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+    <span style="background:var(--color-background-info);color:var(--color-text-info);padding:2px 8px;border-radius:4px;font-size:10px;font-weight:500;">VISTA PRINCIPAL</span>
+    Banners de estado: informativos, sin detalle
+  </div>
+
+  <div style="border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);overflow:hidden;">
+
+    <!-- Nav -->
+    <div style="background:var(--color-background-primary);padding:11px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:0.5px solid var(--color-border-tertiary);">
+      <div>
+        <span style="font-size:15px;font-weight:500;color:var(--color-text-primary);">Dashboard</span>
+        <span style="font-size:12px;color:var(--color-text-secondary);margin-left:6px;">Vista general de canales y producción</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button style="font-size:11px;padding:4px 10px;">↓ Exportar todo</button>
+        <span style="background:var(--color-background-success);color:var(--color-text-success);font-size:11px;padding:3px 9px;border-radius:99px;font-weight:500;">● En vivo</span>
+        <span style="font-size:12px;color:var(--color-text-secondary);">12:23 P.M.</span>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div style="background:var(--color-background-primary);padding:0 18px;display:flex;border-bottom:0.5px solid var(--color-border-tertiary);">
+      <div style="padding:8px 14px;border-bottom:2px solid #16a34a;font-size:12px;font-weight:500;color:#16a34a;display:flex;align-items:center;gap:5px;">● 18 - jun <span style="font-size:11px;color:var(--color-text-secondary);font-weight:400;">activa</span></div>
+      <div style="padding:8px 14px;font-size:12px;color:var(--color-text-secondary);">19 - jun</div>
+      <div style="padding:8px 14px;font-size:12px;color:var(--color-text-secondary);">+ Abrir jornada</div>
+    </div>
+
+    <!-- Banner -->
+    <div style="background:#0f172a;padding:16px 22px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:150px;">
+        <span style="font-size:48px;font-weight:500;color:white;line-height:1;">290</span>
+        <div>
+          <div style="font-size:15px;font-weight:500;color:white;">JUEVES, 18 DE JUNIO</div>
+          <div style="font-size:11px;color:#4ade80;margin-top:3px;font-weight:500;">● VENTAS ACTIVAS</div>
+          <div style="font-size:11px;color:#64748b;margin-top:1px;">HOY · 18/6 · 12:23 P.M.</div>
+        </div>
+      </div>
+
+      <!-- Contadores de estado: SOLO NÚMEROS, sin paneles en el main -->
+      <div style="display:flex;gap:6px;">
+        <div style="text-align:center;padding:8px 13px;background:rgba(74,222,128,.1);border:0.5px solid rgba(74,222,128,.2);border-radius:8px;">
+          <div style="font-size:22px;font-weight:500;color:#4ade80;line-height:1.1;">247</div>
+          <div style="font-size:9px;color:#94a3b8;letter-spacing:.5px;margin-top:3px;text-transform:uppercase;">A despachar</div>
+        </div>
+        <div style="text-align:center;padding:8px 13px;background:rgba(248,113,113,.1);border:0.5px solid rgba(248,113,113,.2);border-radius:8px;">
+          <div style="font-size:22px;font-weight:500;color:#f87171;line-height:1.1;">28</div>
+          <div style="font-size:9px;color:#94a3b8;letter-spacing:.5px;margin-top:3px;text-transform:uppercase;">Canceladas</div>
+        </div>
+        <div style="text-align:center;padding:8px 13px;background:rgba(251,146,60,.1);border:0.5px solid rgba(251,146,60,.2);border-radius:8px;">
+          <div style="font-size:22px;font-weight:500;color:#fb923c;line-height:1.1;">15</div>
+          <div style="font-size:9px;color:#94a3b8;letter-spacing:.5px;margin-top:3px;text-transform:uppercase;">Reprogramadas</div>
+        </div>
+      </div>
+
+      <div style="border-left:0.5px solid rgba(255,255,255,.08);padding-left:14px;text-align:right;">
+        <div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.4px;">Pendientes</div>
+        <div style="font-size:22px;font-weight:500;color:white;">290</div>
+        <div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.4px;margin-top:5px;">Producido</div>
+        <div style="font-size:22px;font-weight:500;color:white;">0</div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        <div style="background:#16a34a;color:white;padding:7px 13px;border-radius:6px;font-size:11px;font-weight:500;">🔒 Cerrar jornada 18-jun</div>
+        <div style="border:0.5px solid rgba(255,255,255,.15);color:rgba(255,255,255,.75);padding:7px 13px;border-radius:6px;font-size:11px;text-align:center;">+ Producir</div>
+      </div>
+    </div>
+
+    <!-- Cards -->
+    <div style="padding:14px 18px;background:var(--color-background-secondary);display:flex;flex-direction:column;gap:10px;">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+        <!-- Colecta: clickable → va al dash secundario -->
+        <div class="dc" style="border:1.5px solid #8b5cf6;cursor:pointer;" onclick="showSecondary()">
+          <div class="lbl" style="color:#8b5cf6;">Colecta <span style="color:var(--color-text-secondary);font-size:9px;text-transform:none;letter-spacing:0;font-weight:400;">→ ver producción</span></div>
+          <div class="num">220</div>
+          <div class="sub">ML · Retiro 12:00hs</div>
+          <div style="margin-top:auto;">
+            <span class="bg">✓ 185 a despachar</span>
+            <span class="br" style="display:block;margin:2px 0;">✕ 23 canceladas</span>
+            <span class="bw">↺ 12 reprogramadas</span>
+          </div>
+        </div>
+
+        <div class="dc" style="border:1.5px solid #10b981;cursor:pointer;">
+          <div class="lbl" style="color:#10b981;">Flex <span style="color:var(--color-text-secondary);font-size:9px;text-transform:none;letter-spacing:0;font-weight:400;">→ ver producción</span></div>
+          <div class="num">70</div>
+          <div class="sub">ML · Retiro 14:00hs</div>
+          <div style="margin-top:auto;">
+            <span class="bg">✓ 62 a despachar</span>
+            <span class="br" style="display:block;margin:2px 0;">✕ 5 canceladas</span>
+            <span class="bw">↺ 3 reprogramadas</span>
+          </div>
+        </div>
+
+        <div class="dc" style="border:1.5px solid #f97316;min-height:115px;">
+          <div class="lbl" style="color:#f97316;">Tienda Nube</div>
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+            <i class="ti ti-package" style="font-size:26px;color:var(--color-text-secondary);" aria-hidden="true"></i>
+            <span style="font-size:12px;color:var(--color-text-secondary);margin-top:6px;">Web propia</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+        <div class="dc" style="border:1.5px solid #f59e0b;min-height:85px;">
+          <div class="lbl" style="color:#d97706;">Distribuidores</div>
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+            <i class="ti ti-truck" style="font-size:26px;color:var(--color-text-secondary);" aria-hidden="true"></i>
+            <span style="font-size:12px;color:var(--color-text-secondary);margin-top:5px;">Mayoristas / bulto</span>
+          </div>
+        </div>
+        <div class="dc" style="border:1.5px solid #ec4899;min-height:85px;">
+          <div class="lbl" style="color:#db2777;">No Flex</div>
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+            <i class="ti ti-package" style="font-size:26px;color:var(--color-text-secondary);" aria-hidden="true"></i>
+            <span style="font-size:12px;color:var(--color-text-secondary);margin-top:5px;">Logística inversa / repos.</span>
+          </div>
+        </div>
+        <div class="dc" style="border:1.5px solid #06b6d4;min-height:85px;">
+          <div class="lbl" style="color:#0891b2;">Correo Argentino</div>
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+            <i class="ti ti-mail" style="font-size:26px;color:var(--color-text-secondary);" aria-hidden="true"></i>
+            <span style="font-size:12px;color:var(--color-text-secondary);margin-top:5px;">Logística inversa</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Solo Stock en la fila inferior — limpio -->
+      <div style="display:grid;grid-template-columns:1fr 3fr;gap:10px;">
+        <div class="dc" style="border:1.5px solid #7c3aed;">
+          <div class="lbl" style="color:#7c3aed;">Stock</div>
+          <div class="num">1</div>
+          <div style="font-size:11px;color:var(--color-text-secondary);margin-top:3px;">Almacén central</div>
+        </div>
+        <!-- Indicador limpio de acción del día -->
+        <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:14px;display:flex;align-items:center;gap:14px;">
+          <i class="ti ti-info-circle" style="font-size:20px;color:var(--color-text-secondary);" aria-hidden="true"></i>
+          <div>
+            <div style="font-size:13px;font-weight:500;color:var(--color-text-primary);">28 canceladas · 15 reprogramadas</div>
+            <div style="font-size:12px;color:var(--color-text-secondary);margin-top:2px;">El detalle y registro acumulativo está disponible dentro de cada canal de producción</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     VISTA SECUNDARIA (Producción - Colecta)
+══════════════════════════════════════ -->
+<div id="view-secondary" style="display:none;">
+
+  <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+    <span style="background:var(--color-background-warning);color:var(--color-text-warning);padding:2px 8px;border-radius:4px;font-size:10px;font-weight:500;">VISTA SECUNDARIA</span>
+    Registro informativo acumulativo — exportable para informe mensual
+  </div>
+
+  <div style="border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);overflow:hidden;">
+
+    <!-- Nav secundario -->
+    <div style="background:var(--color-background-primary);padding:10px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:0.5px solid var(--color-border-tertiary);">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="cursor:pointer;color:var(--color-text-secondary);font-size:13px;" onclick="showMain()">← Dashboard</span>
+        <span style="color:var(--color-border-tertiary);">/</span>
+        <i class="ti ti-package" style="font-size:16px;color:var(--color-text-secondary);" aria-hidden="true"></i>
+        <span style="font-size:14px;font-weight:500;color:var(--color-text-primary);">Colecta</span>
+        <span style="font-size:12px;color:var(--color-text-secondary);">ML · Retiro 12:00hs · Último cierre: 17-jun, 02:38 p.m.</span>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button style="font-size:11px;padding:4px 10px;">↑ Importar Excel</button>
+        <button style="font-size:11px;padding:4px 10px;">↓ Exportar</button>
+        <div style="background:#16a34a;color:white;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:500;cursor:pointer;">+ Producir</div>
+      </div>
+    </div>
+
+    <!-- Alerta jornada vencida -->
+    <div style="background:#fff7ed;border-bottom:0.5px solid #fed7aa;padding:8px 18px;display:flex;align-items:center;gap:8px;">
+      <i class="ti ti-alert-triangle" style="font-size:16px;color:#ea580c;" aria-hidden="true"></i>
+      <span style="font-size:12px;color:#9a3412;">Jornada vencida — la hora de cierre era 12:00. Cerrá ahora para archivar y arrastrar el faltante.</span>
+    </div>
+
+    <!-- Stats -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;border-bottom:0.5px solid var(--color-border-tertiary);">
+      <div style="padding:16px 20px;border-right:0.5px solid var(--color-border-tertiary);">
+        <div style="font-size:11px;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">Unidades totales</div>
+        <div style="font-size:28px;font-weight:500;color:var(--color-text-primary);">220</div>
+      </div>
+      <div style="padding:16px 20px;border-right:0.5px solid var(--color-border-tertiary);">
+        <div style="font-size:11px;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">Unidades producidas</div>
+        <div style="font-size:28px;font-weight:500;color:var(--color-text-primary);">0</div>
+      </div>
+      <div style="padding:16px 20px;">
+        <div style="font-size:11px;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">Faltantes de producción</div>
+        <div style="font-size:28px;font-weight:500;color:var(--color-text-danger);">220</div>
+      </div>
+    </div>
+
+    <!-- Tabla SKU (simplificada) -->
+    <div style="padding:14px 18px;background:var(--color-background-secondary);">
+      <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);overflow:hidden;margin-bottom:8px;">
+        <div style="padding:10px 14px;border-bottom:0.5px solid var(--color-border-tertiary);display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-size:12px;font-weight:500;color:var(--color-text-primary);">Pendiente por SKU</span>
+          <span style="font-size:12px;color:var(--color-text-secondary);">13 productos</span>
+        </div>
+        <div style="display:grid;grid-template-columns:80px 1fr 70px 70px 70px;padding:7px 14px;border-bottom:0.5px solid var(--color-border-tertiary);">
+          <span style="font-size:10px;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.4px;">SKU</span>
+          <span style="font-size:10px;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.4px;">Producto</span>
+          <span style="font-size:10px;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.4px;text-align:right;">Pedido</span>
+          <span style="font-size:10px;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.4px;text-align:right;">Producido</span>
+          <span style="font-size:10px;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.4px;text-align:right;">Faltante</span>
+        </div>
+        <div style="display:grid;grid-template-columns:80px 1fr 70px 70px 70px;padding:7px 14px;border-bottom:0.5px solid var(--color-border-tertiary);align-items:center;">
+          <span style="font-size:12px;color:var(--color-text-secondary);">MAD301</span>
+          <div><div style="font-size:12px;color:var(--color-text-primary);">Bumerang</div><div style="font-size:11px;color:var(--color-text-secondary);">● Blanco</div></div>
+          <span style="font-size:12px;text-align:right;color:var(--color-text-primary);">98</span>
+          <span style="font-size:12px;text-align:right;color:var(--color-text-secondary);">0</span>
+          <span style="font-size:12px;text-align:right;color:var(--color-text-danger);font-weight:500;">98</span>
+        </div>
+        <div style="display:grid;grid-template-columns:80px 1fr 70px 70px 70px;padding:7px 14px;border-bottom:0.5px solid var(--color-border-tertiary);align-items:center;">
+          <span style="font-size:12px;color:var(--color-text-secondary);">MAD302</span>
+          <div><div style="font-size:12px;color:var(--color-text-primary);">Boomerang</div><div style="font-size:11px;color:var(--color-text-secondary);">● Negro</div></div>
+          <span style="font-size:12px;text-align:right;color:var(--color-text-primary);">63</span>
+          <span style="font-size:12px;text-align:right;color:var(--color-text-secondary);">0</span>
+          <span style="font-size:12px;text-align:right;color:var(--color-text-danger);font-weight:500;">63</span>
+        </div>
+        <div style="display:grid;grid-template-columns:80px 1fr 70px 70px 70px;padding:7px 14px;align-items:center;">
+          <span style="font-size:12px;color:var(--color-text-secondary);">MAD095</span>
+          <div><div style="font-size:12px;color:var(--color-text-primary);">Set Redonda</div><div style="font-size:11px;color:var(--color-text-secondary);">● Blanco</div></div>
+          <span style="font-size:12px;text-align:right;color:var(--color-text-primary);">14</span>
+          <span style="font-size:12px;text-align:right;color:var(--color-text-secondary);">0</span>
+          <span style="font-size:12px;text-align:right;color:var(--color-text-danger);font-weight:500;">14</span>
+        </div>
+      </div>
+
+      <!-- Secciones expandibles existentes -->
+      <div class="exp-section">
+        <div class="sec-hdr" onclick="toggle('pedidos')">
+          <span style="font-size:13px;color:var(--color-text-primary);">Pedidos individuales</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:500;color:var(--color-text-primary);">215</span>
+            <i class="ti ti-chevron-down" id="ic-pedidos" style="font-size:14px;color:var(--color-text-secondary);transition:transform .2s;" aria-hidden="true"></i>
+          </div>
+        </div>
+        <div id="pedidos" style="display:none;padding:10px 14px;border-top:0.5px solid var(--color-border-tertiary);">
+          <span style="font-size:12px;color:var(--color-text-secondary);">215 órdenes individuales listas para producir</span>
+        </div>
+      </div>
+
+      <div class="exp-section">
+        <div class="sec-hdr" onclick="toggle('lotes')">
+          <span style="font-size:13px;color:var(--color-text-primary);">Lotes importados</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:500;color:var(--color-text-primary);">25</span>
+            <i class="ti ti-chevron-down" id="ic-lotes" style="font-size:14px;color:var(--color-text-secondary);transition:transform .2s;" aria-hidden="true"></i>
+          </div>
+        </div>
+        <div id="lotes" style="display:none;padding:10px 14px;border-top:0.5px solid var(--color-border-tertiary);">
+          <span style="font-size:12px;color:var(--color-text-secondary);">25 lotes cargados desde Excel</span>
+        </div>
+      </div>
+
+      <!-- ── NUEVAS SECCIONES INFORMATIVAS ── -->
+
+      <div class="exp-section" style="border-color:var(--color-border-danger);">
+        <div class="sec-hdr" style="background:var(--color-background-danger);" onclick="toggle('canceladas')">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:500;color:var(--color-text-danger);">✕ Canceladas</span>
+            <span style="font-size:10px;padding:2px 7px;background:var(--color-background-primary);color:var(--color-text-danger);border-radius:99px;font-weight:500;border:0.5px solid var(--color-border-danger);">Informativo · acumulable</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:500;color:var(--color-text-danger);">23</span>
+            <button style="font-size:10px;padding:2px 8px;border-radius:4px;background:var(--color-background-primary);color:var(--color-text-danger);border:0.5px solid var(--color-border-danger);" onclick="event.stopPropagation()">↓ Exportar</button>
+            <i class="ti ti-chevron-down" id="ic-canceladas" style="font-size:14px;color:var(--color-text-danger);transition:transform .2s;" aria-hidden="true"></i>
+          </div>
+        </div>
+        <div id="canceladas" style="display:none;">
+          <div class="si" style="display:grid;grid-template-columns:80px 1fr 80px 90px;align-items:center;">
+            <span style="font-size:10px;color:var(--color-text-secondary);">SKU</span>
+            <span style="font-size:10px;color:var(--color-text-secondary);">Producto / Orden</span>
+            <span style="font-size:10px;color:var(--color-text-secondary);">Canal</span>
+            <span style="font-size:10px;color:var(--color-text-secondary);">Motivo</span>
+          </div>
+          <div class="si" style="display:grid;grid-template-columns:80px 1fr 80px 90px;align-items:center;">
+            <span style="font-size:11px;color:var(--color-text-secondary);">MAD301</span>
+            <div><div style="font-size:12px;color:var(--color-text-primary);">Bumerang B</div><div style="font-size:11px;color:var(--color-text-secondary);">#2348122</div></div>
+            <span style="font-size:11px;color:var(--color-text-secondary);">Colecta</span>
+            <span class="chip br">Comprador</span>
+          </div>
+          <div class="si" style="display:grid;grid-template-columns:80px 1fr 80px 90px;align-items:center;">
+            <span style="font-size:11px;color:var(--color-text-secondary);">MAD095</span>
+            <div><div style="font-size:12px;color:var(--color-text-primary);">Set Redonda B</div><div style="font-size:11px;color:var(--color-text-secondary);">#2348089</div></div>
+            <span style="font-size:11px;color:var(--color-text-secondary);">Colecta</span>
+            <span class="chip br">Sin stock</span>
+          </div>
+          <div class="si" style="display:grid;grid-template-columns:80px 1fr 80px 90px;align-items:center;">
+            <span style="font-size:11px;color:var(--color-text-secondary);">MAD051</span>
+            <div><div style="font-size:12px;color:var(--color-text-primary);">Mesa Redonda B</div><div style="font-size:11px;color:var(--color-text-secondary);">#2347980</div></div>
+            <span style="font-size:11px;color:var(--color-text-secondary);">Colecta</span>
+            <span class="chip br">Comprador</span>
+          </div>
+          <div style="padding:8px 14px;border-top:0.5px solid var(--color-border-tertiary);text-align:center;font-size:11px;color:var(--color-text-info);cursor:pointer;">Ver 20 más →</div>
+        </div>
+      </div>
+
+      <div class="exp-section" style="border-color:var(--color-border-warning);">
+        <div class="sec-hdr" style="background:var(--color-background-warning);" onclick="toggle('reprog')">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:500;color:var(--color-text-warning);">↺ Reprogramadas</span>
+            <span style="font-size:10px;padding:2px 7px;background:var(--color-background-primary);color:var(--color-text-warning);border-radius:99px;font-weight:500;border:0.5px solid var(--color-border-warning);">Informativo · acumulable</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:500;color:var(--color-text-warning);">12</span>
+            <button style="font-size:10px;padding:2px 8px;border-radius:4px;background:var(--color-background-primary);color:var(--color-text-warning);border:0.5px solid var(--color-border-warning);" onclick="event.stopPropagation()">↓ Exportar</button>
+            <i class="ti ti-chevron-down" id="ic-reprog" style="font-size:14px;color:var(--color-text-warning);transition:transform .2s;" aria-hidden="true"></i>
+          </div>
+        </div>
+        <div id="reprog" style="display:none;">
+          <div class="si" style="display:grid;grid-template-columns:80px 1fr 80px 110px;align-items:center;">
+            <span style="font-size:10px;color:var(--color-text-secondary);">SKU</span>
+            <span style="font-size:10px;color:var(--color-text-secondary);">Producto / Orden</span>
+            <span style="font-size:10px;color:var(--color-text-secondary);">Canal</span>
+            <span style="font-size:10px;color:var(--color-text-secondary);">Fecha</span>
+          </div>
+          <div class="si" style="display:grid;grid-template-columns:80px 1fr 80px 110px;align-items:center;">
+            <span style="font-size:11px;color:var(--color-text-secondary);">MAD301</span>
+            <div><div style="font-size:12px;color:var(--color-text-primary);">Bumerang B</div><div style="font-size:11px;color:var(--color-text-secondary);">#2347812</div></div>
+            <span style="font-size:11px;color:var(--color-text-secondary);">Colecta</span>
+            <span style="font-size:11px;color:var(--color-text-secondary);">18/6 → <span style="color:var(--color-text-warning);font-weight:500;">20/6</span></span>
+          </div>
+          <div class="si" style="display:grid;grid-template-columns:80px 1fr 80px 110px;align-items:center;">
+            <span style="font-size:11px;color:var(--color-text-secondary);">MAD304</span>
+            <div><div style="font-size:12px;color:var(--color-text-primary);">Set XL B</div><div style="font-size:11px;color:var(--color-text-secondary);">#2347655</div></div>
+            <span style="font-size:11px;color:var(--color-text-secondary);">Colecta</span>
+            <span style="font-size:11px;color:var(--color-text-secondary);">18/6 → <span style="color:var(--color-text-warning);font-weight:500;">19/6</span></span>
+          </div>
+          <div class="si" style="display:grid;grid-template-columns:80px 1fr 80px 110px;align-items:center;">
+            <span style="font-size:11px;color:var(--color-text-secondary);">MAD095</span>
+            <div><div style="font-size:12px;color:var(--color-text-primary);">Set Redonda B</div><div style="font-size:11px;color:var(--color-text-secondary);">#2347502</div></div>
+            <span style="font-size:11px;color:var(--color-text-secondary);">Colecta</span>
+            <span style="font-size:11px;color:var(--color-text-secondary);">18/6 → <span style="color:var(--color-text-warning);font-weight:500;">21/6</span></span>
+          </div>
+          <div style="padding:8px 14px;border-top:0.5px solid var(--color-border-tertiary);text-align:center;font-size:11px;color:var(--color-text-info);cursor:pointer;">Ver 9 más →</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+</div>
+
+<script>
+function showSecondary(){
+  document.getElementById('view-main').style.display='none';
+  document.getElementById('view-secondary').style.display='block';
+}
+function showMain(){
+  document.getElementById('view-secondary').style.display='none';
+  document.getElementById('view-main').style.display='block';
+}
+function toggle(id){
+  var el=document.getElementById(id);
+  var ic=document.getElementById('ic-'+id);
+  var open=el.style.display!=='none';
+  el.style.display=open?'none':'block';
+  if(ic) ic.style.transform=open?'':'rotate(180deg)';
+}
+</script>

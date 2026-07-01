@@ -731,7 +731,7 @@
       'Rubro': r.rubro || '',
       'Notas': r.notas || '',
     }));
-    const ws = window.XLSX.utils.json_to_sheet(out);
+    const ws = window.brandedJsonToSheet ? window.brandedJsonToSheet(out, 'Reporte import proveedores') : window.XLSX.utils.json_to_sheet(out);
     const wb = window.XLSX.utils.book_new();
     window.XLSX.utils.book_append_sheet(wb, ws, 'Reporte import');
     const fecha = new Date().toISOString().slice(0, 10);
@@ -1057,7 +1057,7 @@
       'Movement generado': r.movement_generado ? 'sí' : 'no',
       'Notas': r.notas || '',
     }));
-    const ws = window.XLSX.utils.json_to_sheet(out);
+    const ws = window.brandedJsonToSheet ? window.brandedJsonToSheet(out, 'Reporte import cheques') : window.XLSX.utils.json_to_sheet(out);
     const wb = window.XLSX.utils.book_new();
     const sheet = kind === 'received' ? 'Reporte recibidos' : 'Reporte emitidos';
     window.XLSX.utils.book_append_sheet(wb, ws, sheet);
@@ -1416,7 +1416,7 @@
       'Forma cobro': r.forma_cobro || '',
       'Notas': r.notas || '',
     }));
-    const ws = window.XLSX.utils.json_to_sheet(out);
+    const ws = window.brandedJsonToSheet ? window.brandedJsonToSheet(out, 'Reporte import empleados') : window.XLSX.utils.json_to_sheet(out);
     const wb = window.XLSX.utils.book_new();
     window.XLSX.utils.book_append_sheet(wb, ws, 'Reporte empleados');
     const fecha = new Date().toISOString().slice(0, 10);
@@ -1441,13 +1441,14 @@
   async function getCompanySettings() {
     const { data, error } = await supa.rpc('rpc_admin_get_company_settings');
     if (error) throw new Error(error.message || 'No se pudo cargar configuración de empresa');
-    return data;
+    return window.normalizeCompanySettings ? window.normalizeCompanySettings(data) : data;
   }
 
   async function updateCompanySettings(payload) {
-    const { data, error } = await supa.rpc('rpc_admin_update_company_settings', { p_payload: payload });
+    const clean = window.normalizeCompanySettings ? window.normalizeCompanySettings(payload) : payload;
+    const { data, error } = await supa.rpc('rpc_admin_update_company_settings', { p_payload: clean });
     if (error) throw new Error(error.message || 'No se pudo guardar configuración de empresa');
-    return data;
+    return window.normalizeCompanySettings ? window.normalizeCompanySettings(data) : data;
   }
 
   /* loadRecibos: SELECT directo (RLS owner/admin only). Incluye anulados
@@ -1614,7 +1615,7 @@
     aoa.push([]);
     aoa.push(['', '', '', '', 'TOTAL:', suma, '']);
 
-    const ws = window.XLSX.utils.aoa_to_sheet(aoa);
+    const ws = window.brandedAoaToSheet ? window.brandedAoaToSheet(aoa, 'Historial salarial') : window.XLSX.utils.aoa_to_sheet(aoa);
     const wb = window.XLSX.utils.book_new();
     window.XLSX.utils.book_append_sheet(wb, ws, `Recibos ${year}`);
     const fname = `historial_${normalizeFilename(empleado.nombre)}_${year}.xlsx`;
@@ -1666,7 +1667,9 @@
         ultimoTxt,
       ]);
     });
-    const wsResumen = window.XLSX.utils.aoa_to_sheet(resumenAoa.filter(r => r && r.length >= 0));
+    const wsResumen = window.brandedAoaToSheet
+      ? window.brandedAoaToSheet(resumenAoa.filter(r => r && r.length >= 0), 'Reportes salariales')
+      : window.XLSX.utils.aoa_to_sheet(resumenAoa.filter(r => r && r.length >= 0));
     window.XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
 
     /* N hojas detalle (cap REPORTES_GLOBAL_DETAIL_CAP) */
@@ -1705,7 +1708,7 @@
       } else {
         detalleAoa.push(['(Recibos detallados no incluidos en el export rápido. Usar el modal individual.)']);
       }
-      const ws = window.XLSX.utils.aoa_to_sheet(detalleAoa);
+      const ws = window.brandedAoaToSheet ? window.brandedAoaToSheet(detalleAoa, 'Detalle salarial') : window.XLSX.utils.aoa_to_sheet(detalleAoa);
       /* Nombre de hoja: máx 31 chars, sin caracteres prohibidos /\?*[] */
       const safeName = `Detalle - ${(t.nombre || `Empl${idx+1}`)}`
         .replace(/[\/\\?*\[\]:]/g, ' ')
@@ -1808,7 +1811,7 @@
     const desde = (period && period.desde) || '';
     const hasta = (period && period.hasta) || '';
     const incluirProy = !!(period && period.incluirProy);
-    const rs   = (companySettings && companySettings.razon_social) || 'MACARIO';
+    const rs   = window.getCompanyBrandName ? window.getCompanyBrandName(companySettings) : ((companySettings && companySettings.razon_social) || 'Justo Makario');
     const cuit = (companySettings && companySettings.cuit) || '';
 
     const filasArr = Array.isArray(filas) ? filas : [];
@@ -1849,7 +1852,7 @@
       aoa.push(['', '', '', '', '', 'SALDO FINAL:', lastSaldo, '']);
     }
 
-    const ws = window.XLSX.utils.aoa_to_sheet(aoa);
+    const ws = window.brandedAoaToSheet ? window.brandedAoaToSheet(aoa, 'Cash Flow') : window.XLSX.utils.aoa_to_sheet(aoa);
     const wb = window.XLSX.utils.book_new();
     window.XLSX.utils.book_append_sheet(wb, ws, `Cash Flow ${(desde || '').slice(0, 7) || ''}`.slice(0, 31));
     const fechaHoy = new Date().toISOString().slice(0, 10);
@@ -2004,7 +2007,7 @@
     const topProv  = Array.isArray(snap.top_proveedores) ? snap.top_proveedores : [];
     const topEmpl  = Array.isArray(snap.top_empleados)   ? snap.top_empleados   : [];
 
-    const rs   = (companySettings && companySettings.razon_social) || 'MACARIO';
+    const rs   = window.getCompanyBrandName ? window.getCompanyBrandName(companySettings) : ((companySettings && companySettings.razon_social) || 'Justo Makario');
     const cuit = (companySettings && companySettings.cuit) || '';
     const dom  = (companySettings && companySettings.domicilio) || '';
 
@@ -2067,7 +2070,7 @@
     aoa.push([]);
     aoa.push([`Generado: ${new Date().toLocaleString('es-AR')}`]);
 
-    const ws = window.XLSX.utils.aoa_to_sheet(aoa);
+    const ws = window.brandedAoaToSheet ? window.brandedAoaToSheet(aoa, 'Reporte de cierre') : window.XLSX.utils.aoa_to_sheet(aoa);
     const wb = window.XLSX.utils.book_new();
     window.XLSX.utils.book_append_sheet(wb, ws, `Cierre ${String(c.periodo_desde).slice(0,7)}`.slice(0,31));
     const fechaHoy = new Date().toISOString().slice(0,10);

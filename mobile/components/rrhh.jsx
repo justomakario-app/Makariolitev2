@@ -434,6 +434,9 @@ function HsExtrasReporte({ onVolver }) {
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
     let y = 18;
     doc.setFont('helvetica', 'bold'); doc.setFontSize(15);
+    doc.setFontSize(10);
+    doc.text(window.MAKARIO_BRAND_NAME || 'Justo Makario', 12, y); y += 7;
+    doc.setFontSize(15);
     doc.text(`Horas extras · ${HE_MESES[mes-1]} ${anio}`, 12, y); y += 8;
     doc.setFontSize(9); doc.setFont('helvetica', 'normal');
     const headers = ['Empleado','Categoría','Horas','Total','Liquidado','Pendiente'];

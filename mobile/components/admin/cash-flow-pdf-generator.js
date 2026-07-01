@@ -45,7 +45,7 @@
   }
 
   function buildHeader(cs) {
-    const out = [{ text: (cs && cs.razon_social) || 'MACARIO', style: 'h1' }];
+    const out = [{ text: window.getCompanyBrandName ? window.getCompanyBrandName(cs) : ((cs && cs.razon_social) || 'Justo Makario'), style: 'h1' }];
     const line2 = [];
     if (cs && cs.cuit)      line2.push(`CUIT ${cs.cuit}`);
     if (cs && cs.domicilio) line2.push(cs.domicilio);

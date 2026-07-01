@@ -57,7 +57,7 @@
     /* Header empresa */
     const headerEmpresa = [
       {
-        text: (cs && cs.razon_social) || 'MACARIO',
+        text: window.getCompanyBrandName ? window.getCompanyBrandName(cs) : ((cs && cs.razon_social) || 'Justo Makario'),
         style: 'h1',
       },
     ];

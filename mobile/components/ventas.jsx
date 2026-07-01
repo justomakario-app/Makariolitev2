@@ -48,6 +48,24 @@ function mayMoney(n) {
   return '$' + v.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function venCompanyForExport(company) {
+  if (window.normalizeCompanySettings) return window.normalizeCompanySettings(company);
+  return Object.assign({ razon_social: 'Justo Makario' }, company || {});
+}
+
+function venDrawCompanyHeader(doc, company, x, y) {
+  const c = venCompanyForExport(company);
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(40,40,40);
+  doc.text(c.razon_social || 'Justo Makario', x, y); y += 4;
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(80,80,80);
+  if (c.cuit) { doc.text(`CUIT ${c.cuit}`, x, y); y += 4; }
+  const dom = [c.domicilio, c.ciudad, c.provincia].filter(Boolean).join(', ');
+  if (dom) { doc.text(dom, x, y); y += 4; }
+  const cont = [c.telefono, c.email].filter(Boolean).join('  ·  ');
+  if (cont) { doc.text(cont, x, y); y += 4; }
+  return y;
+}
+
 function VentasPage() {
   const TABS = [
     { id:'alta-clientes',    label:'Alta y mod. clientes' },
@@ -1703,17 +1721,11 @@ function presupuestoPDF(p, company) {
   if (!window.jspdf || !window.jspdf.jsPDF) { try { window.MOCK_BUS; } catch (_) {} alert('Librería PDF no cargada — refrescá la página'); return; }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit:'mm', format:'a4' });
-  const M = 14; let y = 18;
+  const M = 14; let y = 14;
+  y = venDrawCompanyHeader(doc, company, M, y) + 3;
   doc.setFont('helvetica','bold'); doc.setFontSize(16);
   doc.text(`PRESUPUESTO ${p.numero}`, M, y); y += 7;
   doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(80,80,80);
-  if (company) {
-    doc.text(`${company.razon_social || ''}${company.cuit ? '  ·  CUIT ' + company.cuit : ''}`, M, y); y += 4;
-    const dom = [company.domicilio, company.ciudad, company.provincia].filter(Boolean).join(', ');
-    if (dom) { doc.text(dom, M, y); y += 4; }
-    const cont = [company.telefono, company.email].filter(Boolean).join('  ·  ');
-    if (cont) { doc.text(cont, M, y); y += 4; }
-  }
   doc.setTextColor(0,0,0);
   y += 2;
   doc.text(`Emisión: ${venFecha(p.fecha_emision)}     Validez: ${venFecha(p.fecha_validez)}`, M, y); y += 7;
@@ -2225,17 +2237,11 @@ function remitoPDF(r, company) {
   if (!window.jspdf || !window.jspdf.jsPDF) { alert('Librería PDF no cargada — refrescá la página'); return; }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit:'mm', format:'a4' });
-  const M = 14; let y = 18;
+  const M = 14; let y = 14;
+  y = venDrawCompanyHeader(doc, company, M, y) + 3;
   doc.setFont('helvetica','bold'); doc.setFontSize(16);
   doc.text(`REMITO ${r.numero}`, M, y); y += 7;
   doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(80,80,80);
-  if (company) {
-    doc.text(`${company.razon_social || ''}${company.cuit ? '  ·  CUIT ' + company.cuit : ''}`, M, y); y += 4;
-    const dom = [company.domicilio, company.ciudad, company.provincia].filter(Boolean).join(', ');
-    if (dom) { doc.text(dom, M, y); y += 4; }
-    const cont = [company.telefono, company.email].filter(Boolean).join('  ·  ');
-    if (cont) { doc.text(cont, M, y); y += 4; }
-  }
   doc.setTextColor(0,0,0); y += 2;
   doc.text(`Emisión: ${venFecha(r.fecha_emision)}     Entrega: ${venFecha(r.fecha_entrega)}${r.transportista ? '     Transportista: ' + r.transportista : ''}`, M, y); y += 6;
   if (r.pedido_numero) { doc.text(`Pedido: ${r.pedido_numero}`, M, y); y += 6; }

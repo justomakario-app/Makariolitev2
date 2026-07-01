@@ -36,7 +36,7 @@ function ProduccionPage() {
       toast.error('Librería de Excel todavía no cargó · reintentá');
       return;
     }
-    const ws = window.XLSX.utils.json_to_sheet(filas);
+    const ws = window.brandedJsonToSheet ? window.brandedJsonToSheet(filas, 'Producción pendiente') : window.XLSX.utils.json_to_sheet(filas);
     ws['!cols'] = [{ wch: 16 }, { wch: 12 }, { wch: 48 }, { wch: 12 }];
     const wb = window.XLSX.utils.book_new();
     window.XLSX.utils.book_append_sheet(wb, ws, 'Producción pendiente');

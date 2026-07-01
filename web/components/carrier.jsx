@@ -50,7 +50,9 @@ function CarrierPage({ channel, onBack, onNav }) {
     if (!window.XLSX || !rows || !rows.length) return;
     const aoa = [['# venta', 'SKU', 'Producto', 'Cantidad', tipo === 'cancel' ? 'Motivo' : 'Reprogramada']];
     rows.forEach(r => aoa.push([r.numero, r.sku, r.modelo, r.cantidad, tipo === 'cancel' ? (r.motivo || '') : (r.reprogramadaAt || '')]));
-    const ws = window.XLSX.utils.aoa_to_sheet(aoa);
+    const ws = window.brandedAoaToSheet
+      ? window.brandedAoaToSheet(aoa, tipo === 'cancel' ? 'Canceladas' : 'Reprogramadas')
+      : window.XLSX.utils.aoa_to_sheet(aoa);
     const wb = window.XLSX.utils.book_new();
     window.XLSX.utils.book_append_sheet(wb, ws, tipo === 'cancel' ? 'Canceladas' : 'Reprogramadas');
     window.XLSX.writeFile(wb, `${tipo === 'cancel' ? 'canceladas' : 'reprogramadas'}-${channel}.xlsx`);
@@ -117,7 +119,7 @@ function CarrierPage({ channel, onBack, onNav }) {
               toast.error('Librería de Excel todavía no cargó · reintentá en un segundo');
               return;
             }
-            const ws = window.XLSX.utils.json_to_sheet(filas);
+            const ws = window.brandedJsonToSheet ? window.brandedJsonToSheet(filas, `Producción pendiente - ${C.label || channel}`) : window.XLSX.utils.json_to_sheet(filas);
             ws['!cols'] = [{ wch: 12 }, { wch: 48 }, { wch: 12 }];
             const wb = window.XLSX.utils.book_new();
             window.XLSX.utils.book_append_sheet(wb, ws, (C.label || 'Pendiente').slice(0, 31));

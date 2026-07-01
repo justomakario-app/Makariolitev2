@@ -76,7 +76,7 @@
 
   function buildPortada(cierre, cs) {
     const out = [];
-    out.push({ text: (cs && cs.razon_social) || 'MACARIO', style: 'h1', alignment: 'center', margin: [0, 40, 0, 6] });
+    out.push({ text: window.getCompanyBrandName ? window.getCompanyBrandName(cs) : ((cs && cs.razon_social) || 'Justo Makario'), style: 'h1', alignment: 'center', margin: [0, 40, 0, 6] });
     const linea2 = [];
     if (cs && cs.cuit)      linea2.push(`CUIT ${cs.cuit}`);
     if (cs && cs.domicilio) linea2.push(cs.domicilio);

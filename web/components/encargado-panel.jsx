@@ -746,7 +746,7 @@ function EncHistorico({ U }) {
     (data.por_dia || []).forEach(d => aoa.push([d.dia, d.cortes, d.melamina, d.pino, d.embalaje]));
     aoa.push([]); aoa.push(['Top productos embalados']); aoa.push(['SKU', 'Nombre', 'Unidades']);
     (data.top_productos || []).forEach(t => aoa.push([t.producto_sku, t.nombre, t.unidades]));
-    const ws = window.XLSX.utils.aoa_to_sheet(aoa);
+    const ws = window.brandedAoaToSheet ? window.brandedAoaToSheet(aoa, 'Histórico de producción') : window.XLSX.utils.aoa_to_sheet(aoa);
     const wb = window.XLSX.utils.book_new();
     window.XLSX.utils.book_append_sheet(wb, ws, 'Historico');
     window.XLSX.writeFile(wb, `historico_produccion_${data.desde}_${data.hasta}.xlsx`);

@@ -13,6 +13,61 @@ const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 window.SUPA = supa;
 
+const MAKARIO_BRAND_NAME = 'Justo Makario';
+window.MAKARIO_BRAND_NAME = MAKARIO_BRAND_NAME;
+
+function makarioBrandKey(value) {
+  const raw = String(value || '').trim();
+  const normalized = raw.normalize ? raw.normalize('NFD') : raw;
+  return normalized
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function normalizeMakarioBrandName(value) {
+  const raw = String(value || '').trim();
+  const key = makarioBrandKey(raw);
+  if (!key) return MAKARIO_BRAND_NAME;
+  if (
+    key === 'macario' ||
+    key === 'makario' ||
+    key === 'c macario' ||
+    key === 'c makario' ||
+    key === 'justo macario' ||
+    key === 'justo makario' ||
+    key === 'macario lite' ||
+    key === 'makario lite' ||
+    /\bmacario\b/.test(key) ||
+    /\bmakario\b/.test(key)
+  ) {
+    return MAKARIO_BRAND_NAME;
+  }
+  return raw;
+}
+
+window.normalizeMakarioBrandName = normalizeMakarioBrandName;
+window.getCompanyBrandName = (settings) => normalizeMakarioBrandName(settings && settings.razon_social);
+window.normalizeCompanySettings = (settings) => {
+  const out = Object.assign({}, settings || {});
+  out.razon_social = window.getCompanyBrandName(out);
+  return out;
+};
+window.brandedAoaToSheet = (aoa, title) => {
+  const header = [[MAKARIO_BRAND_NAME]];
+  if (title) header.push([title]);
+  header.push([]);
+  return window.XLSX.utils.aoa_to_sheet(header.concat(Array.isArray(aoa) ? aoa : []));
+};
+window.brandedJsonToSheet = (rows, title) => {
+  const startRow = title ? 'A4' : 'A3';
+  const ws = window.XLSX.utils.json_to_sheet(Array.isArray(rows) ? rows : [], { origin: startRow });
+  const header = title ? [[MAKARIO_BRAND_NAME], [title], []] : [[MAKARIO_BRAND_NAME], []];
+  window.XLSX.utils.sheet_add_aoa(ws, header, { origin: 'A1' });
+  return ws;
+};
+
 /* ── Helpers expuestos ── */
 window.usernameToEmail = (u) => {
   const v = (u || '').trim();
@@ -1580,6 +1635,7 @@ window.REPORT_UTILS = {
         Sobrante: r.stock || 0,
       }));
       const meta = [
+        { Campo: 'Empresa', Valor: window.MAKARIO_BRAND_NAME || 'Justo Makario' },
         { Campo: 'Canal', Valor: C.label },
         { Campo: 'Fecha jornada', Valor: fechaStr },
         { Campo: 'Cerrada el', Valor: cierre.fecha || '' },
@@ -1608,6 +1664,8 @@ window.REPORT_UTILS = {
       const PAGE_W = 210;
       let y = 18;
       doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.text(window.MAKARIO_BRAND_NAME || 'Justo Makario', 12, y); y += 6;
       doc.setFontSize(16);
       doc.text(`Cierre ${C.label}`, 12, y); y += 7;
       doc.setFont('helvetica', 'normal');
@@ -1759,7 +1817,7 @@ window.QR_UTILS = {
 
   /* Genera un PDF A4 con grilla 4×5 (20 etiquetas/hoja) de los SKUs
      pasados. Cada celda lleva: QR + SKU + modelo + color. Se descarga
-     como `makario-qrs-{fecha}.pdf`. */
+     como `justo-makario-qrs-{fecha}.pdf`. */
   async descargarPDFCatalogo(skus) {
     if (!window.jspdf || !window.jspdf.jsPDF) {
       throw new Error('Librería jsPDF no cargada — refrescá la página.');
@@ -1771,22 +1829,34 @@ window.QR_UTILS = {
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
 
     const PAGE_W = 210, PAGE_H = 297;
-    const MARGIN = 8;
+    const MARGIN_X = 8;
+    const MARGIN_TOP = 15;
+    const MARGIN_BOTTOM = 8;
     const COLS = 4, ROWS = 5;
     const PER_PAGE = COLS * ROWS;
-    const cellW = (PAGE_W - 2 * MARGIN) / COLS;   // 48.5 mm
-    const cellH = (PAGE_H - 2 * MARGIN) / ROWS;   // 56.2 mm
+    const cellW = (PAGE_W - 2 * MARGIN_X) / COLS;   // 48.5 mm
+    const cellH = (PAGE_H - MARGIN_TOP - MARGIN_BOTTOM) / ROWS;
     const QR_SIZE = 35;                            // mm — escaneable desde 30-50cm
+    const drawHeader = () => {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(0, 0, 0);
+      doc.text(window.MAKARIO_BRAND_NAME || 'Justo Makario', MARGIN_X, 9);
+    };
 
+    drawHeader();
     let i = 0;
     for (const sku of skus) {
       const info = window.SKU_DB[sku] || {};
-      if (i > 0 && i % PER_PAGE === 0) doc.addPage();
+      if (i > 0 && i % PER_PAGE === 0) {
+        doc.addPage();
+        drawHeader();
+      }
       const idx = i % PER_PAGE;
       const col = idx % COLS;
       const row = Math.floor(idx / COLS);
-      const x = MARGIN + col * cellW;
-      const y = MARGIN + row * cellH;
+      const x = MARGIN_X + col * cellW;
+      const y = MARGIN_TOP + row * cellH;
 
       // QR
       const dataUrl = await this.generarQRDataUrl(sku, { width: 256 });
@@ -1828,6 +1898,6 @@ window.QR_UTILS = {
       i++;
     }
 
-    doc.save(`makario-qrs-${new Date().toISOString().slice(0, 10)}.pdf`);
+    doc.save(`justo-makario-qrs-${new Date().toISOString().slice(0, 10)}.pdf`);
   },
 };

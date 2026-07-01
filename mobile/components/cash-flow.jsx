@@ -90,7 +90,7 @@ function CashFlowBody() {
 
   /* Carga lazy de company_settings (1 sola vez por sesión de la página).
      Best-effort: si falla, el export PDF usa fallbacks (razón social
-     'MACARIO', resto vacío). */
+     'Justo Makario', resto vacío). */
   useEffect(() => {
     if (companySettings) return;
     let cancelled = false;

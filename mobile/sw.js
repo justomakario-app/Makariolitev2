@@ -3,19 +3,19 @@
    No cachea queries de Supabase (siempre van a la red).
 */
 
-const CACHE = 'macario-mobile-v1';
+const CACHE = 'macario-mobile-v2';
 const SHELL = [
   '/m/',
   '/m/index.html',
   '/m/components/styles.css',
   '/m/components/mobile.css',
-  '/m/components/data.js?v=2',
+  '/m/components/data.js?v=48',
   '/m/components/shared.jsx?v=11',
   '/m/components/login.jsx?v=11',
   '/m/components/bottombar.jsx?v=1',
-  '/m/components/dashboard.jsx?v=1',
-  '/m/components/carrier.jsx?v=1',
-  '/m/components/produccion.jsx?v=1',
+  '/m/components/dashboard.jsx?v=12',
+  '/m/components/carrier.jsx?v=11',
+  '/m/components/produccion.jsx?v=5',
   '/m/components/scan.jsx?v=1',
   '/m/components/modals.jsx?v=11',
   '/m/components/pages.jsx?v=1',

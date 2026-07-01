@@ -17,7 +17,7 @@ function CompanySettingsModal({ onClose, onSuccess }) {
   const [saving, setSaving]     = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [form, setForm]         = useState({
-    razon_social:  '',
+    razon_social:  window.MAKARIO_BRAND_NAME || 'Justo Makario',
     cuit:          '',
     domicilio:     '',
     ciudad:        '',
@@ -34,16 +34,17 @@ function CompanySettingsModal({ onClose, onSuccess }) {
     A.getCompanySettings()
       .then(data => {
         if (cancelled || !data) return;
+        const cs = window.normalizeCompanySettings ? window.normalizeCompanySettings(data) : data;
         setForm({
-          razon_social:  data.razon_social  || '',
-          cuit:          data.cuit          || '',
-          domicilio:     data.domicilio     || '',
-          ciudad:        data.ciudad        || '',
-          provincia:     data.provincia     || '',
-          codigo_postal: data.codigo_postal || '',
-          telefono:      data.telefono      || '',
-          email:         data.email         || '',
-          notas:         data.notas         || '',
+          razon_social:  cs.razon_social  || (window.MAKARIO_BRAND_NAME || 'Justo Makario'),
+          cuit:          cs.cuit          || '',
+          domicilio:     cs.domicilio     || '',
+          ciudad:        cs.ciudad        || '',
+          provincia:     cs.provincia     || '',
+          codigo_postal: cs.codigo_postal || '',
+          telefono:      cs.telefono      || '',
+          email:         cs.email         || '',
+          notas:         cs.notas         || '',
         });
         setLoading(false);
       })
@@ -125,8 +126,8 @@ function CompanySettingsModal({ onClose, onSuccess }) {
       ) : (
         <>
           <div className="field-help" style={{marginBottom:12}}>
-            Estos datos aparecen como encabezado en los PDFs de los recibos
-            de sueldo (S2.12).
+            Estos datos aparecen como encabezado en los PDFs y documentos
+            exportados de la app.
           </div>
 
           <div className="field-group">

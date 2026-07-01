@@ -65,7 +65,7 @@ function CarrierPage({ channel, onBack }) {
       toast.error('Librería de Excel todavía no cargó · reintentá en un segundo');
       return;
     }
-    const ws = window.XLSX.utils.json_to_sheet(filas);
+    const ws = window.brandedJsonToSheet ? window.brandedJsonToSheet(filas, `Producción pendiente - ${C.label || channel}`) : window.XLSX.utils.json_to_sheet(filas);
     ws['!cols'] = [{ wch: 12 }, { wch: 48 }, { wch: 12 }];
     const wb = window.XLSX.utils.book_new();
     window.XLSX.utils.book_append_sheet(wb, ws, (C.label || 'Pendiente').slice(0, 31));
