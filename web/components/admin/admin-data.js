@@ -1811,14 +1811,13 @@
     const desde = (period && period.desde) || '';
     const hasta = (period && period.hasta) || '';
     const incluirProy = !!(period && period.incluirProy);
-    const rs   = window.getCompanyBrandName ? window.getCompanyBrandName(companySettings) : ((companySettings && companySettings.razon_social) || 'Justo Makario');
     const cuit = (companySettings && companySettings.cuit) || '';
 
     const filasArr = Array.isArray(filas) ? filas : [];
 
     /* Header */
     const aoa = [
-      [`Cash Flow - ${rs}${cuit ? ' (CUIT ' + cuit + ')' : ''}`],
+      ...(cuit ? [[`CUIT ${cuit}`]] : []),
       [`Período: ${desde} al ${hasta}${incluirProy ? ' · incluye proyectado' : ''}`],
       [],
       [`Total ingresos:  $ ${Number(kpis.total_ingresos_real || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}`],
@@ -2007,14 +2006,15 @@
     const topProv  = Array.isArray(snap.top_proveedores) ? snap.top_proveedores : [];
     const topEmpl  = Array.isArray(snap.top_empleados)   ? snap.top_empleados   : [];
 
-    const rs   = window.getCompanyBrandName ? window.getCompanyBrandName(companySettings) : ((companySettings && companySettings.razon_social) || 'Justo Makario');
     const cuit = (companySettings && companySettings.cuit) || '';
     const dom  = (companySettings && companySettings.domicilio) || '';
+    const companyAoa = [];
+    if (cuit) companyAoa.push([`CUIT ${cuit}`]);
+    if (dom) companyAoa.push([dom]);
+    if (companyAoa.length) companyAoa.push([]);
 
     const aoa = [
-      [`${rs}${cuit ? ' · CUIT ' + cuit : ''}`],
-      [dom],
-      [],
+      ...companyAoa,
       [`Reporte de cierre ${c.tipo === 'mensual' ? 'mensual' : 'anual'}`],
       [`Período: ${String(c.periodo_desde).slice(0,10)} al ${String(c.periodo_hasta).slice(0,10)}`],
       [`Estado: ${c.estado}`],

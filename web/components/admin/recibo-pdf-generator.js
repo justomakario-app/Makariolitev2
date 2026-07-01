@@ -55,34 +55,9 @@
     const anulado = recibo.estado === 'anulado';
 
     /* Header empresa */
-    const headerEmpresa = [
-      {
-        text: window.getCompanyBrandName ? window.getCompanyBrandName(cs) : ((cs && cs.razon_social) || 'Justo Makario'),
-        style: 'h1',
-      },
-    ];
-
-    const linea2Parts = [];
-    if (cs && cs.cuit) linea2Parts.push(`CUIT ${cs.cuit}`);
-    if (cs && cs.domicilio) linea2Parts.push(cs.domicilio);
-    if (linea2Parts.length) {
-      headerEmpresa.push({ text: linea2Parts.join(' · '), style: 'small' });
-    }
-
-    const linea3Parts = [];
-    if (cs && cs.ciudad) linea3Parts.push(cs.ciudad);
-    if (cs && cs.provincia) linea3Parts.push(cs.provincia);
-    if (cs && cs.codigo_postal) linea3Parts.push(`(${cs.codigo_postal})`);
-    if (linea3Parts.length) {
-      headerEmpresa.push({ text: linea3Parts.join(', '), style: 'small' });
-    }
-
-    const linea4Parts = [];
-    if (cs && cs.telefono) linea4Parts.push(`Tel: ${cs.telefono}`);
-    if (cs && cs.email) linea4Parts.push(cs.email);
-    if (linea4Parts.length) {
-      headerEmpresa.push({ text: linea4Parts.join(' · '), style: 'small' });
-    }
+    const headerEmpresa = window.pdfMakeMakarioHeader
+      ? [window.pdfMakeMakarioHeader(cs)]
+      : [{ text: window.getCompanyBrandName ? window.getCompanyBrandName(cs) : ((cs && cs.razon_social) || 'Justo Makario'), style: 'h1' }];
 
     /* Tabla de items */
     const itemsBody = [

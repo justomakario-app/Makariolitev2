@@ -433,11 +433,17 @@ function HsExtrasReporte({ onVolver }) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
     let y = 18;
+    const logo = window.drawJsPdfMakarioLogo
+      ? window.drawJsPdfMakarioLogo(doc, 12, y, { width: 34, mainSize: 11, subSize: 7 })
+      : null;
     doc.setFont('helvetica', 'bold'); doc.setFontSize(15);
-    doc.setFontSize(10);
-    doc.text(window.MAKARIO_BRAND_NAME || 'Justo Makario', 12, y); y += 7;
+    if (!logo) {
+      doc.setFontSize(10);
+      doc.text(window.MAKARIO_BRAND_NAME || 'Justo Makario', 12, y); y += 7;
+    }
     doc.setFontSize(15);
-    doc.text(`Horas extras · ${HE_MESES[mes-1]} ${anio}`, 12, y); y += 8;
+    doc.text(`Horas extras · ${HE_MESES[mes-1]} ${anio}`, logo ? 54 : 12, logo ? y + 3 : y);
+    y = logo ? Math.max(logo.bottom + 6, y + 14) : y + 8;
     doc.setFontSize(9); doc.setFont('helvetica', 'normal');
     const headers = ['Empleado','Categoría','Horas','Total','Liquidado','Pendiente'];
     const colX = [12, 70, 110, 130, 155, 180];

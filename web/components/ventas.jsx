@@ -55,15 +55,20 @@ function venCompanyForExport(company) {
 
 function venDrawCompanyHeader(doc, company, x, y) {
   const c = venCompanyForExport(company);
+  const logo = window.drawJsPdfMakarioLogo
+    ? window.drawJsPdfMakarioLogo(doc, x, y, { width: 38, mainSize: 11, subSize: 7 })
+    : null;
+  const detailX = logo ? x + 46 : x;
+  let detailY = logo ? y + 1 : y;
   doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(40,40,40);
-  doc.text(c.razon_social || 'Justo Makario', x, y); y += 4;
+  if (!logo) { doc.text(c.razon_social || 'Justo Makario', detailX, detailY); detailY += 4; }
   doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(80,80,80);
-  if (c.cuit) { doc.text(`CUIT ${c.cuit}`, x, y); y += 4; }
+  if (c.cuit) { doc.text(`CUIT ${c.cuit}`, detailX, detailY); detailY += 4; }
   const dom = [c.domicilio, c.ciudad, c.provincia].filter(Boolean).join(', ');
-  if (dom) { doc.text(dom, x, y); y += 4; }
+  if (dom) { doc.text(dom, detailX, detailY); detailY += 4; }
   const cont = [c.telefono, c.email].filter(Boolean).join('  ·  ');
-  if (cont) { doc.text(cont, x, y); y += 4; }
-  return y;
+  if (cont) { doc.text(cont, detailX, detailY); detailY += 4; }
+  return logo ? Math.max(detailY, logo.bottom) : detailY;
 }
 
 function VentasPage() {

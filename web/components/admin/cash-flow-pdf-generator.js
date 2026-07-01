@@ -45,16 +45,11 @@
   }
 
   function buildHeader(cs) {
-    const out = [{ text: window.getCompanyBrandName ? window.getCompanyBrandName(cs) : ((cs && cs.razon_social) || 'Justo Makario'), style: 'h1' }];
-    const line2 = [];
-    if (cs && cs.cuit)      line2.push(`CUIT ${cs.cuit}`);
-    if (cs && cs.domicilio) line2.push(cs.domicilio);
-    if (line2.length) out.push({ text: line2.join(' · '), style: 'small' });
-    const line3 = [];
-    if (cs && cs.ciudad)        line3.push(cs.ciudad);
-    if (cs && cs.provincia)     line3.push(cs.provincia);
-    if (cs && cs.codigo_postal) line3.push(`(${cs.codigo_postal})`);
-    if (line3.length) out.push({ text: line3.join(', '), style: 'small' });
+    const out = [
+      window.pdfMakeMakarioHeader
+        ? window.pdfMakeMakarioHeader(cs, { logoSize: 15, logoSubSize: 9, margin: [0, 0, 0, 6] })
+        : { text: window.getCompanyBrandName ? window.getCompanyBrandName(cs) : ((cs && cs.razon_social) || 'Justo Makario'), style: 'h1' },
+    ];
     out.push({
       canvas: [{ type:'line', x1:0, y1:5, x2:515, y2:5, lineWidth:0.5, lineColor:'#666' }],
       margin: [0, 4, 0, 4],

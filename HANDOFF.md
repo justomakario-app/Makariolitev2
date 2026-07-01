@@ -80,6 +80,48 @@
 
 ---
 
+### [2026-07-01] Exportaciones — logo Justo Makario en documentos
+
+**Qué hice**
+- Agregué un helper central de marca para exportaciones que dibuja el logo textual existente de la app: `JUSTO / MAKARIO / Home`.
+- Reemplacé encabezados que antes imprimían solo el nombre por encabezados con logo en PDFs y encabezado tipo logo en Excel.
+- Quité duplicaciones de marca: si se usa el logo, no se vuelve a escribir "Justo Makario" al lado.
+- Actualicé cache-busters web/mobile y el service worker mobile para evitar JS viejo en navegador.
+
+**Por qué lo hice**
+- La dueña reportó que las exportaciones salían con una marca incorrecta/incompleta y eso afectaba la identidad visual.
+- El logo ya contiene el nombre, por lo que imprimir nombre + logo duplicaba la marca y se veía poco profesional.
+
+**Para qué lo hice**
+- Para que recibos, cierres, cash flow, reportes, PDFs de ventas/remitos/presupuestos, horas extras, QRs y reportes Excel salgan con identidad Justo Makario consistente.
+- Para que futuros exports usen un único helper y no vuelvan a aparecer variantes como `Macario`, `MACARIO` o `C Macario`.
+
+**Cómo**
+- En `web/components/data.js` y `mobile/components/data.js` agregué:
+  - `window.pdfMakeMakarioLogo()` para PDFs hechos con pdfmake.
+  - `window.pdfMakeMakarioHeader()` para logo + datos fiscales/contacto sin repetir razón social.
+  - `window.drawJsPdfMakarioLogo()` para PDFs hechos con jsPDF.
+  - `window.brandedAoaToSheet()` y `window.brandedJsonToSheet()` ahora agregan filas `JUSTO`, `MAKARIO`, `Home` antes del título/tabla.
+- En los generadores PDF administrativos reemplacé encabezados manuales por los helpers de logo:
+  - `components/admin/recibo-pdf-generator.js`
+  - `components/admin/cash-flow-pdf-generator.js`
+  - `components/admin/cierre-pdf-generator.js`
+- En exportadores jsPDF ajusté layouts para logo solo + título/datos:
+  - `components/data.js` (cierre de jornada + PDFs de QR)
+  - `components/ventas.jsx` (presupuestos/remitos)
+  - `components/rrhh.jsx` (horas extras)
+- En Excel administrativo eliminé encabezados tipo `Cash Flow - Justo Makario` / `Justo Makario · CUIT...` porque el logo ya abre la hoja.
+
+**Técnico**
+- No hubo cambio de schema ni funciones Supabase para esta parte del logo.
+- SheetJS CE no permite insertar imágenes reales en XLSX de forma simple/confiable sin agregar otra dependencia; por eso Excel usa un encabezado vector/textual tipo logo (`JUSTO`, `MAKARIO`, `Home`) y PDF usa texto vectorial nítido.
+- Los templates de importación (`plantilla-proveedores`, `plantilla-cheques`, `plantilla-empleados`) se dejaron sin branding para no romper el formato que luego se vuelve a importar.
+- Cache actualizado:
+  - Web: `data.js?v=50`, `admin-data.js?v=24`, PDFs admin `v=4/v=3/v=3`, `rrhh.jsx?v=5`, `ventas.jsx?v=8`.
+  - Mobile: `data.js?v=49`, `admin-data.js?v=23`, PDFs admin `v=4/v=3/v=3`, `rrhh.jsx?v=5`, `ventas.jsx?v=8`, `macario-mobile-v3`.
+
+---
+
 ### [2026-06-21] Ventas — fix de 2 bugs del import (auditoría de producción) · 0099
 
 Investigación de bugs (pedido del Jefe). 2 bugs **reproducidos empíricamente** en `rpc_import_batch` (smokes en transacción) y corregidos.

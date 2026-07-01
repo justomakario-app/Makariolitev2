@@ -14,7 +14,9 @@ const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 window.SUPA = supa;
 
 const MAKARIO_BRAND_NAME = 'Justo Makario';
+const MAKARIO_LOGO_LINES = ['JUSTO', 'MAKARIO', 'Home'];
 window.MAKARIO_BRAND_NAME = MAKARIO_BRAND_NAME;
+window.MAKARIO_LOGO_LINES = MAKARIO_LOGO_LINES;
 
 function makarioBrandKey(value) {
   const raw = String(value || '').trim();
@@ -54,16 +56,88 @@ window.normalizeCompanySettings = (settings) => {
   out.razon_social = window.getCompanyBrandName(out);
   return out;
 };
+window.pdfMakeMakarioLogo = (opts) => {
+  const o = opts || {};
+  const main = o.mainSize || 16;
+  const sub = o.subSize || Math.round(main * 0.62);
+  const align = o.alignment || 'center';
+  return {
+    stack: [
+      {
+        text: [
+          { text: 'JUSTO', bold: true },
+          { text: '  ®', bold: false, fontSize: Math.max(6, Math.round(main * 0.42)) },
+        ],
+        bold: true,
+        fontSize: main,
+        alignment: align,
+        margin: [0, 0, 0, -1],
+      },
+      { text: 'MAKARIO', bold: true, fontSize: main, alignment: align, margin: [0, 0, 0, 1] },
+      { text: 'Home', italics: true, fontSize: sub, alignment: align },
+    ],
+    margin: o.margin || [0, 0, 0, 0],
+  };
+};
+window.pdfMakeMakarioHeader = (settings, opts) => {
+  const o = opts || {};
+  const cs = window.normalizeCompanySettings(settings);
+  const lines = [];
+  if (cs.cuit) lines.push(`CUIT ${cs.cuit}`);
+  if (cs.domicilio) lines.push(cs.domicilio);
+  const geo = [cs.ciudad, cs.provincia, cs.codigo_postal ? `(${cs.codigo_postal})` : ''].filter(Boolean).join(', ');
+  if (geo) lines.push(geo);
+  const contact = [cs.telefono ? `Tel: ${cs.telefono}` : '', cs.email || ''].filter(Boolean).join(' · ');
+  if (contact) lines.push(contact);
+  if (!lines.length) {
+    return window.pdfMakeMakarioLogo({
+      mainSize: o.logoSize || 16,
+      subSize: o.logoSubSize || 10,
+      margin: o.margin || [0, 0, 0, 6],
+    });
+  }
+  return {
+    columns: [
+      { width: o.logoWidth || 92, stack: [window.pdfMakeMakarioLogo({ mainSize: o.logoSize || 16, subSize: o.logoSubSize || 10 })] },
+      {
+        width: '*',
+        stack: lines.map(t => ({ text: t, fontSize: o.detailSize || 8, color: '#666', margin: [0, 0, 0, 1] })),
+        margin: [0, 3, 0, 0],
+      },
+    ],
+    columnGap: o.columnGap || 16,
+    margin: o.margin || [0, 0, 0, 6],
+  };
+};
+window.drawJsPdfMakarioLogo = (doc, x, y, opts) => {
+  const o = opts || {};
+  const width = o.width || 34;
+  const main = o.mainSize || 12;
+  const sub = o.subSize || 8;
+  const cx = x + width / 2;
+  doc.setTextColor(20, 20, 20);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(main);
+  doc.text('JUSTO', cx, y, { align: 'center' });
+  doc.text('MAKARIO', cx, y + 4.8, { align: 'center' });
+  doc.setFontSize(main * 0.42);
+  doc.setFont('helvetica', 'normal');
+  doc.text('®', x + width - 1.5, y - 0.6, { align: 'right' });
+  doc.setFont('times', 'italic');
+  doc.setFontSize(sub);
+  doc.text('Home', cx, y + 10.2, { align: 'center' });
+  return { width, height: 12.5, bottom: y + 12.5 };
+};
 window.brandedAoaToSheet = (aoa, title) => {
-  const header = [[MAKARIO_BRAND_NAME]];
+  const header = [['JUSTO'], ['MAKARIO'], ['Home']];
   if (title) header.push([title]);
   header.push([]);
   return window.XLSX.utils.aoa_to_sheet(header.concat(Array.isArray(aoa) ? aoa : []));
 };
 window.brandedJsonToSheet = (rows, title) => {
-  const startRow = title ? 'A4' : 'A3';
+  const startRow = title ? 'A6' : 'A5';
   const ws = window.XLSX.utils.json_to_sheet(Array.isArray(rows) ? rows : [], { origin: startRow });
-  const header = title ? [[MAKARIO_BRAND_NAME], [title], []] : [[MAKARIO_BRAND_NAME], []];
+  const header = title ? [['JUSTO'], ['MAKARIO'], ['Home'], [title], []] : [['JUSTO'], ['MAKARIO'], ['Home'], []];
   window.XLSX.utils.sheet_add_aoa(ws, header, { origin: 'A1' });
   return ws;
 };
@@ -1635,7 +1709,6 @@ window.REPORT_UTILS = {
         Sobrante: r.stock || 0,
       }));
       const meta = [
-        { Campo: 'Empresa', Valor: window.MAKARIO_BRAND_NAME || 'Justo Makario' },
         { Campo: 'Canal', Valor: C.label },
         { Campo: 'Fecha jornada', Valor: fechaStr },
         { Campo: 'Cerrada el', Valor: cierre.fecha || '' },
@@ -1645,7 +1718,9 @@ window.REPORT_UTILS = {
         { Campo: 'Faltante arrastrado', Valor: cierre.faltante || 0 },
       ];
       const wb = window.XLSX.utils.book_new();
-      const wsMeta = window.XLSX.utils.json_to_sheet(meta);
+      const wsMeta = window.brandedJsonToSheet
+        ? window.brandedJsonToSheet(meta, `Cierre ${C.label}`)
+        : window.XLSX.utils.json_to_sheet(meta);
       wsMeta['!cols'] = [{ wch: 24 }, { wch: 32 }];
       window.XLSX.utils.book_append_sheet(wb, wsMeta, 'Resumen');
       const wsDet = window.XLSX.utils.json_to_sheet(filas);
@@ -1663,15 +1738,16 @@ window.REPORT_UTILS = {
       const doc = new jsPDF({ unit: 'mm', format: 'a4' });
       const PAGE_W = 210;
       let y = 18;
+      const logo = window.drawJsPdfMakarioLogo
+        ? window.drawJsPdfMakarioLogo(doc, 12, y, { width: 34, mainSize: 11, subSize: 7 })
+        : null;
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.text(window.MAKARIO_BRAND_NAME || 'Justo Makario', 12, y); y += 6;
       doc.setFontSize(16);
-      doc.text(`Cierre ${C.label}`, 12, y); y += 7;
+      doc.text(`Cierre ${C.label}`, logo ? 54 : 12, y + 2); y += 7;
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(10);
-      doc.text(`Fecha jornada: ${fechaStr}`, 12, y); y += 5;
-      doc.text(`Cerrada el: ${cierre.fecha ? new Date(cierre.fecha).toLocaleString('es-AR') : '—'}`, 12, y); y += 5;
+      doc.text(`Fecha jornada: ${fechaStr}`, logo ? 54 : 12, y + 2); y += 5;
+      doc.text(`Cerrada el: ${cierre.fecha ? new Date(cierre.fecha).toLocaleString('es-AR') : '—'}`, logo ? 54 : 12, y + 2); y = Math.max(y + 5, logo ? logo.bottom + 6 : y + 5);
       y += 2;
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
@@ -1830,7 +1906,7 @@ window.QR_UTILS = {
 
     const PAGE_W = 210, PAGE_H = 297;
     const MARGIN_X = 8;
-    const MARGIN_TOP = 15;
+    const MARGIN_TOP = 21;
     const MARGIN_BOTTOM = 8;
     const COLS = 4, ROWS = 5;
     const PER_PAGE = COLS * ROWS;
@@ -1838,6 +1914,10 @@ window.QR_UTILS = {
     const cellH = (PAGE_H - MARGIN_TOP - MARGIN_BOTTOM) / ROWS;
     const QR_SIZE = 35;                            // mm — escaneable desde 30-50cm
     const drawHeader = () => {
+      if (window.drawJsPdfMakarioLogo) {
+        window.drawJsPdfMakarioLogo(doc, MARGIN_X, 8, { width: 27, mainSize: 8, subSize: 5 });
+        return;
+      }
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(9);
       doc.setTextColor(0, 0, 0);
