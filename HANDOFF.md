@@ -5,6 +5,30 @@
 
 ---
 
+## 🔒 REGLA PERMANENTE — IDENTIDAD Y AISLAMIENTO DEL PROYECTO
+
+> Aplica **solo** a Justo Makario. Nunca mezclar, copiar ni reutilizar en otros proyectos.
+
+**Datos correctos (los únicos válidos):**
+
+| Item | Valor |
+|---|---|
+| Proyecto | Justo Makario |
+| Cuenta de GitHub | `justomakario-app` |
+| Email | `justomakario@gmail.com` |
+| Repositorio | `https://github.com/justomakario-app/Makariolitev2.git` |
+| Rama | `master` |
+| EasyPanel — Proyecto | `app_gestion_interna` |
+| EasyPanel — Servicio | `makario_lite_nueva` |
+
+**Terminantemente prohibido** usar o relacionar con este proyecto: **ASCEND / Asentech**, la cuenta **`ascendtech1`**, **Antojo OS**, **Cloudflare**, **n8n**, otros repositorios/cuentas/credenciales/servicios, y **cualquier otro servicio de EasyPanel, incluido `justo_makario`**. No usar credenciales, configuraciones, identidades de Git, infraestructura ni decisiones provenientes de otros proyectos.
+
+**Protocolo ante discrepancia** — si una cuenta, repo, remote, rama, servicio o credencial **no coincide EXACTAMENTE** con la tabla de arriba: **(1) detenerse · (2) no cambiar nada · (3) no probar otra cuenta por cuenta propia · (4) preguntar al dueño antes de continuar.**
+
+Regla **permanente para Justo Makario**; no se traslada ni aplica a ningún otro proyecto.
+
+---
+
 ## [2026-07-21] Correcciones funcionales post-NO-GO (Bloque de 4 gaps) — migraciones 0112–0116
 
 El veredicto GO inicial fue **rechazado por el dueño**: faltaban 4 correcciones funcionales del brief. Resueltas y verificadas con smokes transaccionales (rollback). **Producción legacy sigue FROZEN** (`produccion.jsx`/`data.js`/`dashboard.jsx`/`carrier.jsx` sin tocar; verificado por `git status`).
@@ -29,7 +53,7 @@ El veredicto GO inicial fue **rechazado por el dueño**: faltaban 4 correcciones
 ### Estado y próximos pasos (orden estricto)
 
 - **Estado exacto: LISTO PARA REDEPLOY CONTROLADO — NO "validado en fábrica".** Todo lo verificado fue con smokes transaccionales (rollback) contra el remoto; falta la validación operativa real con Seba/el equipo tras el redeploy.
-- **Cadena de commits:** `45b2c95` (correcciones NO-GO) → `7fedf32` (motor 0101-0111) → `c99bb44` (origin/master). Los tres commits de docs/correcciones son **locales, sin pushear**. No reescribir `7fedf32` ni `45b2c95`.
+- **Cadena de commits** (local, sin pushear; identidad de autor `Justo Makario <justomakario@gmail.com>`): `9b6924f` (docs cierre gaps) → `d9b31d4` (correcciones NO-GO / 0112-0116) → `da605e1` (motor 0101-0111) → `c99bb44` (origin/master), más un commit de docs en el tope (esta regla de aislamiento + corrección de referencias de SHA). SHAs previos a la corrección de identidad (ya inexistentes): `d9c13b6`/`45b2c95`/`7fedf32`.
 - **Push:** pendiente hasta que GitHub tenga acceso (el 403 de `ascendtech1` en `justomakario-app/Makariolitev2` sigue vigente). Push normal, sin force, de todos los commits pendientes.
 - **Redeploy:** lo hace el dueño manualmente en EasyPanel `app_gestion_interna / makario_lite_nueva`. No tocar EasyPanel/Asentech/Cloudflare/justo_makario/n8n.
 - **Smoke OBLIGATORIO post-redeploy** (antes de operar en serio): abrir jornada → vincular ventas → ver demanda por sector (CNC/melamina/pino/embalaje) → registrar corte/melamina/embalaje → confirmar consumo de stock y patas → cerrar jornada → verificar que quedó en 0 necesidades → configurar un mínimo y ver alerta/estado "sin configurar" → verificar catálogo de venta sin los 67 internos.

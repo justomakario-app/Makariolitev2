@@ -52,7 +52,7 @@
 
 ---
 
-## Correcciones post-NO-GO — actualizado 2026-07-21 (migraciones 0112–0116, commit `45b2c95`)
+## Correcciones post-NO-GO — actualizado 2026-07-21 (migraciones 0112–0116, commit `d9b31d4`)
 
 > El GO inicial fue **rechazado por el dueño**: faltaban 4 gaps funcionales del brief. Cerrados y verificados con smokes transaccionales (rollback). Ver HANDOFF [2026-07-21]. **Estado: LISTO PARA REDEPLOY CONTROLADO — no "validado en fábrica".**
 
@@ -62,7 +62,7 @@
 - [x] **Gap 4 — Herramienta de mínimos + "sin configurar"** (`0116`): `prod_insumo.minimo_configurado` distingue "0 configurado" de "sin configurar" (los 37 estaban en 0 → nunca alertaban). RPC `prod_rpc_set_minimo` (owner/admin/encargado, valida ≥0, auditoría `prod_minimo_log`), trigger `prod_fn_alerta_stock` corregido (alerta solo si configurado>0 y stock<min), vista `prod_v_minimos` (sin_configurar/critico/bajo/ok). UI `encargado-panel` (web+mobile): banner "N sin configurar" + botón "Mín." + modal auditado.
 - [x] **Prueba transaccional 2 jornadas (MAD010, rollback)**: Jornada A demanda TAP001=2 → CNC PLB001 (1 hoja×rend50=50 crudas) → melamina 5 → faltante 0, **sobrante 3**. Cierre A → explosión 0. Jornada B demanda 3 → **faltante 0 (reusó el sobrante, sin re-cortar)** → embalaje 3 consume melamina −3 (una vez) + patas −9 (3 grandes×3 = regla MESA) → sobrante remanente 2 a futuro. Sin doble reserva ni doble consumo.
 - [x] **Regresión post-correcciones**: 137/137 JSX transpilan (Babel 7.29.0 = runtime); acumulado intacto (506 pendientes, 9.116 archivados excluidos); **Producción legacy FROZEN** (`produccion.jsx`/`data.js`/`dashboard.jsx`/`carrier.jsx` fuera del delta); ninguna tabla legacy alterada; tracker 0112–0116 alineado.
-- [x] **Higiene de commit** `45b2c95` (16 archivos, +427/−21): 0 secretos staged, 0 archivos ajenos; `.gitignore` bloquea `*ingreso*.txt`/`*token*.txt`/`brief_funcional_*.md`. Cadena: `45b2c95` → `7fedf32` → `c99bb44` (origin/master). Sin pushear.
+- [x] **Higiene de commit** `d9b31d4` (16 archivos, +427/−21): 0 secretos staged, 0 archivos ajenos; `.gitignore` bloquea `*ingreso*.txt`/`*token*.txt`/`brief_funcional_*.md`. Cadena (identidad `Justo Makario <justomakario@gmail.com>`): `9b6924f` → `d9b31d4` → `da605e1` → `c99bb44` (origin/master). Sin pushear.
 - [ ] **Smoke OBLIGATORIO post-redeploy** (dueño): abrir jornada → vincular ventas → demanda por sector → registrar corte/melamina/embalaje → confirmar consumo → cerrar → 0 necesidades → configurar mínimo/ver alerta → catálogo de venta sin los 67 internos.
 - [ ] **Rotación `service_role` / remediación INFORME**: **solo DESPUÉS** de verificar deploy sano (ventana de seguridad controlada).
 - [ ] **Residual**: `TAP025` pieza huérfana sin receta (pool `desconocido`, no bloquea BOM) → limpieza futura de datos.
