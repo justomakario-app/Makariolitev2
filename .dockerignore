@@ -37,7 +37,15 @@ npm-debug.log*
 # Lo que el container no necesita en runtime:
 # - app-makario-lite-nueva/: prototipo HTML legacy (referencia, no runtime)
 # - supabase/: migrations SQL (corren contra Supabase, no contra el container)
-# - DEPLOY.md, *.md de docs
+# - *.md de docs
 app-makario-lite-nueva/
 supabase/
-DEPLOY.md
+
+# Documentación / informes / accesos — NUNCA al container (pueden contener credenciales)
+*.md
+**/*.md
+web/INFORME_TECNICO_BACKEND.md
+**/ingreso*.txt
+*.xlsx
+backup_*/
+*.zip

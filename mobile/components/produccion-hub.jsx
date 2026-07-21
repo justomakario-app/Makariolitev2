@@ -197,6 +197,8 @@ function ProduccionHubPage() {
     { id:'stock',      label:'Stock',           stockOnly: true  },
     { id:'fe-fabrica', label:'De fábrica',      stockOnly: false },
     { id:'linea-prod', label:'Línea productiva', stockOnly: false },
+    { id:'tablero',    label:'Tablero LP',      stockOnly: false },
+    { id:'carga-stock',label:'Carga stock',     stockOnly: true  },
   ];
 
   const TABS = ALL_TABS.filter(t => !t.stockOnly || canSeeStock);
@@ -234,6 +236,10 @@ function ProduccionHubPage() {
           <LineaProductivaGuard role={role}/>
         ) : tab === 'fe-fabrica' ? (
           <DeFabrica/>
+        ) : tab === 'tablero' ? (
+          window.LineaDashboardPageMobile ? <window.LineaDashboardPageMobile/> : null
+        ) : tab === 'carga-stock' && canSeeStock ? (
+          window.LineaStockCargaPage ? <window.LineaStockCargaPage/> : null
         ) : (
           window.ProximamentePlaceholder
             ? <window.ProximamentePlaceholder nombre={active.label}/>

@@ -280,7 +280,7 @@ function EmbInicio({ U, jornadaAbierta, jornada, demanda, armMap, stockMel, stoc
 function EmbScan({ U, jornadaAbierta, productos, armMap, melMap, patasMap, onRegistrado, toast, goInicio }) {
   const [sel, setSel] = useState(null);
   const [unidades, setUnidades] = useState(1);
-  const [receta, setReceta] = useState([]);
+  const [prechBase, setPrechBase] = useState(null); // pre-check por unidad (canónico, BOM — misma fuente que el consumo backend)
   const [loadingRec, setLoadingRec] = useState(false);
   const [saving, setSaving] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -288,33 +288,29 @@ function EmbScan({ U, jornadaAbierta, productos, armMap, melMap, patasMap, onReg
   const armMax = sel ? (armMap[sel.sku] || 0) : 0;
 
   useEffect(() => {
-    if (!sel) { setReceta([]); return; }
+    if (!sel) { setPrechBase(null); return; }
     let vivo = true;
     setLoadingRec(true);
-    window.LP_DATA.recetaProducto(sel.sku)
-      .then(r => { if (vivo) setReceta(r || []); })
-      .catch(() => { if (vivo) setReceta([]); })
+    window.LP_DATA.embalajePrecheck({ producto_sku: sel.sku, unidades: 1 })
+      .then(r => { if (vivo) setPrechBase(r || null); })
+      .catch(() => { if (vivo) setPrechBase(null); })
       .finally(() => { if (vivo) setLoadingRec(false); });
     return () => { vivo = false; };
   }, [sel]);
 
   const u = Math.max(parseInt(unidades, 10) || 0, 0);
 
-  // Verificación de componentes (✓/✗)
-  const comps = [];
-  for (const r of receta) {
-    const need = u * (Number(r.cantidad) || 0);
-    const have = melMap[r.pieza_sku] || 0;
-    comps.push({ tipo:'Tapa', nombre: r.pieza_sku, need, have, ok: have >= need });
-  }
-  if (sel && sel.patas_tipo && (Number(sel.patas_cant) || 0) > 0) {
-    const need = u * (Number(sel.patas_cant) || 0);
-    const have = patasMap[sel.patas_tipo] || 0;
-    comps.push({ tipo:'Patas', nombre: sel.patas_tipo, need, have, ok: have >= need });
-  }
+  // Verificación de componentes CANÓNICA (BOM) — requerido escala con u, disponible = stock actual.
+  const comps = (prechBase && prechBase.componentes ? prechBase.componentes : []).map(c => {
+    const need = (Number(c.requerido) || 0) * u;
+    const have = Number(c.disponible) || 0;
+    const poolLabel = c.pool === 'patas' ? 'Patas' : c.pool === 'melamina' ? 'Melamina' : 'Insumo';
+    return { nombre: c.componente, tipo: `${poolLabel} · ${c.sector}`, need, have, faltante: Math.max(need - have, 0), ok: have >= need };
+  });
+  const sufic = comps.length > 0 && comps.every(c => c.ok);
   const kit = sel && sel.kit_embalaje ? Object.keys(sel.kit_embalaje).map(k => `${k}: ${sel.kit_embalaje[k]}`) : [];
 
-  const puedeEnviar = jornadaAbierta && sel && u > 0 && u <= armMax && !saving;
+  const puedeEnviar = jornadaAbierta && sel && u > 0 && u <= armMax && sufic && !saving;
 
   const enviar = async () => {
     if (!puedeEnviar) return;
@@ -397,7 +393,10 @@ function EmbScan({ U, jornadaAbierta, productos, armMap, melMap, patasMap, onReg
                     <div style={{fontSize:10, color:U.inkMuted}}>{c.tipo}</div>
                   </div>
                 </div>
-                <span style={{fontSize:12, fontWeight:700, color: c.ok ? U.inkSoft : U.danger, fontVariantNumeric:'tabular-nums'}}>{c.have} / {c.need}</span>
+                <div style={{textAlign:'right'}}>
+                  <div style={{fontSize:12, fontWeight:700, color: c.ok ? U.inkSoft : U.danger, fontVariantNumeric:'tabular-nums'}}>disp {c.have} / req {c.need}</div>
+                  {!c.ok ? <div style={{fontSize:9.5, color:U.danger, fontWeight:800}}>falta {c.faltante}</div> : null}
+                </div>
               </div>
             ))}
           </div>

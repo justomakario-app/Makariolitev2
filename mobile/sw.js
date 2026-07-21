@@ -3,7 +3,7 @@
    No cachea queries de Supabase (siempre van a la red).
 */
 
-const CACHE = 'macario-mobile-v3';
+const CACHE = 'macario-mobile-v4';
 const SHELL = [
   '/m/',
   '/m/index.html',

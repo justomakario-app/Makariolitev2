@@ -78,6 +78,277 @@
 
 ## Registro de tareas
 
+### [2026-07-21] AUDITORÍA FINAL E2E de Línea Productiva — VEREDICTO: GO (listo para redeploy manual)
+
+**Alcance auditado:** todo el módulo Línea Productiva (previo + esta etapa). Producción legacy = baseline congelada (no auditada para cambio, solo regresión).
+
+**Integridad backend (evidencia SQL):** 26 productos vendibles · 0 ciclos · 0 huérfanos · 0 duplicados · 0 hojas sin pool · 0 placas inválidas · 0 productos sin receta/componente · canónico prod_* (40 tablas) · **0 triggers nuevos en tablas legacy** · migraciones 0101–0111 aplicadas y **objetos coinciden con remoto** · tracker alineado a numérico (11).
+
+**Reglas de Seba (26 productos, verificadas):** SET 3ch+3gr · MESA 3gr · RECT 4gr · YORI 4×VAR003(85) · HIKARI 4×VAR004(45) · 26 recetas COMPLETA · 0 INCOMPLETA_PATAS · Pino operativo.
+
+**Tests obligatorios (transaccionales, rollback):**
+- CNC (punto 9): PLB003×3=54 piezas; PLB007=16 (MAD301); plan_corte refleja faltante neto stock-aware; ceil/rendimiento OK.
+- Sobrante + dos jornadas (punto 11): Melamina consume 30 → cruda 24 + terminada 30 (utilizable 54, **sin doble conteo**); cierre j1 → j2 **reutiliza** el sobrante (faltante refleja stock global). Melamina no procesa más de lo disponible.
+- 5 familias + jornada vincular (506) + dashboard (506/516/447, Pino operativo, 26 completas) + insuficiente bloquea sin parciales.
+- Carga stock: preview read-only, confirm idempotente, aborta lote si hay bloqueada, ledger con usuario/fecha/motivo.
+
+**Frontend:** 137 JSX (web+mobile) compilan · 0 scripts faltantes (sin 404) · cache-busters consistentes (produccion-hub v10, lp-data v12, embalaje-sector v6, linea-dashboard/linea-stock-carga v1) · SW mobile → v4 (invalida shell) · Tablero LP + Carga stock aislados, read-only al abrir, no rompen Producción si el RPC falla · anti doble-tap · card↔RPC exacto · 5 métricas separadas y dinámicas (contrastadas con cálculo independiente).
+
+**Regresión Producción: idéntica** (orders 9622, prod_logs 846/Σ9058, carrier 71, free_stock 44, jornadas 40; prod_* operativas en 0). data.js y RPCs legacy sin cambios; 0 triggers nuevos en legacy; los 4 tabs previos + default intactos.
+
+**RIESGOS RESIDUALES (documentados, NO bloqueantes del redeploy):**
+1. **Sectores operan sobre demanda GLOBAL** (`prod_v_orden_sector`/`prod_v_demanda_corte`/`prod_v_prioridad_melamina`/`prod_v_armables`), stock-aware y correcta post-0101. Las vistas **por jornada** (`prod_v_explosion_jornada`/`prod_v_faltante_jornada`) son infraestructura aditiva **no cableada aún** a las pantallas de sector (la jornada se usa como contenedor de escritura/trazabilidad). No es regresión. Cablearlas a per-jornada = mejora futura (requiere rewire + test).
+2. **`reservado`/`en_proceso`** existen como columnas pero ningún flujo los puebla → "reserva" es refinamiento futuro (el reuso de sobrante funciona vía `disponible`).
+3. **72 SKUs internos (AGU/CAJ) activos en `sku_catalog`** (categoría ACCESORIOS) — los consume el módulo ventas/ML legacy. **NO modificado** (evita romper legacy). Requiere que Seba confirme cuáles se venden como repuesto antes de separar.
+4. **Mínimos de stock**: 37 insumos, todos en 0 → funcionalidad de alertas lista pero **requiere configuración de valores por Seba**.
+5. **Pendiente de seguridad conocido** (INFORME/service_role) — ver banner. No se rota ahora (decisión de Aaron); ya excluido del artefacto Docker/ZIP.
+
+**GATE: verde** (0 bugs críticos/altos, 0 tests fallidos, migraciones completas, build OK, Producción intacta, secretos fuera del artefacto). → COMMIT + PUSH a origin/master. Redeploy = manual por Aaron en `app_gestion_interna/makario_lite_nueva`.
+
+---
+
+> ⚠️ **PENDIENTE DE SEGURIDAD CONOCIDO — resolver durante la ventana controlada del deploy final:** `web/INFORME_TECNICO_BACKEND.md` está commiteado en el repo (org justomakario-app) y contiene 1 JWT + referencias a `service_role` → credencial expuesta en GitHub y (según método de deploy) potencialmente servida por nginx. **NO se rota/revoca/modifica ahora** (decisión de Aaron: rotar solo tras deploy verificado). Mitigación ya aplicada en el artefacto: `.dockerignore` endurecido (`*.md`, INFORME, `ingreso*.txt`, xlsx, backups, zip) + el ZIP de deploy NO lo incluye. `supabase/ingreso...txt` (tokens): untracked, NO ignorado → no commitear.
+
+### [2026-07-20i] Migraciones locales 0103–0111 reconstruidas + paquete de deploy listo (sin subir)
+
+- **Migraciones 0103–0111 reconstruidas como archivos locales** (exactas a lo aplicado en remoto vía MCP; NO re-ejecutadas, NO se modificó Supabase, NO se reparó historial). Verificado: los 11 archivos (0101–0111) existen y **todos los objetos existen en remoto** (tablas/columnas/funciones/vistas = local ↔ remoto).
+- **Reglas de Seba consolidadas (verificadas):** SET 3ch+3gr · MESA 3gr · RECT 4gr · YORI 4×VAR003(85) · HIKARI 4×VAR004(45) · 26/26 recetas COMPLETA · 0 INCOMPLETA_PATAS · Pino operativo · Embalaje consume desde BOM · pre-check misma fuente · insuficiente bloquea sin parciales.
+- **Verificación final (smoke consolidado, rollback):** jornada vincular 506; dashboard 506/516/447 + Pino operativo + 26 completas; 5 familias con consumo correcto; insuficiente bloquea. **Regresión Producción idéntica** (9622/846/71/44/40; prod_* en 0). **137 JSX (web+mobile) compilan.**
+- **Paquete de deploy** (scratchpad, NO subido): `macario-lite-deploy.zip` — 729.5 KB, 159 archivos, SHA256 `78C3114BF19369C325ECDF5C74FBCF98481C5E536DDBFAD1873EF9EA900C3019`. Contiene: `web/Macario Lite.html`+`web/components/`, `mobile/*`, `nginx.conf`, `Dockerfile`, `.dockerignore`. **0 secretos privilegiados, 0 docs/migraciones/tokens.**
+- **Target EasyPanel:** proyecto `app_gestion_interna` / servicio `makario_lite_nueva` (no tocar `justo_makario`, `n8n`, otros). Método: subir ZIP (DEPLOY.md) o rebuild Docker.
+- **NO se hizo:** commit, push, deploy, upload, restart, redeploy, rotación de key, cambios de infraestructura.
+
+---
+
+### [2026-07-20h] Preview accesible (intento) + plan de deploy + escenarios de piloto
+
+**Preview público — intentado, NO confiable desde este entorno**
+- Precheck OK: frontend apunta solo a `ditmb…kimqv` con clave anon (public); 0 tokens privilegiados en el código servido; se excluyó `INFORME_TECNICO_BACKEND.md` del preview (contiene un token — no se sirve por la app, pero se sacó por las dudas).
+- Montado: copia aislada de `web/`(root)+`mobile/`(/m/) en scratchpad, servida local + túnel `cloudflared` (trycloudflare). URLs respondían 200; informe.md → 404.
+- **Falla**: el boot desktop espera a que carguen **~50 scripts `type=text/babel`**; si el túnel gratuito descarta 1 de 50 fetches concurrentes, el arranque nunca completa. En localhost boot=0 errores y cada archivo sirve 200 → **limitación del túnel gratuito, no del código**. Inconsistente incluso en mobile. Túnel dado de baja (no se entrega enlace roto).
+- **Para un preview confiable** hace falta un host estático con CDN (Cloudflare Pages / Vercel / Netlify) → requiere cuenta/token no configurado acá + autorización de Aaron. `deploy-to-vercel` existe como skill pero sin token.
+
+**Plan de deploy controlado (NO ejecutado — espera autorización)**
+- Archivos a publicar (frontend): `web/Macario Lite.html`, `web/components/{linea-dashboard.jsx,linea-stock-carga.jsx,produccion-hub.jsx,lp-data.jsx,embalaje-sector.jsx}`; `mobile/index.html`, `mobile/components/{linea-dashboard.jsx,linea-stock-carga.jsx,produccion-hub.jsx,lp-data.jsx,embalaje-sector.jsx}`.
+- Cache-busters: produccion-hub v10, lp-data v12, embalaje-sector v6, linea-dashboard v1, linea-stock-carga v1. (Mobile SW `macario-mobile-v3` → considerar bump a v4 para invalidar shell.)
+- Backend: migraciones 0101–0111 YA en remoto (aditivas). Backup `backup_20260720`.
+- Rollback frontend: revertir esos archivos a su versión previa (git) + restaurar cache-busters anteriores (produccion-hub v8/v9, lp-data v11, embalaje v5) + no republicar. Backend: las nuevas RPCs/columnas son aditivas y no rompen la versión anterior del front (que no las llama) → no requiere rollback de DB para volver el front atrás.
+- Orden: smoke autenticado OK → corregir hallazgos → build → regresión Producción → publicar → verificar → (rollback si algo falla).
+
+**Escenarios de piloto (PREPARADOS, NO ejecutados — esperan autorización)**
+- **Escenario A — Stock disponible** (no genera corte). Producto: **MAD095 (SET REDONDA)**. Venta: 1 unidad. Stock físico inicial: melamina TAP005 y TAP003 ≥1, patas chicas ≥3, grandes ≥3, insumos del kit (CAJ001, tornillos, soportes) — *cantidades exactas a contar en el conteo físico*. Necesidad bruta = receta×1. Faltante esperado = 0 (stock cubre). Placa/patrón esperado = **ninguno** (no debe planificar corte). Melamina: consume/entrega tapas. Pino: entrega patas del stock. Embalaje: valida (pre-check todo suficiente) → arma 1 → 1 terminado MAD095. Sobrante = stock inicial − consumido. Confirman: encargado (jornada+carga), embalaje (arma), owner (revisa). Evidencia por pantalla: Tablero LP faltante 0; Embalaje pre-check verde; terminado +1.
+- **Escenario B — Faltante que requiere CNC** (circuito completo). Producto: **MAD301 (BUMERANG)** — usa TAP011 (PLB007, 16/placa) + TAP001 (PLB001, 50/placa). Venta: p.ej. 20 unidades. Stock físico inicial: tapas TAP011/TAP001 **por debajo** de la necesidad (faltante real) — *cantidades a contar*. Necesidad bruta tapas = 20 c/u. Faltante esperado = 20 − stock. Plan de corte esperado: PLB007 (boomerang) ⌈faltante_TAP011/16⌉ placas; PLB001 (redonda30) ⌈faltante_TAP001/50⌉. Piezas generadas = placas×rendimiento. Excedente esperado = generado − faltante (queda en stock). Patas: PAT005 (3 chicas+3 grandes)×20 desde Pino (paralelo). Insumos: kit×20. Resultado: 20 terminados MAD301. Confirman: CNC (corte), Melamina (tapas), Pino (patas), Embalaje (arma), owner. Evidencia: Tablero LP faltante>0; plan de corte con placas/rendimiento; tras corte, stock pieza sube y faltante baja; sobrante registrado.
+- **Reversión operativa auditada mediante movimiento compensatorio** (NO "rollback"): si se ejecuta el piloto, ninguna corrección borra/edita movimientos; se hace con un movimiento inverso con motivo/usuario/fecha/referencia al piloto (vía `prod_stock_ajuste` u operación inversa). Producción legacy NO se toca.
+
+---
+
+> **ESTADO DE LA ETAPA (no cerrada punta a punta):** Backend productivo COMPLETO · GAP-B COMPLETO · patas/varillas CONFIRMADAS · dashboard backend COMPLETO · pre-check Embalaje CORREGIDO · UI carga inicial CONSTRUIDA · frontend desktop/mobile VALIDADO CON HARNESS. **PENDIENTE:** smoke autenticado real (detrás de login) · jornada piloto real con stock físico. **Frontend NO desplegado** (solo local).
+
+---
+
+### [2026-07-20g] LÍNEA PRODUCTIVA — Pre-check Embalaje canónico + UI carga inicial de stock · 0111
+
+**Pre-check de Embalaje corregido (`0111` + frontend)**
+- Antes: el pre-check visual usaba `patas_cant` (fuente vieja, null para sets) y `melMap` para TODA la receta (incl. CAJ/KIT) → display engañoso. El consumo backend ya era correcto; el display no.
+- **`prod_rpc_embalaje_precheck`** (read-only): explota el BOM canónico y devuelve por componente {componente, pool, sector, requerido, disponible, faltante, suficiente} + `suficiente_total`. Misma fuente que el consumo (`prod_rpc_registrar_embalaje`).
+- **Frontend** (`embalaje-sector.jsx` web+mobile): reemplazado el cálculo viejo por `LP_DATA.embalajePrecheck` (1 llamada por producto; requerido escala con unidades). Muestra requerido/disponible/faltante/pool·sector por componente; el botón se deshabilita si hay insuficiencia. NO usa `patas_cant`, ni reglas viejas, ni nombres.
+- **Smoke (5 familias)**: SET 3ch+3gr · MESA 3gr · RECT 4gr · YORI VAR003×4 · HIKARI VAR004×4 — canónico, exacto.
+
+**UI de carga inicial de stock (Bloque 5 frontend) — NUEVA, aislada**
+- `web/components/linea-stock-carga.jsx` + `mobile/components/linea-stock-carga.jsx` (`window.LineaStockCargaPage`, responsive) + tab **"Carga stock"** en ambos hubs (guard owner/admin/encargado; confirm solo owner/admin) + scripts en HTML.
+- Flujo: filas (SKU/bucket/cantidad/origen/motivo) → **Previsualizar** (`prod_rpc_stock_preview`, **read-only**, clasifica valida/advertencia/bloqueada + stock actual/proyectado por fila) → **Confirmar** (`prod_rpc_stock_confirmar`, write EXPLÍCITO idempotente por lote) → resultado (aplicadas/ya-aplicadas). Cancelar/limpiar. Anti doble-tap (botones deshabilitados mientras procesa). Abrir/previsualizar NO modifica stock.
+- `free_stock` legacy (44) queda separado/pendiente de conciliación (no se migra desde acá); `VAR002` (diámetro) aparte.
+- **Verificado (harness, playwright, 0 errores)**: desktop preview (VÁLIDA · stock 0→10 · Confirmar habilitado) + confirm result; mobile 360 bloqueada (BLOQUEADA · sector_incompatible · "Corregí las filas bloqueadas" deshabilitado; sin cortes). Harness temporal eliminado.
+
+**Regresión Producción**: legacy IDÉNTICA (orders 9622, prod_logs 846/Σ9058, carrier 71, free_stock 44, jornadas 40); prod_* operativas en 0.
+
+**Cache-busters bumpeados**: web+mobile produccion-hub v10, lp-data v12, embalaje-sector v6, +linea-stock-carga v1.
+
+**Estado de despliegue**: TODO local. Migraciones 0101–0111 **aplicadas en remoto** (Supabase). Frontend (web/ y mobile/) **NO desplegado** a la URL diaria. Pendiente: build + deploy con revisión + smoke autenticado. Producción sigue funcionando con la versión desplegada actual (sin mis cambios de frontend).
+
+---
+
+### [2026-07-20f] LÍNEA PRODUCTIVA — GAP-B (patas/varillas confirmadas por Seba) + frontend mobile + verificación visual · 0108/0109/0110
+
+**Reglas de patas/varillas CONFIRMADAS por Seba (fuente de verdad, mapeo EXPLÍCITO por SKU, sin LIKE)**
+- SET → 3 chicas + 3 grandes (1×PAT005). MESA individual → **3 grandes** (1×PAT004) [Seba corrigió: NO 3 chicas]. RECTANGULAR → 4 grandes (4×PAT002). YORI → 4×VAR003 (85cm), 0 patas. HIKARI → 4×VAR004 (45cm), 0 patas. Precedencia: YORI/HIKARI → rectangular → set → mesa.
+- **`0108`**: varillas por longitud VAR003(85cm)/VAR004(45cm) creadas aditivas (VAR001/002 eran por diámetro; no se migró stock de VAR002); BOM patas actualizado; YORI/HIKARI varillas; `patas_confirmadas=true`; `patas_cant` sincronizado desde BOM. Embalaje consume patas desde el BOM (canónico), atómico; varillas vía trigger insumo (pools separados, sin doble conteo).
+- **`0109`** (corrección Seba): 10 mesas individuales → 3 grandes (PAT004).
+- **`0110`**: dashboard `pino_estado` dinámico (operativo si todas las patas confirmadas).
+- **Verificación BOM**: 26/26 productos = reglas Seba; YORI=VAR003×4, HIKARI=VAR004×4; INCOMPLETA_PATAS=0, COMPLETA=26.
+- **Smokes GAP-B (rollback)**: SET consume 3ch+3gr ✓; MESA 0ch+3gr ✓; RECT 0ch+4gr ✓; YORI/HIKARI 0 patas + 4 varillas ✓; patas insuficientes BLOQUEA ✓.
+- **Regresión**: Producción legacy IDÉNTICA (orders 9622, prod_logs 846/Σ9058, carrier 71/516, free_stock 44, jornadas 40); prod_* operativas en 0 (smokes revirtieron).
+
+**Frontend mobile + verificación visual (harness)**
+- `mobile/components/linea-dashboard.jsx` (`window.LineaDashboardPageMobile`) + tab "Tablero LP" en `mobile/produccion-hub.jsx` (v9) + `mobile/index.html`. Read-only, aislado. Los 4 tabs previos intactos.
+- Frontend desktop actualizado: badge Pino lee `pino_estado` dinámico.
+- **Harness visual local** (fixture = contrato de `prod_rpc_dashboard`, sin login/Supabase, TEMPORAL): componente pre-transpilado, renderizado headless (playwright).
+- **Verificado 0 errores de consola** en: desktop 1440×900/1024×768/390×844/360×800 × estados normal/vacío/incompleta/error/loading/valores-grandes/textos-largos; mobile 390/360 × normal/incompleta. Card↔RPC exacto (506/516/69/447/2 separadas; pools agrupados; canónico vs free_stock separados; Pino operativo/pendiente dinámico).
+- **Boot-to-login** de la app real: arranca al login con **0 errores de consola** y 0 atribuibles a mis archivos. Harness temporal **eliminado** (no queda en build).
+- Estados de interfaz cubiertos: sin jornada, jornada con datos, receta incompleta, error del RPC, loading, valores grandes, textos largos, stock cero. Falla del RPC NO afecta Producción (mensaje explícito + Reintentar).
+
+**PENDIENTE**: smoke autenticado real detrás del login (requiere usuario autorizado — checklist manual entregado a Aaron). Sincronizar display de patas para SETs en `embalaje-sector.jsx` (hoy consume bien por BOM; el pre-check visual de patas mixtas es refinamiento).
+
+---
+
+### [2026-07-20e] LÍNEA PRODUCTIVA — Frontend dashboard (aislado) + auditoría de impacto sobre Producción
+
+**Corrección de alcance**: Producción (legacy, uso diario) = **baseline congelada**; Línea Productiva (`prod_*`) es lo que se repara. NO se reemplaza ni refactoriza Producción.
+
+**Auditoría de impacto 0101–0107 (evidencia)**
+- **PRODUCCIÓN LEGACY NO MODIFICADA**: `orders`/`carrier_state`/`production_logs`/`free_stock`/`jornadas` — 0 triggers nuevos, solo lectura. `data.js` (data layer de Producción diario) **no referencia ningún `prod_v_*` ni `prod_rpc_*`** (grep confirmado); usa solo tablas legacy.
+- **EXCLUSIVO LÍNEA PRODUCTIVA**: los únicos objetos preexistentes modificados (`prod_v_explosion`, `prod_v_demanda_corte`, `prod_rpc_registrar_embalaje`) los consume solo `lp-data.jsx`/sectores. Todo lo demás es nuevo/aditivo.
+- **Regresión datos**: baseline == después (orders 9622, prod_logs 846/Σ9058, carrier 71/516, free_stock 44, jornadas 40). Smokes revirtieron (prod_* operativas en 0).
+
+**Frontend agregado (aislado, read-only)**
+- Nuevo archivo `web/components/linea-dashboard.jsx` → `window.LineaDashboardPage`. Consume `prod_rpc_dashboard` vía `window.SUPA`. Cero mutaciones (no vincula jornada, no escribe stock/orders/carrier/logs). Estados: loading/ok/error/forbidden/vacío. Si el RPC falla, Producción no se afecta.
+- Cards: A Resumen (órdenes/unidades/producidas/netas/excedente SEPARADAS) · B Necesidades por pieza (agrupadas por pool) · C Sectores (Pino='pendiente validación patas') · D Stock (canónico por bucket + free_stock legacy separado, NO sumados) · E Calidad (recetas completa/INCOMPLETA_PATAS/CONFIG + SKUs sin pool). Cifras dinámicas del RPC.
+- Wiring aditivo: tab **"Tablero LP"** en `produccion-hub.jsx` (los tabs Producción/Stock/De fábrica/Línea productiva **intactos**) + `<script ... linea-dashboard.jsx?v=1>` en `Macario Lite.html` (produccion-hub v8→v9).
+- **Verificado**: ambos JSX **transpilan** con Babel standalone 7.29 (misma versión de la app); RPC devuelve cifras correctas; aislación e isolación de datos OK.
+
+**PENDIENTE (limitación honesta)**
+- **Verificación visual en vivo (desktop/mobile)**: el tablero vive dentro del hub autenticado; se necesita **credencial de login de prueba** (no disponible en este entorno) para navegar y sacar capturas. Sin eso no puedo *afirmar* verificación visual — queda para validar con un usuario de prueba.
+- **Versión mobile** (`/m/`): construida solo la de desktop (`web/`). El componente mobile es una adición paralela pendiente.
+
+---
+
+### [2026-07-20d] LÍNEA PRODUCTIVA — Bloque 5 (carga stock preview) + Dashboard backend · 0106/0107
+
+**Precisiones cerradas (con datos)**
+- **506 órdenes ≠ 516 unidades ≠ 447 netas**: 506 = filas de orden pendientes/arrastradas; 516 = suma de `cantidad`; 447 = 516 − 69 producidas aplicables. Tres métricas distintas — el dashboard NUNCA dice "pendientes" a secas.
+- **2 unidades excedentes**: `MAD020 colecta` (prod 4 > pend 3) + `MAD021 colecta` (prod 2 > pend 1). En `production_logs` esos SKU tienen movimientos `[FREE_STOCK] al_cerrar_jornada` → el sobrante ya se movía a `free_stock` (MAD020 free_stock=6, MAD021=3). Destino físico no demostrable ⇒ dashboard las muestra como **"excedente producido pendiente de conciliación"**, NO como stock disponible, NO se borran.
+- **Auditoría 38 `otro`**: 26 productos + 9 kits + 3 sets de patas — **todos compuestos (0 hojas)**. Ninguna hoja requerida cae en `otro`/`desconocido`. Clasificación intencional demostrada. TAP025 = único `desconocido` (huérfano sin uso), Embalaje lo bloquea si algún producto lo requiere.
+
+**Bloque 5 — carga inicial de stock (`0106`, APLICADO + smokes)** — SIN migrar datos reales
+- `prod_stock_ajuste` (ledger append-only, UNIQUE(lote,sku,bucket) ⇒ idempotencia).
+- `prod_rpc_stock_preview`: valida sin escribir → por fila estado valida/advertencia/bloqueada + stock actual/proyectado. Detecta sku_inexistente, sin_pool, sector_incompatible, cantidad_invalida, motivo_requerido, duplicado_en_lote.
+- `prod_rpc_stock_confirmar`: idempotente por lote; aborta el lote entero si hay una fila bloqueada (sin parciales).
+- `prod_v_free_stock_conciliacion`: preview free_stock→terminado (44 uds: 5 inequívoco + 1 sin_mapping). **NO migra** — free_stock queda como "legacy pendiente de conciliación", separado del stock canónico.
+- Smokes (rollback): preview 3 válidas/5 bloqueadas/1 advertencia; confirm idempotente (2ª vez 0 nuevas); lote con bloqueada aborta (TAP003 no aplicado).
+
+**Dashboard backend (`0107`, APLICADO + verificado)** — `prod_rpc_dashboard(jornada_id?)`
+- Métricas **dinámicas** (nada hardcodeado), separadas: `ordenes_vinculadas` / `unidades_vendidas` / `unidades_producidas_aplicables` / `unidades_netas_a_producir` / `excedente_producido_pendiente_conciliacion`.
+- `necesidades_por_pieza` (con `pool` para agrupar en UI), `stock` (canónico por bucket + free_stock legacy separado + lotes de carga inicial), `sectores` (0 = estado vacío correcto; Pino='pendiente_validacion_patas'), `calidad_datos` (recetas COMPLETA/INCOMPLETA_PATAS/CONFIG + SKUs sin pool).
+- Verificado en vivo: 506/516/69/447/2, free_stock 44, calidad 2/24/0/1 — coincide con baseline.
+- **Pendiente**: componente frontend del dashboard (consume `prod_rpc_dashboard`) — requiere lectura del front existente y verificación desktop/mobile **corriendo la app** (no verificable solo por SQL). RPC listo para cablear.
+
+---
+
+### [2026-07-20c] LÍNEA PRODUCTIVA — Bloque 4: vínculo jornada↔ventas · 0104/0105
+
+**Qué se hizo (APLICADO + smokes verificados con rollback)**
+- **Estados de jornada** ampliados: `preparada|abierta|en_proceso|cerrada|cancelada` (reemplazado CHECK viejo abierta/cerrada · `0105`).
+- **`prod_jornada_orden`** (link snapshot venta→jornada): PK(jornada,order) impide duplicar en la misma jornada; el RPC impide que una orden esté en 2 jornadas activas.
+- **`prod_rpc_vincular_jornada`** idempotente: vincula pendientes/arrastradas, EXCLUYE archivadas, saltea las ya activas en otra jornada, `ON CONFLICT DO NOTHING`.
+- **`prod_rpc_set_jornada_estado`**: transición explícita (no admite salir de cerrada/cancelada). Sin corte automático 270/300.
+- **`prod_v_explosion_jornada` / `prod_v_faltante_jornada`**: demanda/faltante por jornada (snapshot de sus ventas, stock-aware, incluye `pool`).
+- **`prod_producto.patas_confirmadas`** (default false) + **`prod_v_producto_receta_estado`**: marca `INCOMPLETA_PATAS` (patas sin confirmar Seba) / `INCOMPLETA_CONFIG` (hoja sin pool) / `COMPLETA` — para no planificar a ciegas.
+- **Smokes (rollback)**: 1ª vinculación 506 (=pendientes; 0 archivadas) · 2ª vinculación 0 (idempotente) · orden activa no entra a 2ª jornada (0) · jornada cerrada rechaza · explosión/faltante por jornada OK · MAD095(set)=INCOMPLETA_PATAS, MAD300(varilla)=COMPLETA.
+- **Trazabilidad**: venta → `prod_jornada_orden` → `prod_v_explosion_jornada` → (plan corte / sectores). Compatibilidad legacy: `orders` y `carrier_state` intactos; el vínculo es aditivo.
+
+**Pendiente**: consumo genérico de patas (bloqueado por confirmación Seba de la matriz); Bloque 5 (carga inicial con preview); dashboard; smokes restantes (reuso de sobrante entre jornadas — depende de operar 2 jornadas con stock).
+
+---
+
+### [2026-07-20b] LÍNEA PRODUCTIVA — BUG-A semántico + reconciliación exacta + pruebas adversariales · 0102
+
+**BUG-A corregido (`0102`, APLICADA + re-smoke verificado)**
+- Causa: `prod_rpc_registrar_embalaje` validaba/consumía TODA la receta contra `prod_stock_melamina`, incluyendo CAJ/KIT → exigía melamina de cajas/kits → Embalaje se bloqueaba.
+- Fix **semántico (no por prefijo)**: nueva función `prod_pieza_pool(sku)` clasifica por metadatos existentes: `melamina`=salida de placa CNC (`prod_placa`/`_pieza_extra`); `insumo`=`prod_insumo`; `patas`=`naturaleza='corte'` no-placa; `otro`=kit/compuesto. Embalaje ahora valida/consume melamina SOLO donde `prod_pieza_pool='melamina'`. Cada componente en un único pool (excluyentes).
+- **Re-smoke MAD095 sin melamina falsa** (transacción, rollback): pool TAP=melamina/CAJ=insumo/KIT=otro/PAT=patas ✓; Embalaje ok, terminado=1 ✓; tapas melamina→0 ✓; insumos por trigger −1/−4/−10/−6 (una sola vez) ✓; sin consumo parcial.
+
+**Reconciliación EXACTA del acumulado (corrige el "3.443" mal informado antes)**
+- El "3.443" previo era una suma parcial de nodos-padre intermedios → **métrica inválida, descartada**.
+- Cifras like-for-like (recalculadas con filtro viejo vs nuevo en paralelo):
+  - Órdenes: 9.622 (sin cambios; nada borrado). Unidades de venta: **9.761** (9.245 archivado + 516 pendiente) → **516** (solo pendiente).
+  - **Demanda neta producto (base): 9.690 → 447**. Cuadra: `9.690 = 9.761 − 71 producido`; `447 = 516 − 69 producido`.
+  - Piezas hoja (explosión BOM): 277.492 → 12.871.
+- Driver único: **9.245 unidades archivadas** excluidas. Seba debe ver **516 pendientes** (447 netas de producido), NO 9.690. Solo cambió la consulta, no los datos.
+
+**Prueba adversarial de doble conteo legacy/prod_* (transacción, rollback)**
+- Producir 18 piezas vía RPC nuevo: faltante 39→21 (=39−18, contado 1 vez) ✓; `carrier.producido` 71→71 (la producción nueva NO toca el contador legacy) ✓; relectura idéntica (idempotente) ✓.
+- El motor nuevo (`prod_v_explosion`/`prod_v_faltante`) NO lee `free_stock` ni `prod_stock_terminado`; producido se descuenta a nivel producto y stock a nivel pieza = ejes distintos → **imposible doble descuento de la misma cantidad**. `free_stock`=44 (legacy) sigue solo en el circuito legacy.
+
+**GAP-B / patas — decisión de fuente canónica + matriz para Seba**
+- **Canónico = BOM (`prod_componente`)** para composición de patas. `prod_producto.patas_tipo/cant` es limitado (un solo tamaño) → a derivar del BOM o deprecar. Motivo probado por la matriz:
+  - 12 MESAS individuales: BOM y `patas` **coinciden** (ej. MAD051 BOM `1×PAT004`=3 grandes = `grande×3`).
+  - 12 SETs: BOM tiene patas (PAT005/PAT003) pero `patas_cant=0` porque `patas_tipo` no puede representar un set mixto (PAT005 = 3 chicas + 3 grandes).
+  - 2 varilla (YORI/HIKARI): sin patas (usan VAR002) — probable correcto.
+- **PENDIENTE de Seba (no inventado)**: confirmar si cada producto lleva comercialmente esas patas. Hasta entonces esos productos = **receta incompleta** para el tramo de patas (no se planifican silenciosamente). NO se cambió ninguna cantidad ni asociación. Matriz completa (24 productos, estado CONTRADICTORIO/DOBLE_FUENTE/FALTANTE) generada para validación.
+- Composición patas (verificada en archivo INSUMOS): PAT001=pata chica, PAT002=pata grande, PAT003=3×PAT001 (3 chicas), PAT004=3×PAT002 (3 grandes), PAT005=PAT003+PAT004 (3 chicas+3 grandes).
+
+**Endurecimiento clasificador (`0103`, APLICADA)** — corrige falso positivo
+- `prod_pieza_pool` v1 clasificaba `TAP025` (tapa sin placa) como 'patas' por la regla frágil "corte no-placa". Fix: nueva tabla `prod_pata_tamano` (registro explícito: PAT001=chica, PAT002=grande — composición verificada en archivo) → 'patas' SOLO por registro; catch-all `'desconocido'` que NO cae en patas. Embalaje v3 falla con error claro si una hoja del BOM queda 'desconocido'.
+- **Auditoría de pools (todos los SKUs)**: melamina=25 (TAP salida de placa), insumo=35, patas=2 (PAT001/PAT002), otro=38 (kits/sets/productos), desconocido=1 (TAP025, huérfano sin uso). Cada SKU en un único pool; 0 productos vendibles con hojas desconocidas (guard no bloquea nada real).
+
+**Reconciliación fina (las 2 unidades 71 vs 69)**: `carrier.producido` total=71; aplicable al universo pendiente=69. Las 2 restantes = `MAD020 colecta` (prod 4 > pend 3) + `MAD021 colecta` (prod 2 > pend 1): producido que excede el pendiente (resto archivado) y se recorta por `GREATEST(pend−prod,0)`. Correctamente excluidas. **PAT005 = 3 chicas + 3 grandes** confirmado en archivo, HANDOFF, checklist y DB (no persistió ninguna interpretación "1+1").
+
+**Doble conteo**: probado SIN doble descuento en los caminos verificados (no afirmación absoluta); conservar la prueba adversarial como regresión ante futuros cambios de vistas/puentes/fuentes de stock.
+
+**Pendiente de esta sub-etapa**: consumo genérico de patas desde `prod_stock_patas` (requiere confirmación Seba de la matriz); Bloque 5 (carga inicial con preview); dashboard.
+
+---
+
+### [2026-07-20] LÍNEA PRODUCTIVA — Saneamiento + corrección del motor de faltantes · 0101
+
+> Etapa "reparar/conectar/operar la línea productiva". Decisión arquitectónica: **`prod_*` es el modelo canónico**; el legacy (`orders`/`carrier_state`/`production_logs`/`free_stock`/`jornadas`) se conserva como puente temporal (fuente de ventas + producido legacy durante la transición). No se creó un tercer modelo.
+
+**Estado inicial encontrado (auditoría)**
+- **Dos modelos de producción**: legacy operativo (con datos: 9.622 orders, carrier_state, 40 jornadas) y `prod_*` (catálogo maestro cargado —26 productos, 75 piezas, 86 recetas, 161 componentes BOM, 29 placas, 35 insumos— pero **tablas operativas en 0 filas**: nunca se operó una jornada real).
+- El puente `prod_v_explosion` YA leía ventas reales vía BOM recursivo, **pero** con dos defectos: (a) filtraba `orders.status <> 'despachado'` — valor **inexistente** en `order_status_enum` (`pendiente|completado|arrastrado|archivado|cancelado`) → **no excluía nada** e incluía **9.116 pedidos `archivado`** como demanda viva; (b) el plan de corte (`prod_v_demanda_corte` → `prod_rpc_plan_corte`) **no consultaba stock por sector** → producía de más.
+- **Acumulados incorrectos reproducidos**: MAD301 demanda calculada 4.938 vs real pendiente 278 (los ~5008 del brief). A nivel producto: 9.690 (viejo) vs 3.443 (correcto).
+- **Cadena de sectores ya construida y correcta** (solo faltaba operarla): `prod_rpc_registrar_corte` (CNC→`prod_stock_pieza`), `_melamina` (consume pieza cruda→`prod_stock_melamina`), `_pino` (paralelo, produce `prod_stock_patas` por tamaño chica/grande, **no** consume de otro sector), `_embalaje` (valida y **rechaza si falta melamina/patas**, consume ambos, produce `prod_stock_terminado`, escribe `prod_pedido_estado` = puente de vuelta a la venta).
+- **BOM sano**: 0 productos sin receta/componente, 0 huérfanos, 0 duplicados, 0 placas inválidas; los 24 SKUs vendidos mapean a `prod_componente.padre_sku`.
+- **Dos estructuras de receta**: `prod_receta` (plana producto→pieza, la usa Embalaje) y `prod_componente` (BOM recursivo, la usa la explosión). Convención SKU: `TAP%`=tapa (CNC/Melamina), `PAT%`=pata (Pino).
+
+**Bloque 0 — Saneamiento (hecho)**
+- Proyecto Supabase verificado vía MCP real (`ditmb…kimqv`, URL coincide con `supabase/ingreso a supabase...txt`). No se tocó ningún otro proyecto.
+- **Drift de migraciones resuelto**: el tracker remoto (`supabase_migrations.schema_migrations`) cortaba en `0064c` (versiones timestamp); los archivos locales fueron renumerados a `0001–0100`, rompiendo la correlación del CLI → **0065–0100 no estaban trackeadas**. Se insertaron filas numéricas `0001–0100` (`created_by='migration_repair_20260720'`, idempotente, reversible) → `supabase db push` ahora es **no-op**. Las 73 filas timestamp originales quedan como historial inerte.
+- **Backup lógico** en schema `backup_20260720` (CTAS de: schema_migrations, orders, production_logs, carrier_state, free_stock, jornadas, prod_producto/pieza/placa/placa_pieza_extra/receta/componente/insumo, ml_sku_map). Borrar tras validar la etapa.
+
+**Bloque 5/6/10 — Migración `0101_prod_motor_faltante_stockaware` (APLICADA + verificada)**
+- **Schema stock (aditivo)**: `reservado` + `en_proceso` (int, default 0) en `prod_stock_pieza/melamina/patas/terminado`.
+- **Fix motor (`prod_v_explosion`)**: filtro de estado `status IN ('pendiente','arrastrado')` (antes `<> 'despachado'`). Columnas de salida preservadas → dependientes intactos (`prod_v_demanda_corte/tap/prioridad_melamina/orden_sector/resumen_dia/armables/compras/materia_prima/cortes_dia`).
+- **Nueva vista `prod_v_faltante`**: `faltante_neto = demanda_bruta − stock utilizable (pieza cruda + melamina terminada, neto de reservas)`. Base para "consultar stock antes de producir".
+- **`prod_v_demanda_corte`** ahora consume `faltante_neto` (stock-aware) en vez de la demanda bruta → el optimizador CNC deja de producir de más.
+- **Verificado**: demanda producto 9.690→3.443; plan de corte 17 filas / 3.521 piezas netas; vistas recalculan sin error. Hoy stock=0 → faltante=demanda (sin regresión); el descuento por stock se activa solo al cargar stock.
+
+**Validación contra archivos reales de Seba (`sku para sistema.xlsx`)** — prioridad de fuente de verdad por encima de la base
+- **Placas CNC (`prod_placa`) = 100% coincide** con hoja "SKU DE PLACAS DE CORTE CNC": 29 placas (PLB/PLN/PMB/PMN + COM combinadas), **todos los rendimientos verificados** (PLB007 BOOMERANG=16, PLB001 REDONDA30=50, COM=8). → HALLAZGO COMPROBADO: patrones/rendimientos correctos.
+- **Recetas (`prod_componente`)**: MAD095/MAD096 exactos al archivo; sub-árbol INSUMOS exacto (PAT005=PAT003+PAT004; KIT001=TOR003+TOR004+SOP007; TOR004=10×TOR002).
+- **DISCREPANCIA (PUNTO A VALIDAR, no corregida)**: la base agrega **patas (PAT###) y varillas (VAR002)** a productos que la hoja "sku x producto" NO lista (esa hoja omite patas). Plausiblemente correcto (mesa necesita patas) pero el mapeo pata↔producto es inferencia de la base → validar con Seba antes de tocar.
+- **Patas doble-modeladas**: `prod_componente` (demanda) + `prod_producto.patas_tipo/cant` (consumo Embalaje). Ejes distintos → sin doble conteo hoy; vigilar consistencia.
+- **MAD301 (BUMERANG BLANCO)** verificado = 1×TAP011 (PLB007/16) + 1×TAP001 (PLB001/50) + KIT001 + CAJ002 (+PAT005 en base) → coincide con el ejemplo del brief → caso de prueba del piloto.
+- Los 72 SKUs "internos" en catálogo público son accesorios/insumos (AGU/CAJ/TOR/SOP/VAR) definidos en hoja INSUMOS — NO son productos de venta (la hoja "SKU DE PRODUCTOS" solo tiene MAD###). Separación a resolver en Bloque 2 (validar cuáles se venden como repuesto).
+
+**Reclasificación de certeza (correción de rumbo 2026-07-20)**
+- `prod_*` = **modelo canónico CANDIDATO CONFIRMADO por evidencia** (no "porque es el más nuevo"): cubre despiece/stock/sectores/optimizador, ya es consumido por 10 vistas + pantallas de sector, tiene el catálogo verificado contra archivos, y el puente a ventas (`prod_v_explosion`/`prod_pedido_estado`) ya existe. Legacy se conserva como fuente de ventas + producido durante transición. No se creó tercer modelo.
+- Causa del acumulado: **1 causa raíz COMPROBADA** (archivadas en explosión) corregida en la consulta generadora; **NO se borró ningún dato**. Quedan por descartar otras fuentes (jornadas sin cerrar, producción no confirmada) antes de declararlo cerrado.
+
+**Riesgos / notas**
+- **Patas**: `prod_stock_patas` se llavea por `tamano` (chica/grande), pero el BOM usa `PAT%` sku → aún sin descuento de stock para patas (marcado TODO puente-patas en la vista). No genera regresión (patas: faltante=demanda).
+- **`free_stock`** (sobrante de producto terminado por sku de venta) vs `prod_stock_terminado`: representan lo mismo → al cargar stock inicial NO duplicar (mapear free_stock→terminado, no a piezas).
+- **72 SKUs internos** (accesorios AGU/CAJ tapa-tornillos/cajas) figuran `activo` en el catálogo público `sku_catalog`. Es **decisión funcional** (algunos podrían venderse) → NO se tocó; queda para validar en Bloque 2.
+
+**Piloto controlado — smoke transaccional (rollback vía RAISE EXCEPTION, impersonando owner)**
+- **Método de aislamiento**: un único bloque `DO $$` por escenario, `set_config('request.jwt.claims', owner)` para que `auth.uid()` resuelva y pasen los RPCs reales; `RAISE EXCEPTION` al final = rollback garantizado (RPC por REST commitea por-call → NO se usó). Preflight: 0 pg_net/http → sin efectos externos fuera del rollback.
+- **SMOKE 1 — motor de faltantes (TAP005, demanda real 39)**: sin stock→faltante 39 (=39 ✓); parcial stock 19→faltante 20 (=39−19 ✓); suficiente stock 139→faltante 0 (✓). Regla del brief cumplida.
+- **SMOKE 2 — flujo CNC→Melamina→Embalaje (1×MAD095, receta verificada, RPCs reales)**: CNC PLB003/PLB002→pieza TAP005=18/TAP003=32 ✓; Melamina→pieza 17/31, melamina 1/1 (débito crudo=crédito terminado ✓); Embalaje→melamina 0/0/0/0, terminado MAD095=1 ✓; trigger insumos CAJ001−1, TOR001−4, TOR002−10, SOP001−6 (exacto al BOM ✓). **Conservación perfecta, sin doble conteo** (tapas: pieza→melamina→consumo un solo camino; insumos solo por trigger; melamina/patas solo por RPC = pools distintos).
+- **Evidencia de rollback**: post-smokes todas las tablas operativas en 0 filas; `orders`=9.622 intactas.
+- **Conciliación legacy (numérica)**: `carrier.producido`=71 (nivel producto) vs `prod_stock_terminado`=0 (nivel pieza) → ejes distintos; `free_stock`=44 vs `prod_stock_terminado`=0 → no solapan. Al operar el modelo nuevo: migrar `free_stock`→`prod_stock_terminado` (no ambos).
+- **Acumulado 9.690→3.443**: like-for-like (misma consulta, distinto filtro); driver = 9.245 unidades `archivado` excluidas. Pendiente real=516 unidades. NO se borró/modificó ninguna orden.
+
+**Hallazgos estructurales del piloto (a corregir antes de operar productos con patas)**
+- 🔴 **BUG-A (receta/embalaje)**: `prod_receta` incluye CAJ/KIT (no solo tapas). El RPC `registrar_embalaje` valida/consume TODA la receta contra `prod_stock_melamina` → exige stock de melamina para cajas/kits (imposible en la práctica). Fix propuesto: que el check/consumo melamina filtre `pieza_sku LIKE 'TAP%'` (o flag de naturaleza). En el smoke se sorteó sembrando melamina de CAJ/KIT.
+- 🔴 **GAP-B (patas no cierran loop)**: `prod_producto.patas_tipo/cant` = null/0 en los productos → el RPC embalaje NO consume `prod_stock_patas`; y `PAT%` no está en `prod_insumo` → el trigger tampoco. Resultado: Pino produce patas que **nada consume**. Fix depende de decisión funcional (mapeo pata↔producto — ver PENDIENTE).
+
+**Pendiente (próxima iteración de esta etapa)**
+- 🔴 **Corregir BUG-A** (embalaje/receta melamina solo TAP) y **GAP-B** (cerrar Pino→Embalaje) — este último requiere que Seba confirme qué set de patas usa cada producto (hoy `prod_componente` y `prod_producto.patas` se contradicen).
+- **Bloque 4**: vincular ventas↔`prod_jornada` (hoy la explosión es global, no por jornada) + estados preparada/abierta/en_proceso/cerrada/cancelada. Sin límite 270/300 automático.
+- **Bloque 5 (datos)**: carga de stock inicial por sector (migración segura desde `free_stock`/`production_logs` + carga manual auditada).
+- **Bloque 7/8/9**: operar CNC→Melamina→Pino→Embalaje con datos reales; puente patas (tamaño↔PAT); sobrantes/reutilización.
+- **Piloto end-to-end** + verificación de regresión de dashboards.
+
 ---
 
 ### [2026-07-01] Exportaciones — logo Justo Makario en documentos

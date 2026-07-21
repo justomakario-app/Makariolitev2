@@ -65,6 +65,9 @@ window.LP_DATA = window.LP_DATA || (function () {
 
     // ── Embalaje ──
     registrarEmbalaje: (p) => rpc('prod_rpc_registrar_embalaje', p),
+    embalajePrecheck: (p) => rpc('prod_rpc_embalaje_precheck', p), // {producto_sku,unidades} → {componentes:[{componente,pool,sector,requerido,disponible,faltante,suficiente}],suficiente_total} — canónico BOM
+    stockPreview:   (p) => rpc('prod_rpc_stock_preview', p),   // {lote_id,filas:[...]} → clasifica sin escribir (read-only)
+    stockConfirmar: (p) => rpc('prod_rpc_stock_confirmar', p), // {lote_id,filas:[...]} → aplica idempotente (write EXPLÍCITO)
     editarEmbalaje: (p) => rpc('prod_rpc_editar_embalaje', p),
     embalajeDia: (j) => sel('prod_embalaje', 'id, producto_sku, unidades, canal, created_at', q => q.eq('jornada_id', j).order('created_at', { ascending: false })),
 

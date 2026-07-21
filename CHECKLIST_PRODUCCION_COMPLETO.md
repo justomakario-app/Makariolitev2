@@ -21,6 +21,37 @@
 
 ---
 
+## Estado etapa "operar la línea productiva" — actualizado 2026-07-20
+
+> Decisión: **`prod_*` = modelo canónico**; legacy como puente temporal. Ver HANDOFF [2026-07-20] · migración `0101`.
+
+- [x] **Bloque 0 — Saneamiento**: proyecto Supabase verificado · drift de migraciones resuelto (tracker `0001–0100` reparado, `db push`=no-op) · backup lógico en schema `backup_20260720`.
+- [x] **Bloque 1 — Mapa de la línea productiva** trazado (ventas→explosión→plan corte→sectores→stock→puente `prod_pedido_estado`).
+- [x] **Bloque 3 — Auditoría BOM**: 26 productos, 0 sin receta/componente, 0 huérfanos, 0 duplicados, 0 placas inválidas. BOM sano y cableado a ventas reales.
+- [~] **Bloque 2 — Separación SKU venta/producción**: OK en `prod_*`; ⚠️ 72 SKUs internos (accesorios AGU/CAJ) activos en catálogo público → decisión funcional pendiente.
+- [x] **Bloque 6 — Motor de faltantes (fix núcleo)** 🔒: `prod_v_explosion` filtro `pendiente|arrastrado` (antes `<> despachado` inexistente incluía 9.116 archivadas) · nueva `prod_v_faltante` stock-aware · `prod_v_demanda_corte` consume faltante neto. Verificado: demanda producto 9.690→3.443.
+- [x] **Bloque 5 — Schema stock**: `reservado` + `en_proceso` agregados a `prod_stock_*`. [ ] carga de stock inicial (datos) pendiente.
+- [x] **Bloque 10 — Acumulados**: causa raíz (archivadas en la explosión) corregida y verificada.
+- [~] **Piloto controlado (smoke transaccional, rollback probado)**: SMOKE 1 motor faltantes (cero/parcial/suficiente = 39/20/0 ✓) · SMOKE 2 flujo CNC→Melamina→Embalaje 1×MAD095 con RPCs reales (conservación exacta, sin doble conteo ✓) · rollback verificado (tablas operativas en 0, orders 9.622 intactas).
+- [x] **Conciliación legacy** numérica (carrier.producido 71 vs terminado 0; free_stock 44 vs terminado 0 — sin solape).
+- [x] **BUG-A CORREGIDO** (`0102`, re-smoke ✓): `prod_pieza_pool()` semántico (sin prefijos) · Embalaje valida/consume melamina solo de piezas de melamina · insumos por trigger 1 sola vez.
+- [x] **Reconciliación exacta acumulado**: 9.690→**447** demanda neta producto (like-for-like); driver = 9.245 unidades archivadas; 0 órdenes borradas. ("3.443" previo era métrica inválida, descartada).
+- [x] **Prueba adversarial doble conteo**: producir vía RPC nuevo NO toca `carrier.producido`; faltante descuenta 1 sola vez; idempotente.
+- [x] **GAP-B CERRADO** (`0108/0109/0110`, smokes ✓): reglas Seba confirmadas (SET 3ch+3gr, MESA 3gr, RECT 4gr, YORI 4×VAR85, HIKARI 4×VAR45). Varillas por longitud VAR003/VAR004 (aditivas). Embalaje consume patas desde BOM (atómico, sin doble conteo). 26/26 recetas COMPLETA, 0 INCOMPLETA_PATAS. Pino operativo.
+- [x] **Frontend desktop + mobile** del Tablero LP (aislados, read-only): render verificado a 4 tamaños × 6 estados con 0 errores (harness fixture, playwright) + boot-to-login limpio. Producción legacy intacta. Harness temporal eliminado.
+- [x] **Pre-check Embalaje canónico** (`0111`): `prod_rpc_embalaje_precheck` (BOM = fuente del consumo); frontend web/mobile muestra requerido/disponible/faltante/pool; sin `patas_cant`. Smoke 5 familias ✓.
+- [x] **UI carga inicial de stock** (`linea-stock-carga.jsx` web+mobile, tab "Carga stock"): preview read-only → confirm explícito idempotente → cancelar; anti doble-tap; harness desktop + mobile 360 ✓. free_stock/VAR002 separados.
+- [ ] **PENDIENTE (no punta a punta)**: smoke autenticado real (login) · jornada piloto real con stock físico · **deploy del frontend** (hoy solo local; migraciones 0101–0111 sí en remoto).
+- [x] **Bloque 4 — Jornadas** (`0104/0105`, smokes ✓): `prod_jornada_orden` (link snapshot) + `prod_rpc_vincular_jornada` idempotente (excluye archivadas, sin doble proceso) + estados preparada/abierta/en_proceso/cerrada/cancelada + `prod_v_explosion_jornada`/`prod_v_faltante_jornada` + `receta_estado` (INCOMPLETA_PATAS/CONFIG/COMPLETA). Sin corte automático 270/300.
+- [x] Clasificador `prod_pieza_pool` endurecido (`0103`): TAP025→desconocido, patas por registro explícito `prod_pata_tamano`, guard de config en Embalaje.
+- [x] **Bloque 5 — Carga inicial (preview)** (`0106`, smokes ✓): `prod_stock_ajuste` ledger + `prod_rpc_stock_preview` (valida sin escribir) + `prod_rpc_stock_confirmar` idempotente (sin parciales) + `prod_v_free_stock_conciliacion` (sin migrar).
+- [x] **Dashboard backend** (`0107`, verificado): `prod_rpc_dashboard` dinámico (órdenes/unidades/netas/excedente separados, stock por bucket, calidad de datos). Frontend del dashboard = pendiente (requiere app para verificar desktop/mobile).
+- [ ] **Bloque 7/8/9 — Operar sectores** con datos reales + puente patas (tamaño↔`PAT%`) + sobrantes/reutilización.
+- [~] **Frontend dashboard** (`web/components/linea-dashboard.jsx`, tab "Tablero LP" en produccion-hub): construido, aislado, read-only, transpila ✓, RPC ✓, Producción legacy sin cambios (baseline==después). PENDIENTE: verificación visual en vivo (necesita login de prueba) + versión mobile.
+- [x] **Auditoría de impacto 0101–0107**: Producción legacy NO modificada; cambios EXCLUSIVO Línea Productiva. Regresión de datos OK.
+
+---
+
 # FASE 0 — CIMIENTOS Y DATOS MAESTROS
 
 ## 0.1 Backend base — tablas prod_* (migration 0071)
