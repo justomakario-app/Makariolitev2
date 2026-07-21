@@ -28,7 +28,7 @@
 - [x] **Bloque 0 — Saneamiento**: proyecto Supabase verificado · drift de migraciones resuelto (tracker `0001–0100` reparado, `db push`=no-op) · backup lógico en schema `backup_20260720`.
 - [x] **Bloque 1 — Mapa de la línea productiva** trazado (ventas→explosión→plan corte→sectores→stock→puente `prod_pedido_estado`).
 - [x] **Bloque 3 — Auditoría BOM**: 26 productos, 0 sin receta/componente, 0 huérfanos, 0 duplicados, 0 placas inválidas. BOM sano y cableado a ventas reales.
-- [~] **Bloque 2 — Separación SKU venta/producción**: OK en `prod_*`; ⚠️ 72 SKUs internos (accesorios AGU/CAJ) activos en catálogo público → decisión funcional pendiente.
+- [x] **Bloque 2 — Separación SKU venta/producción**: CERRADO 2026-07-21 (`0115`, ver sección "Correcciones post-NO-GO"). 67 internos ocultos de venta vía `es_insumo_interno`; 5 repuestos con ventas reales conservados vendibles; nada desactivado; ML/legacy intactos.
 - [x] **Bloque 6 — Motor de faltantes (fix núcleo)** 🔒: `prod_v_explosion` filtro `pendiente|arrastrado` (antes `<> despachado` inexistente incluía 9.116 archivadas) · nueva `prod_v_faltante` stock-aware · `prod_v_demanda_corte` consume faltante neto. Verificado: demanda producto 9.690→3.443.
 - [x] **Bloque 5 — Schema stock**: `reservado` + `en_proceso` agregados a `prod_stock_*`. [ ] carga de stock inicial (datos) pendiente.
 - [x] **Bloque 10 — Acumulados**: causa raíz (archivadas en la explosión) corregida y verificada.
@@ -49,6 +49,23 @@
 - [ ] **Bloque 7/8/9 — Operar sectores** con datos reales + puente patas (tamaño↔`PAT%`) + sobrantes/reutilización.
 - [~] **Frontend dashboard** (`web/components/linea-dashboard.jsx`, tab "Tablero LP" en produccion-hub): construido, aislado, read-only, transpila ✓, RPC ✓, Producción legacy sin cambios (baseline==después). PENDIENTE: verificación visual en vivo (necesita login de prueba) + versión mobile.
 - [x] **Auditoría de impacto 0101–0107**: Producción legacy NO modificada; cambios EXCLUSIVO Línea Productiva. Regresión de datos OK.
+
+---
+
+## Correcciones post-NO-GO — actualizado 2026-07-21 (migraciones 0112–0116, commit `45b2c95`)
+
+> El GO inicial fue **rechazado por el dueño**: faltaban 4 gaps funcionales del brief. Cerrados y verificados con smokes transaccionales (rollback). Ver HANDOFF [2026-07-21]. **Estado: LISTO PARA REDEPLOY CONTROLADO — no "validado en fábrica".**
+
+- [x] **Gap 1 — Demanda operativa por JORNADA (no global)** (`0112/0113/0114`): `prod_v_explosion`, `prod_v_demanda_tap`, `prod_v_resumen_dia` leen las ventas vinculadas de la **jornada `abierta`** (`prod_jornada_orden`); se quitó el filtro buggy `<> 'despachado'` que aún quedaba en melamina/embalaje. Cadena jornada-scoped completa (CNC/melamina/pino/embalaje/compras/De fábrica). *Evidencia:* sin jornada → todas las vistas de sector = 0; con jornada → pobladas; venta pendiente NO vinculada → no aparece; jornada cerrada → 0 necesidades. La demanda global queda solo como resumen (`prod_v_resumen_global`/dashboard).
+- [x] **Gap 2 — Jornada operativa ÚNICA GLOBAL** (`0114`, decisión Opción A): índice `ux_prod_jornada_una_abierta` = a lo sumo **1 jornada `abierta`** en todo el sistema. Coincide con `prod_rpc_abrir_jornada` y `jornadaAbierta` del frontend. *Evidencia:* 2ª jornada abierta → bloqueada. Elimina doble reserva/consumo por construcción (no se implementó reserva atómica Opción B).
+- [x] **Gap 3 — Separación SKUs internos vs catálogo de venta** (`0115`, cierra Bloque 2): `sku_catalog.es_insumo_interno` aditivo, **por evidencia** — 128 SKUs = 26 productos + **5 repuestos con ventas reales conservados vendibles** (KIT001/KIT002/SOP003/SOP007/SOP008) + **67 internos ocultos de venta** + 30 otros. Nada desactivado (`activo` intacto); ML/`SKU_DB`/legacy leen la tabla completa. Frontend `ventas.jsx` "Base de productos" (web+mobile) oculta internos con toggle de consulta. Vistas `prod_v_sku_clasificado`/`prod_v_catalogo_venta`.
+- [x] **Gap 4 — Herramienta de mínimos + "sin configurar"** (`0116`): `prod_insumo.minimo_configurado` distingue "0 configurado" de "sin configurar" (los 37 estaban en 0 → nunca alertaban). RPC `prod_rpc_set_minimo` (owner/admin/encargado, valida ≥0, auditoría `prod_minimo_log`), trigger `prod_fn_alerta_stock` corregido (alerta solo si configurado>0 y stock<min), vista `prod_v_minimos` (sin_configurar/critico/bajo/ok). UI `encargado-panel` (web+mobile): banner "N sin configurar" + botón "Mín." + modal auditado.
+- [x] **Prueba transaccional 2 jornadas (MAD010, rollback)**: Jornada A demanda TAP001=2 → CNC PLB001 (1 hoja×rend50=50 crudas) → melamina 5 → faltante 0, **sobrante 3**. Cierre A → explosión 0. Jornada B demanda 3 → **faltante 0 (reusó el sobrante, sin re-cortar)** → embalaje 3 consume melamina −3 (una vez) + patas −9 (3 grandes×3 = regla MESA) → sobrante remanente 2 a futuro. Sin doble reserva ni doble consumo.
+- [x] **Regresión post-correcciones**: 137/137 JSX transpilan (Babel 7.29.0 = runtime); acumulado intacto (506 pendientes, 9.116 archivados excluidos); **Producción legacy FROZEN** (`produccion.jsx`/`data.js`/`dashboard.jsx`/`carrier.jsx` fuera del delta); ninguna tabla legacy alterada; tracker 0112–0116 alineado.
+- [x] **Higiene de commit** `45b2c95` (16 archivos, +427/−21): 0 secretos staged, 0 archivos ajenos; `.gitignore` bloquea `*ingreso*.txt`/`*token*.txt`/`brief_funcional_*.md`. Cadena: `45b2c95` → `7fedf32` → `c99bb44` (origin/master). Sin pushear.
+- [ ] **Smoke OBLIGATORIO post-redeploy** (dueño): abrir jornada → vincular ventas → demanda por sector → registrar corte/melamina/embalaje → confirmar consumo → cerrar → 0 necesidades → configurar mínimo/ver alerta → catálogo de venta sin los 67 internos.
+- [ ] **Rotación `service_role` / remediación INFORME**: **solo DESPUÉS** de verificar deploy sano (ventana de seguridad controlada).
+- [ ] **Residual**: `TAP025` pieza huérfana sin receta (pool `desconocido`, no bloquea BOM) → limpieza futura de datos.
 
 ---
 

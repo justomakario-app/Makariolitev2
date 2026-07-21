@@ -22,7 +22,19 @@ El veredicto GO inicial fue **rechazado por el dueño**: faltaban 4 correcciones
 
 **Regresión:** 137/137 JSX transpilan (Babel 7.29.0 = runtime); acumulado intacto (506 pendientes, 9116 archivados excluidos); frozen legacy intacto; advisors sin clase nueva de issue (vistas/RPC nuevos siguen el patrón SECURITY DEFINER existente). Residual conocido: 1 SKU `TAP025` con pool `desconocido` (huérfano en `prod_pieza`, sin receta ⇒ no bloquea BOM; limpieza de datos).
 
+**Decisión de arquitectura — Jornada operativa ÚNICA GLOBAL:** se adoptó la Opción A del brief (una sola jornada `abierta` a la vez en todo el sistema, forzada por índice único), en lugar de reserva atómica por jornada/SKU/sector (Opción B). Motivo: coincide con la operación real (abren/cierran una jornada por día), con `prod_rpc_abrir_jornada` y con el gate `jornadaAbierta` del frontend; elimina el riesgo de doble reserva/consumo por construcción, sin agregar complejidad de reservas.
+
 **Seguridad (sin cambios, ya trackeado):** `web/INFORME_TECNICO_BACKEND.md` con credencial + patrón SECURITY DEFINER general = pendiente para la ventana de seguridad controlada. `.gitignore` ampliado para bloquear `*ingreso*.txt` / `*token*.txt` / `brief_funcional_*.md`.
+
+### Estado y próximos pasos (orden estricto)
+
+- **Estado exacto: LISTO PARA REDEPLOY CONTROLADO — NO "validado en fábrica".** Todo lo verificado fue con smokes transaccionales (rollback) contra el remoto; falta la validación operativa real con Seba/el equipo tras el redeploy.
+- **Cadena de commits:** `45b2c95` (correcciones NO-GO) → `7fedf32` (motor 0101-0111) → `c99bb44` (origin/master). Los tres commits de docs/correcciones son **locales, sin pushear**. No reescribir `7fedf32` ni `45b2c95`.
+- **Push:** pendiente hasta que GitHub tenga acceso (el 403 de `ascendtech1` en `justomakario-app/Makariolitev2` sigue vigente). Push normal, sin force, de todos los commits pendientes.
+- **Redeploy:** lo hace el dueño manualmente en EasyPanel `app_gestion_interna / makario_lite_nueva`. No tocar EasyPanel/Asentech/Cloudflare/justo_makario/n8n.
+- **Smoke OBLIGATORIO post-redeploy** (antes de operar en serio): abrir jornada → vincular ventas → ver demanda por sector (CNC/melamina/pino/embalaje) → registrar corte/melamina/embalaje → confirmar consumo de stock y patas → cerrar jornada → verificar que quedó en 0 necesidades → configurar un mínimo y ver alerta/estado "sin configurar" → verificar catálogo de venta sin los 67 internos.
+- **Rotación de `service_role` / remediación del INFORME:** ejecutar **únicamente DESPUÉS** de verificar que el deploy quedó sano (para no romper la app en caliente). Es la ventana de seguridad controlada ya acordada.
+- **Residuales:** (1) seguridad SECURITY DEFINER + credencial en INFORME (ya documentada, ventana controlada); (2) `TAP025` pieza huérfana sin receta → limpieza futura de datos, no bloquea.
 
 ---
 
