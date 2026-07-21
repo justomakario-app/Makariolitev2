@@ -5,6 +5,27 @@
 
 ---
 
+## [2026-07-21] Correcciones funcionales post-NO-GO (Bloque de 4 gaps) — migraciones 0112–0116
+
+El veredicto GO inicial fue **rechazado por el dueño**: faltaban 4 correcciones funcionales del brief. Resueltas y verificadas con smokes transaccionales (rollback). **Producción legacy sigue FROZEN** (`produccion.jsx`/`data.js`/`dashboard.jsx`/`carrier.jsx` sin tocar; verificado por `git status`).
+
+**Gap 1 — Demanda operativa por JORNADA (no global).** `prod_v_explosion` ahora lee las ventas vinculadas de la **jornada abierta** (`prod_jornada_orden`), no todas las pendientes. Se repointaron también `prod_v_demanda_tap` (melamina) y `prod_v_resumen_dia` (embalaje), que aún leían `orders` global con el filtro buggy `<> 'despachado'`. Cadena jornada-scoped: explosion→faltante→demanda_corte (CNC/pino) · demanda_tap→prioridad_melamina · resumen_dia (embalaje) · materia_prima→compras · orden_sector (De fábrica). **Jornada cerrada/cancelada ⇒ 0 necesidades** (verificado). La demanda global queda solo como resumen en `prod_rpc_dashboard` / `prod_v_resumen_global`, nunca como orden de sector.
+- Trazado pantalla→helper→vista: CNC `planCorte`→`prod_rpc_plan_corte`→`prod_v_demanda_corte`→`prod_v_faltante`→`prod_v_explosion`; Melamina `prioridadMelamina`→`prod_v_prioridad_melamina`→`prod_v_demanda_tap`; Embalaje `resumenDia`→`prod_v_resumen_dia`; De fábrica `ordenSector`→`prod_v_orden_sector`; Compras `compras`→`prod_v_materia_prima`→`prod_v_explosion`. Todas heredan el scope de jornada por cambio de vista base (sin tocar código de sector).
+
+**Gap 2 — Jornada operativa ÚNICA (Opción A del brief).** Índice único `ux_prod_jornada_una_abierta` ⇒ a lo sumo **1 jornada `abierta`** global. Coincide con `prod_rpc_abrir_jornada` y con `jornadaAbierta = estado==='abierta'` del frontend. Garantiza que dos jornadas no reserven/consuman el mismo stock (verificado: 2ª jornada abierta ⇒ bloqueada). `preparada` = staged (no consume). Stock se consume atómico por RPC (una sola vez).
+
+**Gap 3 — Separación SKUs internos ↔ catálogo de venta.** Columna aditiva `sku_catalog.es_insumo_interno`. Clasificación por **evidencia**: 128 SKUs = 26 productos venta + **5 repuestos con ventas reales** (KIT001/KIT002/SOP003/SOP007/SOP008 → quedan vendibles) + **67 insumos internos** (ocultos de venta) + 30 otros. No se desactiva nada (`activo` intacto); ML/Ventas legacy y `SKU_DB` (lookup) leen la tabla completa. Frontend `ventas.jsx` "Base de productos" (web+mobile): oculta internos por defecto, toggle "Ver insumos internos" para consulta. Vistas `prod_v_sku_clasificado` / `prod_v_catalogo_venta`.
+
+**Gap 4 — Herramienta de mínimos + alertas confiables.** `prod_insumo.minimo_configurado` distingue **"0 configurado" vs "sin configurar"** (los 37 insumos estaban en 0 ⇒ nunca alertaban = falso "saludable"). RPC `prod_rpc_set_minimo(sku,minimo,motivo)` (owner/admin/encargado, valida ≥0, auditoría en `prod_minimo_log`). Trigger `prod_fn_alerta_stock` ahora alerta solo si `minimo_configurado AND stock_minimo>0 AND stock<minimo`. Vista `prod_v_minimos` (estado sin_configurar/critico/bajo/ok). Frontend `encargado-panel` (web+mobile): banner "N sin configurar", botón "Mín." por insumo, modal auditado.
+
+**Evidencia test 2 jornadas (MAD010, rollback):** Jornada A demanda TAP001=2 → CNC PLB001 (1 hoja×rend50=50 crudas) → melamina 5 term → faltante 0, **sobrante=3**. Cierre A ⇒ explosión=0. Jornada B demanda=3 → **faltante=0 (reusó el sobrante, sin re-cortar)** → embalaje 3 consume melamina −3 (una vez) + patas −9 (3 grandes×3 = regla MESA) → sobrante remanente=2 a futuro. Sin doble reserva ni doble consumo.
+
+**Regresión:** 137/137 JSX transpilan (Babel 7.29.0 = runtime); acumulado intacto (506 pendientes, 9116 archivados excluidos); frozen legacy intacto; advisors sin clase nueva de issue (vistas/RPC nuevos siguen el patrón SECURITY DEFINER existente). Residual conocido: 1 SKU `TAP025` con pool `desconocido` (huérfano en `prod_pieza`, sin receta ⇒ no bloquea BOM; limpieza de datos).
+
+**Seguridad (sin cambios, ya trackeado):** `web/INFORME_TECNICO_BACKEND.md` con credencial + patrón SECURITY DEFINER general = pendiente para la ventana de seguridad controlada. `.gitignore` ampliado para bloquear `*ingreso*.txt` / `*token*.txt` / `brief_funcional_*.md`.
+
+---
+
 ## Stack & Proyecto
 
 | Item | Detalle |

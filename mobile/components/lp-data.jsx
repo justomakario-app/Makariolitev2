@@ -75,7 +75,10 @@ window.LP_DATA = window.LP_DATA || (function () {
     alertas: () => sel('prod_alerta', 'id, insumo_sku, nivel, stock_actual, stock_minimo, vista, created_at', q => q.eq('vista', false).order('created_at', { ascending: false })),
     mantenimientos: () => sel('prod_mantenimiento', 'id, sector, tipo, urgencia, maquina, descripcion, estado, reportado_por, created_at', q => q.order('created_at', { ascending: false })),
     solicitudes: () => sel('prod_solicitud', 'id, jornada_id, sector, items, estado, solicitado_por, created_at', q => q.order('created_at', { ascending: false })),
-    insumos: () => sel('prod_insumo', 'sku, nombre, categoria, sector, stock_actual, stock_minimo, unidad', q => q.order('nombre')),
+    insumos: () => sel('prod_insumo', 'sku, nombre, categoria, sector, stock_actual, stock_minimo, unidad, minimo_configurado', q => q.order('nombre')),
+    // Punto 4 — configuración de mínimos: estado + setear con auditoría.
+    minimos:   () => sel('prod_v_minimos', 'sku, nombre, categoria, sector, unidad, stock_actual, stock_minimo, minimo_configurado, estado, minimo_actualizado_at', q => q.order('nombre')),
+    setMinimo: (p) => rpc('prod_rpc_set_minimo', p), // { sku, minimo, motivo }
 
     // ── Materia prima / Remitos (Fase 6) ── ingreso suma stock; el historial
     // se lee directo (RLS encargado/owner/admin). Gate del RPC: owner/admin/encargado.

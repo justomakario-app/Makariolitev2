@@ -1105,6 +1105,7 @@ function BaseProductosTab() {
   const [cat, setCat]         = useState('');
   const [soloAct, setSoloAct] = useState(true);
   const [showInc, setShowInc] = useState(false);
+  const [verInternos, setVerInternos] = useState(false);  // Punto 3 — insumos internos separados del catálogo de venta
   const [vista, setVista]     = useState('tabla');  // 'tabla' | 'galeria'
   const [skuModal, setSkuModal] = useState(null);    // {sku, isNew, incompleto}
   const [tglTarget, setTglTarget] = useState(null);  // fila a togglear activo
@@ -1125,13 +1126,17 @@ function BaseProductosTab() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows.filter(r => {
+      // Punto 3 — separación venta/producción: por defecto ocultar insumos internos.
+      if (verInternos) { if (!r.es_insumo_interno) return false; }
+      else { if (r.es_insumo_interno) return false; }
       if (cat && r.categoria !== cat) return false;
       if (soloAct && r.activo === false) return false;
       if (showInc && !r.incompleto) return false;
       if (!q) return true;
       return [r.sku, r.modelo, r.color, r.categoria].some(v => (v || '').toLowerCase().includes(q));
     });
-  }, [rows, search, cat, soloAct, showInc]);
+  }, [rows, search, cat, soloAct, showInc, verInternos]);
+  const kInternos = rows.filter(r => r.es_insumo_interno).length;
 
   const activos = rows.filter(r => r.activo !== false);
   const kActivos = activos.length;
@@ -1222,7 +1227,19 @@ function BaseProductosTab() {
         <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:MAY_UI.inkSoft, fontWeight:600 }}>
           <input type="checkbox" checked={showInc} onChange={e => setShowInc(e.target.checked)}/> Mostrar incompletos
         </label>
+        <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:MAY_UI.inkSoft, fontWeight:600 }}
+               title="Insumos y piezas internas de producción, separados del catálogo de venta">
+          <input type="checkbox" checked={verInternos} onChange={e => setVerInternos(e.target.checked)}/> Ver insumos internos {kInternos > 0 && <span style={{ fontWeight:700, color:MAY_UI.inkFaint }}>({kInternos})</span>}
+        </label>
       </div>
+
+      {verInternos && (
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12, padding:'9px 12px', borderRadius:10,
+                      background:'#FEF3C7', border:'1px solid #FDE68A', color:'#92400E', fontSize:12, fontWeight:600 }}>
+          <Icon n="alert" s={15} c="#92400E"/>
+          Insumos internos de producción — NO son productos vendibles. Se muestran solo para consulta.
+        </div>
+      )}
 
       {loading ? (
         <div style={{ display:'flex', justifyContent:'center', padding:'48px 0' }}><span className="loader" style={{ width:26, height:26 }}/></div>

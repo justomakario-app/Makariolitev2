@@ -46,6 +46,7 @@ function EncargadoPanel() {
   const [alertas, setAlertas] = useState([]);
   const [mantes, setMantes] = useState([]);
   const [insumos, setInsumos] = useState([]);
+  const [minEdit, setMinEdit] = useState(null);  // Punto 4 — insumo cuyo mínimo se está configurando
   const [solicitudes, setSolicitudes] = useState([]);
   const [remitos, setRemitos] = useState([]);
   const [jornadaBusy, setJornadaBusy] = useState(false);
@@ -253,7 +254,8 @@ function EncargadoPanel() {
         ) : tab === 'aprob' ? (
           <EncAprobaciones U={U} role={role} solicitudes={solicitudes} mantes={mantes} onAction={handleAprob}/>
         ) : tab === 'stock' ? (
-          <EncStock U={U} insumos={insumos} remitos={remitos} onRemito={() => setRemitoOpen(true)}/>
+          <EncStock U={U} insumos={insumos} remitos={remitos} onRemito={() => setRemitoOpen(true)}
+                    role={role} onSetMinimo={setMinEdit}/>
         ) : tab === 'historico' ? (
           <EncHistorico U={U}/>
         ) : (
@@ -278,6 +280,20 @@ function EncargadoPanel() {
             }}/>
         );
       })()}
+
+      {minEdit && (
+        <LpEditModal U={U} titulo={`Mínimo de ${minEdit.nombre || minEdit.sku}`} motivoRequerido={true}
+          campos={[{ key:'minimo', label:`Stock mínimo (${minEdit.unidad || 'u'})`, tipo:'number' }]}
+          inicial={{ minimo: minEdit.minimo_configurado ? minEdit.stock_minimo : '' }}
+          onCerrar={() => setMinEdit(null)}
+          onGuardar={async (v, motivo) => {
+            try {
+              await window.LP_DATA.setMinimo({ sku: minEdit.sku, minimo: v.minimo, motivo });
+              toast.success('Mínimo configurado y auditado');
+              setMinEdit(null); await cargar();
+            } catch (err) { toast.error(err && err.message ? err.message : 'No se pudo configurar el mínimo'); }
+          }}/>
+      )}
 
       {remitoOpen && (
         <EncRemitoModal U={U} insumos={insumos} toast={toast}
@@ -468,8 +484,11 @@ function EncSectores({ U, jornada, placaMap, cortes, melamina, pino, embalaje, o
 }
 
 /* ── Tab Stock ── */
-function EncStock({ U, insumos, remitos, onRemito }) {
-  const bajo = insumos.filter(i => (Number(i.stock_actual) || 0) < (Number(i.stock_minimo) || 0));
+function EncStock({ U, insumos, remitos, onRemito, role, onSetMinimo }) {
+  const puedeConfig = ['owner','admin','encargado'].includes((role || '').toLowerCase());
+  // Punto 4 — "bajo mínimo" real: solo si el mínimo fue configurado y es > 0.
+  const bajo = insumos.filter(i => i.minimo_configurado && (Number(i.stock_minimo) || 0) > 0 && (Number(i.stock_actual) || 0) < (Number(i.stock_minimo) || 0));
+  const sinConfig = insumos.filter(i => !i.minimo_configurado);
   const histRem = remitos || [];
   const itemsRem = (it) => Array.isArray(it) ? it.reduce((s, x) => s + (Number(x.cantidad) || 0), 0) : 0;
   return (
@@ -504,6 +523,16 @@ function EncStock({ U, insumos, remitos, onRemito }) {
         </div>
       )}
 
+      {sinConfig.length > 0 && (
+        <div style={{background:U.warn+'14', border:`1px solid ${U.warn}44`, borderRadius:12, padding:'11px 13px', marginBottom:18,
+                     display:'flex', alignItems:'center', gap:9}}>
+          <Icon n="alert" s={16} c={U.warn}/>
+          <span style={{fontSize:12.5, color:U.ink, fontWeight:600}}>
+            <b>{sinConfig.length}</b> insumo{sinConfig.length===1?'':'s'} sin mínimo configurado — no generan alertas hasta definir su mínimo.
+          </span>
+        </div>
+      )}
+
       <h3 style={{fontSize:13.5, fontWeight:800, margin:'0 0 10px', color:U.ink}}>Stock general</h3>
       {insumos.length === 0 ? (
         <div style={{background:U.surface, border:`1px dashed ${U.border}`, borderRadius:12, padding:'18px 14px',
@@ -517,9 +546,24 @@ function EncStock({ U, insumos, remitos, onRemito }) {
                          padding:'10px 12px', borderBottom: idx < Math.min(insumos.length, 60) - 1 ? `1px solid ${U.border}` : 'none'}}>
               <div style={{minWidth:0, paddingRight:10}}>
                 <div style={{fontSize:12.5, fontWeight:700, color:U.ink, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{i.nombre || i.sku}</div>
-                <div style={{fontSize:10, color:U.inkMuted}}>{i.categoria || ''}{i.sku ? ` · ${i.sku}` : ''}</div>
+                <div style={{fontSize:10, color:U.inkMuted}}>
+                  {i.categoria || ''}{i.sku ? ` · ${i.sku}` : ''}
+                  {' · '}
+                  {i.minimo_configurado
+                    ? <span style={{color:U.inkSoft}}>mín {i.stock_minimo} {i.unidad}</span>
+                    : <span style={{color:U.warn, fontWeight:700}}>mín sin configurar</span>}
+                </div>
               </div>
-              <span style={{fontSize:13, fontWeight:700, color:(Number(i.stock_actual)||0) > 0 ? U.ink : U.inkMuted, fontVariantNumeric:'tabular-nums'}}>{i.stock_actual} {i.unidad}</span>
+              <div style={{display:'flex', alignItems:'center', gap:10}}>
+                <span style={{fontSize:13, fontWeight:700, color:(Number(i.stock_actual)||0) > 0 ? U.ink : U.inkMuted, fontVariantNumeric:'tabular-nums'}}>{i.stock_actual} {i.unidad}</span>
+                {puedeConfig && (
+                  <button onClick={() => onSetMinimo(i)} title="Configurar mínimo"
+                    style={{border:`1px solid ${U.border}`, background:U.surface, borderRadius:8, padding:'4px 8px',
+                            fontSize:11, fontWeight:700, color:U.accent, cursor:'pointer', whiteSpace:'nowrap'}}>
+                    Mín.
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>
