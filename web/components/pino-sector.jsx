@@ -33,6 +33,8 @@ function PinoSector() {
   const [jornada, setJornada] = useState(null);
   const [patas, setPatas] = useState([]);          // stock_patas [{tamano, disponible, masilladas}]
   const [registros, setRegistros] = useState([]);  // pinoDia
+  const [ventas, setVentas] = useState([]);
+  const [tareasPino, setTareasPino] = useState(0);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);
 
@@ -47,12 +49,16 @@ function PinoSector() {
     try {
       const j = await window.LP_DATA.jornadaHoy();
       setJornada(j);
-      const [st, rg] = await Promise.all([
+      const [st, rg, os, vv] = await Promise.all([
         window.LP_DATA.stock().catch(() => null),
         j && j.jornada_id ? window.LP_DATA.pinoDia(j.jornada_id).catch(() => []) : Promise.resolve([]),
+        window.LP_DATA.ordenSector().catch(() => []),
+        j && j.jornada_id ? window.LP_DATA.ventasVinculadas(j.jornada_id).catch(() => []) : Promise.resolve([]),
       ]);
       setPatas(st && st.stock_patas ? st.stock_patas : []);
       setRegistros(rg || []);
+      setVentas(vv || []);
+      setTareasPino((os || []).filter(o => o.sector === 'pino' && (Number(o.cantidad) || 0) > 0).length);
     } catch (err) {
       toast.error(err && err.message ? err.message : 'No se pudo cargar el sector');
     } finally { setLoading(false); }
@@ -130,7 +136,8 @@ function PinoSector() {
         {loading ? (
           <div style={{textAlign:'center', color:U.inkMuted, padding:'60px 0', fontSize:13}}>Cargando sector…</div>
         ) : tab === 'inicio' ? (
-          <PinoInicio U={U} jornadaAbierta={jornadaAbierta} jornada={jornada} patasMap={patasMap} registros={registros} totalTerminadas={totalTerminadas} onEdit={setEditing}/>
+          <PinoInicio U={U} jornadaAbierta={jornadaAbierta} jornada={jornada} patasMap={patasMap} registros={registros} totalTerminadas={totalTerminadas}
+                      nVentas={ventas.filter(v => v.snapshot_status !== 'cancelada').length} nTareas={tareasPino} onEdit={setEditing}/>
         ) : tab === 'scan' ? (
           <PinoScan U={U} jornadaAbierta={jornadaAbierta} onRegistrado={cargar} toast={toast} goInicio={() => setTab('inicio')}/>
         ) : tab === 'solicitud' ? (
@@ -157,7 +164,9 @@ function PinoSector() {
 }
 
 /* ── Tab Inicio ── */
-function PinoInicio({ U, jornadaAbierta, jornada, patasMap, registros, totalTerminadas, onEdit }) {
+function PinoInicio({ U, jornadaAbierta, jornada, patasMap, registros, totalTerminadas, nVentas, nTareas, onEdit }) {
+  const neu = lpNeutralMsg(jornada, nVentas, nTareas, 'Pino');
+  if (neu) return <LpNeutral U={U} msg={neu}/>;
   const chica = patasMap['chica'] || { disponible:0, masilladas:0 };
   const grande = patasMap['grande'] || { disponible:0, masilladas:0 };
   const masilladasTotal = (Number(chica.masilladas) || 0) + (Number(grande.masilladas) || 0);

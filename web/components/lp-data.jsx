@@ -27,7 +27,13 @@ window.LP_DATA = window.LP_DATA || (function () {
     // ── Jornada ──
     jornadaHoy: () => rpc('prod_rpc_get_jornada_hoy'),
     abrirJornada:  () => rpc('prod_rpc_abrir_jornada'),   // owner/admin/encargado; abre la de HOY
-    cerrarJornada: () => rpc('prod_rpc_cerrar_jornada'),  // cierra la abierta de hoy; devuelve resumen por sector
+    cerrarJornada: (p) => rpc('prod_rpc_cerrar_jornada', p),  // {forzar?} → si hay pendientes y no forzar: {ok:false, requiere_confirmacion}
+    // ── Puente de activación LP (0117): vincular ventas↔jornada con preview/confirm/sync + arrastre ──
+    vincularPreview:   (p) => rpc('prod_rpc_vincular_preview', p),   // {origen:{tipo,...}} → read-only: ventas/unidades que se vincularían
+    vincularConfirmar: (p) => rpc('prod_rpc_vincular_confirmar', p), // {origen} → escribe idempotente + auditoría
+    jornadaSync:       (p) => rpc('prod_rpc_jornada_sync', p),       // {origen} → nuevas + cantidades cambiadas + canceladas (auditado)
+    arrastrePreview:   (p) => rpc('prod_rpc_arrastre_preview', p),   // → pendientes NETO (bruto − terminado) de jornadas cerradas
+    ventasVinculadas:  (j) => sel('prod_jornada_orden', 'order_id, snapshot_status', q => q.eq('jornada_id', j)), // para estado neutro de sectores
 
     // ── Maestros ──
     placas:    () => sel('prod_placa', 'sku, nombre, material, rendimiento, pieza_sku, combinada', q => q.order('sku')),

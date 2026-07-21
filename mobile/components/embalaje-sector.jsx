@@ -34,6 +34,7 @@ function EmbalajeSector() {
   const [stockPatas, setStockPatas] = useState([]); // stock_patas
   const [demanda, setDemanda] = useState([]);       // resumen del día
   const [registros, setRegistros] = useState([]);   // embalajeDia
+  const [ventas, setVentas] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const armMap = useMemo(() => {
@@ -53,12 +54,13 @@ function EmbalajeSector() {
     try {
       const j = await window.LP_DATA.jornadaHoy();
       setJornada(j);
-      const [pr, ar, st, dm, rg] = await Promise.all([
+      const [pr, ar, st, dm, rg, vv] = await Promise.all([
         window.LP_DATA.productos().catch(() => []),
         window.LP_DATA.armables().catch(() => []),
         window.LP_DATA.stock().catch(() => null),
         window.LP_DATA.resumenDia().catch(() => []),
         j && j.jornada_id ? window.LP_DATA.embalajeDia(j.jornada_id).catch(() => []) : Promise.resolve([]),
+        j && j.jornada_id ? window.LP_DATA.ventasVinculadas(j.jornada_id).catch(() => []) : Promise.resolve([]),
       ]);
       setProductos(pr || []);
       setArmables(ar || []);
@@ -66,6 +68,7 @@ function EmbalajeSector() {
       setStockPatas(st && st.stock_patas ? st.stock_patas : []);
       setDemanda(dm || []);
       setRegistros(rg || []);
+      setVentas(vv || []);
     } catch (err) {
       toast.error(err && err.message ? err.message : 'No se pudo cargar el sector');
     } finally { setLoading(false); }
@@ -143,7 +146,8 @@ function EmbalajeSector() {
           <div style={{textAlign:'center', color:U.inkMuted, padding:'60px 0', fontSize:13}}>Cargando sector…</div>
         ) : tab === 'inicio' ? (
           <EmbInicio U={U} jornadaAbierta={jornadaAbierta} jornada={jornada} demanda={demanda} armMap={armMap}
-                     stockMel={stockMel} stockPatas={stockPatas} registros={registros} totalEmbalado={totalEmbalado}/>
+                     stockMel={stockMel} stockPatas={stockPatas} registros={registros} totalEmbalado={totalEmbalado}
+                     nVentas={ventas.filter(v => v.snapshot_status !== 'cancelada').length}/>
         ) : tab === 'scan' ? (
           <EmbScan U={U} jornadaAbierta={jornadaAbierta} productos={productos} armMap={armMap}
                    melMap={melMap} patasMap={patasMap} onRegistrado={cargar} toast={toast} goInicio={() => setTab('inicio')}/>
@@ -157,8 +161,10 @@ function EmbalajeSector() {
 }
 
 /* ── Tab Inicio ── */
-function EmbInicio({ U, jornadaAbierta, jornada, demanda, armMap, stockMel, stockPatas, registros, totalEmbalado }) {
+function EmbInicio({ U, jornadaAbierta, jornada, demanda, armMap, stockMel, stockPatas, registros, totalEmbalado, nVentas }) {
   const prioridad = demanda.filter(d => (Number(d.pendiente) || 0) > 0);
+  const neu = lpNeutralMsg(jornada, nVentas, prioridad.length, 'Embalaje');
+  if (neu) return <LpNeutral U={U} msg={neu}/>;
   return (
     <div>
       {!jornadaAbierta && (

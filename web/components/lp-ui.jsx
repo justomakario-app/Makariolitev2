@@ -13,6 +13,30 @@ function LpClock() {
   return <span>{hh}:{mm}</span>;
 }
 
+/* ── Estado neutro de la Línea Productiva por sector (3 situaciones distintas) ──
+   lpNeutralMsg(jornada, nVentas, nTareas) → {titulo, sub} o null (null = hay trabajo).
+   1) sin jornada abierta · 2) abierta sin ventas vinculadas · 3) con ventas, sin tareas del sector. */
+function lpNeutralMsg(jornada, nVentas, nTareas, sectorLabel) {
+  const abierta = jornada && jornada.estado === 'abierta';
+  if (!abierta) return { titulo:'Línea Productiva todavía no iniciada',
+    sub:'Cuando el encargado inicie la jornada y vincule ventas, vas a ver acá tus tareas.' };
+  if (!nVentas) return { titulo:'Jornada abierta, todavía sin ventas vinculadas',
+    sub:'La jornada arrancó pero todavía no se vincularon ventas. En cuanto se vinculen, aparecen las tareas.' };
+  if (!nTareas) return { titulo:'No hay tareas pendientes para este sector',
+    sub:'Hay ventas en la jornada, pero ' + (sectorLabel || 'este sector') + ' no tiene trabajo pendiente ahora.' };
+  return null;
+}
+function LpNeutral({ U, msg }) {
+  if (!msg) return null;
+  return (
+    <div style={{ background:U.surface||'#fff', border:`1px dashed ${U.border||'rgba(0,0,0,.12)'}`, borderRadius:14,
+                  padding:'36px 20px', textAlign:'center', margin:'10px 0' }}>
+      <div style={{ fontSize:15.5, fontWeight:800, color:U.ink||'#0A0A0A', marginBottom:7 }}>{msg.titulo}</div>
+      <div style={{ fontSize:12.5, color:U.inkSoft||U.inkMuted||'#666', lineHeight:1.6, maxWidth:420, margin:'0 auto' }}>{msg.sub}</div>
+    </div>
+  );
+}
+
 /* Niveles de urgencia (Mantenimiento) — color por nivel. */
 const LP_URGENCIAS = [
   { id:'alta',  label:'Alta',  color:'#FF4060' },

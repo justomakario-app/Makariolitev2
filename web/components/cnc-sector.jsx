@@ -44,6 +44,7 @@ function CncSector() {
   const [placas, setPlacas] = useState([]);
   const [cortes, setCortes] = useState([]);
   const [demanda, setDemanda] = useState([]);
+  const [ventas, setVentas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);
 
@@ -58,12 +59,13 @@ function CncSector() {
     try {
       const j = await window.LP_DATA.jornadaHoy();
       setJornada(j);
-      const [pl, ct, dm] = await Promise.all([
+      const [pl, ct, dm, vv] = await Promise.all([
         window.LP_DATA.placas().catch(() => []),
         j && j.jornada_id ? window.LP_DATA.cortesDia(j.jornada_id).catch(() => []) : Promise.resolve([]),
         window.LP_DATA.resumenDia().catch(() => []),
+        j && j.jornada_id ? window.LP_DATA.ventasVinculadas(j.jornada_id).catch(() => []) : Promise.resolve([]),
       ]);
-      setPlacas(pl); setCortes(ct); setDemanda(dm);
+      setPlacas(pl); setCortes(ct); setDemanda(dm); setVentas(vv);
     } catch (err) {
       toast.error(err && err.message ? err.message : 'No se pudo cargar el sector');
     } finally { setLoading(false); }
@@ -151,7 +153,8 @@ function CncSector() {
         {loading ? (
           <div style={{textAlign:'center', color:U.inkMuted, padding:'60px 0', fontSize:13}}>Cargando sector…</div>
         ) : tab === 'inicio' ? (
-          <CncInicio U={U} jornadaAbierta={jornadaAbierta} jornada={jornada} cortes={cortesView} totalNeto={totalNeto} demanda={demanda} onEdit={setEditing}/>
+          <CncInicio U={U} jornadaAbierta={jornadaAbierta} jornada={jornada} cortes={cortesView} totalNeto={totalNeto} demanda={demanda}
+                     nVentas={ventas.filter(v => v.snapshot_status !== 'cancelada').length} onEdit={setEditing}/>
         ) : tab === 'opt' ? (
           <CncOptimizacion U={U} placaMap={placaMap} toast={toast}/>
         ) : tab === 'scan' ? (
@@ -181,7 +184,9 @@ function CncSector() {
 }
 
 /* ── Tab Inicio ── */
-function CncInicio({ U, jornadaAbierta, jornada, cortes, totalNeto, demanda, onEdit }) {
+function CncInicio({ U, jornadaAbierta, jornada, cortes, totalNeto, demanda, nVentas, onEdit }) {
+  const neu = lpNeutralMsg(jornada, nVentas, (demanda || []).length, 'CNC');
+  if (neu) return <LpNeutral U={U} msg={neu}/>;
   return (
     <div>
       {!jornadaAbierta && (

@@ -32,6 +32,7 @@ function MelaminaSector() {
   const [crudo, setCrudo] = useState([]);          // stock_pieza [{pieza_sku, disponible}]
   const [prioridad, setPrioridad] = useState([]);  // prod_v_prioridad_melamina
   const [registros, setRegistros] = useState([]);  // melaminaDia
+  const [ventas, setVentas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);
 
@@ -49,16 +50,18 @@ function MelaminaSector() {
     try {
       const j = await window.LP_DATA.jornadaHoy();
       setJornada(j);
-      const [pz, st, pr, rg] = await Promise.all([
+      const [pz, st, pr, rg, vv] = await Promise.all([
         window.LP_DATA.piezas().catch(() => []),
         window.LP_DATA.stock().catch(() => null),
         window.LP_DATA.prioridadMelamina().catch(() => []),
         j && j.jornada_id ? window.LP_DATA.melaminaDia(j.jornada_id).catch(() => []) : Promise.resolve([]),
+        j && j.jornada_id ? window.LP_DATA.ventasVinculadas(j.jornada_id).catch(() => []) : Promise.resolve([]),
       ]);
       setPiezas((pz || []).filter(p => String(p.sku).startsWith('TAP')));
       setCrudo(st && st.stock_pieza ? st.stock_pieza : []);
       setPrioridad(pr || []);
       setRegistros(rg || []);
+      setVentas(vv || []);
     } catch (err) {
       toast.error(err && err.message ? err.message : 'No se pudo cargar el sector');
     } finally { setLoading(false); }
@@ -137,7 +140,8 @@ function MelaminaSector() {
           <div style={{textAlign:'center', color:U.inkMuted, padding:'60px 0', fontSize:13}}>Cargando sector…</div>
         ) : tab === 'inicio' ? (
           <MelInicio U={U} jornadaAbierta={jornadaAbierta} jornada={jornada} crudo={crudo}
-                     prioridad={prioridad} registros={registros} piezaNombre={piezaNombre} totalTerminadas={totalTerminadas} onEdit={setEditing}/>
+                     prioridad={prioridad} registros={registros} piezaNombre={piezaNombre} totalTerminadas={totalTerminadas}
+                     nVentas={ventas.filter(v => v.snapshot_status !== 'cancelada').length} onEdit={setEditing}/>
         ) : tab === 'scan' ? (
           <MelScan U={U} jornadaAbierta={jornadaAbierta} piezas={piezas} crudoMap={crudoMap}
                    onRegistrado={cargar} toast={toast} goInicio={() => setTab('inicio')}/>
@@ -165,8 +169,10 @@ function MelaminaSector() {
 }
 
 /* ── Tab Inicio ── */
-function MelInicio({ U, jornadaAbierta, jornada, crudo, prioridad, registros, piezaNombre, totalTerminadas, onEdit }) {
+function MelInicio({ U, jornadaAbierta, jornada, crudo, prioridad, registros, piezaNombre, totalTerminadas, nVentas, onEdit }) {
   const prioridadFalta = prioridad.filter(p => (Number(p.falta) || 0) > 0);
+  const neu = lpNeutralMsg(jornada, nVentas, prioridadFalta.length, 'Melamina');
+  if (neu) return <LpNeutral U={U} msg={neu}/>;
   return (
     <div>
       {!jornadaAbierta && (
