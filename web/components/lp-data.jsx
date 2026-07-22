@@ -116,6 +116,34 @@ window.LP_DATA = window.LP_DATA || (function () {
     // ── Histórico / Dashboard del director (Fase 9) ── solo owner/admin.
     directorHistorico: (p) => rpc('prod_rpc_director_historico', p), // { desde, hasta } → { kpis, comparativa, por_dia, top_productos, mantenimientos }
 
+    // ── Multi-jornada (0138/0141/0144) ──
+    planificarJornada: (p) => rpc('prod_rpc_planificar_jornada', p), // {fecha} → jornada planificada
+    ejecutarJornada:   (p) => rpc('prod_rpc_ejecutar_jornada', p),   // {jornada_id, override_motivo?} → una en_ejecucion; gate de capacidad
+    pausarJornada:     (p) => rpc('prod_rpc_pausar_jornada', p),     // {jornada_id?} → pausa la activa
+    capacidad:         (p) => rpc('prod_rpc_capacidad', p),          // {jornada_id?} → {calculable,nivel,sets,advertencia,critica,skus_sin_equiv}
+    setSetsEquiv:      (p) => rpc('prod_rpc_set_sets_equiv', p),     // {sku, sets_equiv|null} owner/admin
+    listaJornadas: () => sel('prod_jornada', 'id,fecha,estado,fase,abierta_at,cerrada_at', (q) => q.neq('fase', 'cerrada').order('fecha', { ascending: false })),
+
+    // ── Tareas / reservas reservado→en_proceso (0140) ──
+    reservarJornada: (p) => rpc('prod_rpc_reservar_jornada', p), // {jornada_id?} → crea tareas + reserva input disponible
+    iniciarTarea:    (p) => rpc('prod_rpc_iniciar_tarea', p),    // {tarea_id, cantidad} reservado→en_proceso (parcial, rol de sector)
+    finalizarTarea:  (p) => rpc('prod_rpc_finalizar_tarea', p),  // {tarea_id, cantidad} consume en_proceso + genera output
+    cancelarTarea:   (p) => rpc('prod_rpc_cancelar_tarea', p),   // {tarea_id} → movimiento compensatorio
+    tareas: (p) => sel('prod_v_tareas', '*', (q) => (p && p.jornada_id) ? q.eq('jornada_id', p.jornada_id) : q),
+
+    // ── Materia prima placas/Pino (0139) ──
+    mpUpsert: (p) => rpc('prod_rpc_mp_upsert', p),  // {sku,nombre,tipo,sector,unidad} owner/admin
+    mpAjuste: (p) => rpc('prod_rpc_mp_ajuste', p),  // {sku,delta,motivo} owner/admin/encargado (auditado)
+    stockMP:  () => sel('prod_v_stock_mp', '*', (q) => q.order('sku')),
+
+    // ── Estados demorado/reprogramado (0142) ──
+    setEstadoExterno: (p) => rpc('prod_rpc_set_estado_externo', p), // {order_id, valor_externo, reprogramada_para?}
+
+    // ── Minimos extendidos + alertas (0143) ──
+    setMinimoPool:   (p) => rpc('prod_rpc_set_minimo_pool', p), // {pool,sku,minimo,sector?}
+    reconocerAlerta: (p) => rpc('prod_rpc_reconocer_alerta', p),// {alerta_id}
+    minimos:         () => rpc('prod_rpc_minimos'),             // → {alertas:[...], configurados} (recalcula, fail-closed)
+
     // ── Realtime (Fase 4.2) ──
     // Suscribe a INSERT/UPDATE/DELETE de las `tables` indicadas y llama a
     // onChange (debounced 250ms) ante cualquier cambio. RLS filtra server-side:

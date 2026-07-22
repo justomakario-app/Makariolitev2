@@ -13,6 +13,68 @@
   const hoy = () => new Date().toISOString().slice(0,10);
   const btn = (bg, on) => ({ background: on?bg:'#CBD5E1', border:'none', borderRadius:10, color:'#fff', padding:'10px 16px', fontSize:13, fontWeight:800, cursor:on?'pointer':'not-allowed' });
 
+  // ── Gestión de jornadas (0138/0141): hasta 3 abiertas, 1 en ejecución, capacidad, override ──
+  function JornadasPanel() {
+    const pcard = { background:U.surface, border:`1px solid ${U.border}`, borderRadius:14, padding:'16px 18px', marginBottom:14 };
+    const [role] = useState(() => ((window.MOCK && window.MOCK.user && window.MOCK.user.role) || '').toLowerCase());
+    const [lista, setLista] = useState(null);
+    const [cap, setCap] = useState(null);
+    const [busy, setBusy] = useState(false);
+    const [nueva, setNueva] = useState(hoy);
+    const [pmsg, setPmsg] = useState(''); const [perr, setPerr] = useState('');
+    const puede = ['owner','admin','encargado'].includes(role);
+    const cargar = React.useCallback(async () => {
+      try { setLista(await window.LP_DATA.listaJornadas()); }
+      catch (e) { setPerr((e && e.message) || 'error'); setLista([]); }
+      try { setCap(await window.LP_DATA.capacidad()); } catch (e) { setCap(null); }
+    }, []);
+    useEffect(() => { cargar(); }, [cargar]);
+    if (!puede) return null;
+    const planificar = async () => { setBusy(true); setPmsg(''); setPerr(''); try { await window.LP_DATA.planificarJornada({ fecha: nueva }); setPmsg('Jornada planificada.'); await cargar(); } catch (e) { setPerr((e && e.message) || 'error'); } finally { setBusy(false); } };
+    const pausar = async (id) => { setBusy(true); setPmsg(''); setPerr(''); try { await window.LP_DATA.pausarJornada({ jornada_id: id }); setPmsg('Jornada pausada.'); await cargar(); } catch (e) { setPerr((e && e.message) || 'error'); } finally { setBusy(false); } };
+    const ejecutar = async (id) => {
+      setBusy(true); setPmsg(''); setPerr('');
+      try { await window.LP_DATA.ejecutarJornada({ jornada_id: id }); setPmsg('Jornada en ejecución.'); await cargar(); }
+      catch (e) {
+        const m = (e && e.message) || '';
+        if (/Capacidad incompleta|no calculable/.test(m)) {
+          const motivo = window.prompt('Capacidad no calculable (faltan equivalencias a sets). Ingresá el MOTIVO del override para ejecutar igual (queda auditado):');
+          if (motivo && motivo.trim()) { try { await window.LP_DATA.ejecutarJornada({ jornada_id: id, override_motivo: motivo.trim() }); setPmsg('Ejecutada con override auditado.'); await cargar(); } catch (e2) { setPerr((e2 && e2.message) || 'error'); } }
+          else setPerr('Ejecución cancelada (sin override).');
+        } else setPerr(m || 'error');
+      } finally { setBusy(false); }
+    };
+    const faseLabel = { planificada:'Planificada', en_ejecucion:'▶ En ejecución', pausada:'⏸ Pausada' };
+    const faseColor = { planificada:'#8A8A8A', en_ejecucion:'#16A34A', pausada:'#D97706' };
+    return (
+      <div style={pcard}>
+        <div style={{ fontWeight:800, marginBottom:8, color:U.ink }}>Jornadas · máx. 3 abiertas, 1 en ejecución</div>
+        {pmsg ? <div style={{ color:'#065F46', fontSize:12, marginBottom:6, fontWeight:700 }}>{pmsg}</div> : null}
+        {perr ? <div style={{ color:'#991B1B', fontSize:12, marginBottom:6, fontWeight:700 }}>{perr}</div> : null}
+        {cap && cap.calculable === false && cap.nivel === 'no_calculable'
+          ? <div style={{ background:'#FEF3C7', border:'1px solid #FDE68A', borderRadius:8, padding:8, fontSize:12, color:'#92400E', marginBottom:8 }}>Capacidad no calculable: faltan equivalencias a sets ({cap.skus_sin_equiv || '—'}). Para ejecutar hará falta override auditado.</div>
+          : cap && cap.calculable ? <div style={{ fontSize:12, fontWeight:700, color: cap.nivel==='critica'?'#DC2626':cap.nivel==='advertencia'?'#D97706':'#16A34A', marginBottom:8 }}>Capacidad: {cap.sets} sets · {cap.nivel} (aviso {cap.advertencia} / crítico {cap.critica})</div> : null}
+        <div style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:10 }}>
+          {(lista || []).map(j => (
+            <div key={j.id} style={{ display:'flex', gap:8, alignItems:'center', justifyContent:'space-between', border:`1px solid ${U.border}`, borderRadius:8, padding:'8px 10px', flexWrap:'wrap' }}>
+              <div style={{ minWidth:0 }}><span style={{ fontWeight:700 }}>{j.fecha}</span> <span style={{ color:faseColor[j.fase]||U.inkMuted, fontWeight:800, fontSize:12 }}>{faseLabel[j.fase]||j.fase}</span></div>
+              <div style={{ display:'flex', gap:6 }}>
+                {j.fase !== 'en_ejecucion'
+                  ? <button disabled={busy} style={btn('#16A34A', !busy)} onClick={() => ejecutar(j.id)}>Ejecutar</button>
+                  : <button disabled={busy} style={btn('#D97706', !busy)} onClick={() => pausar(j.id)}>Pausar</button>}
+              </div>
+            </div>
+          ))}
+          {lista && lista.length === 0 ? <div style={{ color:U.inkMuted, fontSize:12 }}>No hay jornadas abiertas.</div> : null}
+        </div>
+        <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+          <input type="date" value={nueva} onChange={e => setNueva(e.target.value)} style={{ padding:'8px 10px', borderRadius:8, border:`1px solid ${U.border}`, minWidth:0, maxWidth:'100%', boxSizing:'border-box' }}/>
+          <button disabled={busy} style={btn(U.accent, !busy)} onClick={planificar}>Planificar jornada</button>
+        </div>
+      </div>
+    );
+  }
+
   function LineaActivacionPage() {
     // FIX auditoría: NO llamar el hook useMockData() dentro del inicializador de useState
     // (rompe el orden de hooks → crash en el primer re-render). role no necesita reactividad.
@@ -93,6 +155,8 @@
       <div style={{ background:U.surface2, padding:'20px clamp(12px,4vw,24px) 32px', minHeight:'60vh', boxSizing:'border-box', maxWidth:'100%', overflowX:'hidden' }}>
         {msg ? <div style={{ ...card, background:'#ECFDF5', borderColor:'#A7F3D0', color:'#065F46', fontWeight:700 }}>{msg}</div> : null}
         {err ? <div style={{ ...card, background:'#FEF2F2', borderColor:'#FECACA', color:'#991B1B', fontWeight:700 }}>{err}</div> : null}
+
+        <JornadasPanel/>
 
         {!abierta ? (
           <div style={{ ...card, textAlign:'center', padding:'40px 18px' }}>
