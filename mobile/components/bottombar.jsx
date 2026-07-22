@@ -14,7 +14,7 @@ function BottomBar({ current, onNav, unread }) {
   const allTabs = [
     { id:'dashboard',   label:'Inicio',     icon:'home' },
     { id:'scan',        label:'Scan',       icon:'qr' },
-    { id:'produccion',  label:'Producción', icon:'tools' },
+    { id:'produccion-hub', label:'Producción', icon:'tools' },
     { id:'notificaciones', label:'Avisos',  icon:'bell', badge: unread },
     { id:'perfil',      label:'Perfil',     icon:'user' },
   ];

@@ -22,7 +22,7 @@ function App() {
       // que exista como pantalla mobile (produccion) o, si no, en avisos/perfil.
       if (window.isPermissionedAdmin && window.isPermissionedAdmin()) {
         const set = window.allowedNavSet ? window.allowedNavSet() : new Set();
-        landing = ['produccion','notificaciones','perfil'].find(id => set.has(id)) || 'perfil';
+        landing = ['produccion-hub','produccion','notificaciones','perfil'].find(id => set.has(id)) || 'perfil';
       }
       setPage(landing);
       setDidLanding(true);
@@ -71,15 +71,17 @@ function App() {
     let p = page;
     if (window.isPermissionedAdmin && window.isPermissionedAdmin() && !window.canSeeNav(p)) {
       const set = window.allowedNavSet ? window.allowedNavSet() : new Set();
-      p = ['produccion','notificaciones','perfil'].find(id => set.has(id)) || 'perfil';
+      p = ['produccion-hub','produccion','notificaciones','perfil'].find(id => set.has(id)) || 'perfil';
     }
 
     if (p === 'dashboard')   return <DashboardPage onNav={setPage}/>;
     if (p === 'scan')        return <ScanPage onNav={setPage}/>;
-    // F4: 'produccion' entra por el Hub (paridad con web). Con flag LP OFF el Hub renderiza
-    // Producción legacy directa (sin tabs LP) → comportamiento mobile actual preservado.
-    // Con flag ON, cada rol autorizado llega a su sector LP desde el router real.
-    if (p === 'produccion')  return window.ProduccionHubPage ? <window.ProduccionHubPage/> : <ProduccionPage/>;
+    // F4/Fase2: el Hub se alcanza por el id de nav REAL 'produccion-hub' (el que usan ROLE_NAV y el
+    // BottomBar). Con flag LP OFF el Hub renderiza Producción legacy directa (sin tabs LP) →
+    // comportamiento mobile actual preservado. Con flag ON, cada rol autorizado llega a su sector.
+    // 'produccion' se mantiene como alias de compatibilidad (bookmarks/landing viejos).
+    if (p === 'produccion-hub' || p === 'produccion')
+      return window.ProduccionHubPage ? <window.ProduccionHubPage/> : <ProduccionPage/>;
     if (p === 'notificaciones') return <NotificacionesPage/>;
     if (p === 'perfil')      return <PerfilPage onLogout={handleLogout}/>;
     if (p === 'marketing') {

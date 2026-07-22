@@ -135,7 +135,25 @@ El veredicto GO inicial fue **rechazado por el dueño**: faltaban 4 correcciones
 
 ## Registro de tareas
 
-### [2026-07-22] CORRECCIÓN INTEGRAL F1–F8 (post NO APTO) — LP completa web+mobile, operativa intacta — **validado en aislado**
+### [2026-07-22] RONDA de accesibilidad mobile + auditoría BOM real + reconciliación de alcance
+
+**Estado de partida:** `1c13375` sobre `d998ab2`. Remoto `ditmbqkvzreekqnkimqv` intacto (tracker 0117–0135, flag `linea_productiva` OFF). **No** se tocaron migraciones (0136/0137 siguen SOLO locales), remoto, flag ni app publicada.
+
+**Implementado y validado (frontend, seguro y acotado):**
+- **Navegación mobile (cierre real de F4):** el `BottomBar` mobile usaba el id `produccion` mientras `ROLE_NAV` y el router usan `produccion-hub`; por ese desajuste **la pestaña Producción no se mostraba a los operarios** y el hub era inalcanzable desde el celular. Corregido: `bottombar.jsx` usa el id `produccion-hub`; `app.jsx` rutea `produccion-hub` (y mantiene `produccion` como alias de compatibilidad). *Prueba con el BottomBar REAL + router real + hub real (jsdom):* con flag OFF los 3 roles ven la pestaña y al tocarla llegan a Producción legacy; con flag ON `cnc→CNC`, `embalaje→Embalaje`, `encargado→Panel`; apagar en vivo desmonta a legacy. Ningún rol queda con pantalla en blanco.
+- **carpinteria/logistica alineados a la fuente:** no tienen sector LP; ahora **conservan Producción legacy** también con flag ON (antes caían en un placeholder "en desarrollo"). Se agregó `LP_SECTOR_ROLES = [encargado,cnc,melamina,pino,embalaje]` (los únicos que auto-aterrizan en `linea-prod`) en el hub web y mobile.
+- Cache-busters: `produccion-hub v15`, `app v10` (mobile), `bottombar v3` (mobile); SW `macario-mobile-v15`.
+
+**Auditoría BOM real (lectura del remoto, sin escribir):** los **26 productos** están **activos, vendibles y con BOM completa** (receta + componentes), **0 referencias colgadas**, **0 hojas con pool desconocido**, **0 productos sin BOM**. `MAD030` = `TAP011`(melamina) + `KIT008` + `CAJ002` + `PAT004`, todo resoluble. El guard `0137` (embalaje sin receta) ya protege el único modo de fallo y **ningún producto real lo dispara**. → No hay brecha de catálogo que remediar hoy.
+
+**Reconciliación de alcance — lo que NO se implementó en esta ronda y por qué (bloqueos reales, no "para después"):**
+- **Multi-jornada simultánea (hasta 3):** el motor impone hoy **una única jornada abierta** (índice único `0114` + ~15 funciones/vistas que resuelven "la abierta"). Es un **rediseño del núcleo de demanda/asignación** que además **revierte una corrección NO-GO deliberada** (0112–0116). Requiere una **decisión de negocio explícita** sobre la semántica de "jornada activa" y de **asignación de stock compartido entre jornadas** (a quién se asigna el terminado cuando 3 jornadas compiten). Ejecutarlo mal = doble asignación / pérdida de conservación → cae en la cláusula de parada por riesgo de pérdida de datos.
+- **Ciclo reservado→en_proceso real:** las columnas `reservado`/`en_proceso` existen pero **el modelo no las usa** (la reserva de terminado se resuelve por el ledger `prod_asignacion`). Cablearlas para **componentes** exige definir un evento "inicio de trabajo" (que hoy no existe) y semántica de reserva por tarea sobre stock compartido — **decisión de diseño** pendiente.
+- **Consumo de materia prima en CNC/Pino:** CNC hoy genera piezas por `hojas × rendimiento` **sin** descontar un inventario de placas (no existe `prod_stock_placa`); Pino produce patas **sin** consumir listones/varillas (no modelados). Falta **dato físico real** (inventario e ingreso de placas; listones por sector/tamaño; rendimiento de corte lineal). Por regla, sin ese dato la acción debe **bloquearse como "configuración incompleta"**, no inventarse.
+- **Capacidad 270/300 como alerta:** falta la **equivalencia unidad→"set"** por producto para contar "sets" (ningún documento la trae). Sin ese dato no se puede contar sets; sí se puede alertar por unidades, pero la métrica pedida ("sets") queda **pendiente de dato**.
+- **Reglas de demorado/reprogramado:** `orders.status` no tiene esos estados (`pendiente/completado/arrastrado/archivado/cancelado`); "reprogramado" vive en columnas (`reprogramada_at`, `reprogramada_in_jornada_id`) y "demorado" solo en `estado_ml` (texto ML). Su efecto productivo **depende del importador de ventas**, fuera del módulo LP.
+
+**Validación de esta ronda:** parse Babel de los 4 archivos OK; test de navegación mobile real 8/8 (3 OFF + 5 ON, incl. dinámico); repro de gate web sin regresión; instalación limpia 0001→0137 **137/137**; kill-switch **11/11**. Producción legacy intacta.
 
 **Estado de partida:** `d998ab2` (= `origin/master`). Remoto `ditmbqkvzreekqnkimqv` sin tocar (tracker 0117–0135, flag `linea_productiva` OFF). Se cerraron **todos** los hallazgos F1–F8 de la auditoría anterior en una sola ronda. **Migraciones nuevas `0136`/`0137` SOLO locales** (no aplicadas en remoto). **No se hizo**: redeploy, push, migraciones remotas, activación del flag, ni cambios en datos operativos.
 

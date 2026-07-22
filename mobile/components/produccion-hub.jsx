@@ -224,10 +224,13 @@ function ProduccionHubPage() {
   const LP_TAB_IDS = ['linea-prod', 'tablero', 'activar', 'carga-stock', 'fe-fabrica'];
   const TABS = ALL_TABS.filter(t => (!t.stockOnly || canSeeStock) && (lpOn || LP_TAB_IDS.indexOf(t.id) === -1));
   const PROD_ROLES = ['encargado','cnc','melamina','pino','embalaje','carpinteria','logistica'];
+  // Roles con pantalla de sector LP propia (aterrizan en 'linea-prod' con flag ON). carpinteria y
+  // logistica NO tienen sector LP: por fuente funcional conservan Producción legacy como destino.
+  const LP_SECTOR_ROLES = ['encargado','cnc','melamina','pino','embalaje'];
   const [tab, setTab] = useState('produccion');
   const effTab = TABS.some(t => t.id === tab) ? tab : (TABS[0] ? TABS[0].id : 'produccion');
   useEffect(() => { if (effTab !== tab) setTab(effTab); }, [effTab, tab]);
-  useEffect(() => { if (lpOn && PROD_ROLES.includes(role) && tab === 'produccion') setTab('linea-prod'); }, [lpOn]);
+  useEffect(() => { if (lpOn && LP_SECTOR_ROLES.includes(role) && tab === 'produccion') setTab('linea-prod'); }, [lpOn]);
   const isLPTab = LP_TAB_IDS.indexOf(effTab) !== -1;
   const active = TABS.find(t => t.id === effTab) || TABS[0] || { id: 'produccion', label: 'Producción' };
 

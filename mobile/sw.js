@@ -3,7 +3,7 @@
    No cachea queries de Supabase (siempre van a la red).
 */
 
-const CACHE = 'macario-mobile-v14';
+const CACHE = 'macario-mobile-v15';
 /* M02 (auditoría): el SHELL ya NO precachea archivos versionados (?v=N). Antes la lista quedaba
    congelada en versiones viejas que el index.html actual nunca pedía (offline roto y riesgo de
    servir JS viejo). Ahora se precachea solo el esqueleto sin versión; todos los .jsx/.js/.css
