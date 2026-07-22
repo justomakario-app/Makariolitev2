@@ -13,7 +13,9 @@
   const hoy = () => new Date().toISOString().slice(0,10);
   const btn = (bg, on) => ({ background: on?bg:'#CBD5E1', border:'none', borderRadius:10, color:'#fff', padding:'10px 16px', fontSize:13, fontWeight:800, cursor:on?'pointer':'not-allowed' });
 
-  // ── Gestión de jornadas (0138/0141): hasta 3 abiertas, 1 en ejecución, capacidad, override ──
+  // ── Gestión de jornadas (RECONCILIADA 0147): consume el sistema EXISTENTE `jornadas` (dashboard): hasta
+  //    3 abiertas, 1 en ejecución (única fuente del tope). Planificar/Ejecutar delegan en las RPC del
+  //    dashboard; "pausar" no existe (se cambia la activa ejecutando otra). Capacidad = informativa. ──
   function JornadasPanel() {
     const pcard = { background:U.surface, border:`1px solid ${U.border}`, borderRadius:14, padding:'16px 18px', marginBottom:14 };
     const [role] = useState(() => ((window.MOCK && window.MOCK.user && window.MOCK.user.role) || '').toLowerCase());
@@ -30,19 +32,14 @@
     }, []);
     useEffect(() => { cargar(); }, [cargar]);
     if (!puede) return null;
-    const planificar = async () => { setBusy(true); setPmsg(''); setPerr(''); try { await window.LP_DATA.planificarJornada({ fecha: nueva }); setPmsg('Jornada planificada.'); await cargar(); } catch (e) { setPerr((e && e.message) || 'error'); } finally { setBusy(false); } };
-    const pausar = async (id) => { setBusy(true); setPmsg(''); setPerr(''); try { await window.LP_DATA.pausarJornada({ jornada_id: id }); setPmsg('Jornada pausada.'); await cargar(); } catch (e) { setPerr((e && e.message) || 'error'); } finally { setBusy(false); } };
+    const planificar = async () => { setBusy(true); setPmsg(''); setPerr(''); try { await window.LP_DATA.planificarJornada({ fecha: nueva }); setPmsg('Jornada abierta.'); await cargar(); } catch (e) { setPerr((e && e.message) || 'error'); } finally { setBusy(false); } };
+    // Ejecutar = activar esa jornada en el dashboard (rpc_set_active_jornada). Es la única activa; para
+    // "pausar" una, se ejecuta otra. La capacidad es informativa y NO bloquea la activación.
     const ejecutar = async (id) => {
       setBusy(true); setPmsg(''); setPerr('');
       try { await window.LP_DATA.ejecutarJornada({ jornada_id: id }); setPmsg('Jornada en ejecución.'); await cargar(); }
-      catch (e) {
-        const m = (e && e.message) || '';
-        if (/Capacidad incompleta|no calculable/.test(m)) {
-          const motivo = window.prompt('Capacidad no calculable (faltan equivalencias a sets). Ingresá el MOTIVO del override para ejecutar igual (queda auditado):');
-          if (motivo && motivo.trim()) { try { await window.LP_DATA.ejecutarJornada({ jornada_id: id, override_motivo: motivo.trim() }); setPmsg('Ejecutada con override auditado.'); await cargar(); } catch (e2) { setPerr((e2 && e2.message) || 'error'); } }
-          else setPerr('Ejecución cancelada (sin override).');
-        } else setPerr(m || 'error');
-      } finally { setBusy(false); }
+      catch (e) { setPerr((e && e.message) || 'error'); }
+      finally { setBusy(false); }
     };
     const faseLabel = { planificada:'Planificada', en_ejecucion:'▶ En ejecución', pausada:'⏸ Pausada' };
     const faseColor = { planificada:'#8A8A8A', en_ejecucion:'#16A34A', pausada:'#D97706' };
@@ -52,7 +49,7 @@
         {pmsg ? <div style={{ color:'#065F46', fontSize:12, marginBottom:6, fontWeight:700 }}>{pmsg}</div> : null}
         {perr ? <div style={{ color:'#991B1B', fontSize:12, marginBottom:6, fontWeight:700 }}>{perr}</div> : null}
         {cap && cap.calculable === false && cap.nivel === 'no_calculable'
-          ? <div style={{ background:'#FEF3C7', border:'1px solid #FDE68A', borderRadius:8, padding:8, fontSize:12, color:'#92400E', marginBottom:8 }}>Capacidad no calculable: faltan equivalencias a sets ({cap.skus_sin_equiv || '—'}). Para ejecutar hará falta override auditado.</div>
+          ? <div style={{ background:'#FEF3C7', border:'1px solid #FDE68A', borderRadius:8, padding:8, fontSize:12, color:'#92400E', marginBottom:8 }}>Capacidad no calculable: faltan equivalencias a sets ({cap.skus_sin_equiv || '—'}). Es informativa: no bloquea la ejecución.</div>
           : cap && cap.calculable ? <div style={{ fontSize:12, fontWeight:700, color: cap.nivel==='critica'?'#DC2626':cap.nivel==='advertencia'?'#D97706':'#16A34A', marginBottom:8 }}>Capacidad: {cap.sets} sets · {cap.nivel} (aviso {cap.advertencia} / crítico {cap.critica})</div> : null}
         <div style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:10 }}>
           {(lista || []).map(j => (
@@ -61,7 +58,7 @@
               <div style={{ display:'flex', gap:6 }}>
                 {j.fase !== 'en_ejecucion'
                   ? <button disabled={busy} style={btn('#16A34A', !busy)} onClick={() => ejecutar(j.id)}>Ejecutar</button>
-                  : <button disabled={busy} style={btn('#D97706', !busy)} onClick={() => pausar(j.id)}>Pausar</button>}
+                  : <span style={{ fontSize:12, color:'#16A34A', fontWeight:800 }}>activa</span>}
               </div>
             </div>
           ))}

@@ -209,6 +209,8 @@ function ProduccionHubPage() {
     { id:'linea-prod', label:'Línea productiva', stockOnly: false },
     { id:'tablero',    label:'Tablero LP',      stockOnly: false },
     { id:'activar',    label:'Activar LP',      stockOnly: true  },
+    { id:'tareas',     label:'Tareas LP',       stockOnly: false },
+    { id:'config',     label:'Configurar LP',   stockOnly: true  },
     { id:'carga-stock',label:'Carga stock',     stockOnly: true  },
   ];
 
@@ -231,7 +233,7 @@ function ProduccionHubPage() {
     return () => { window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onVis); clearInterval(id); };
   }, [readFlag]);
 
-  const LP_TAB_IDS = ['linea-prod', 'tablero', 'activar', 'carga-stock', 'fe-fabrica'];
+  const LP_TAB_IDS = ['linea-prod', 'tablero', 'activar', 'tareas', 'config', 'carga-stock', 'fe-fabrica'];
   // Tabs AUTORIZADAS: LP sólo con flag ON. 'produccion' siempre está (destino seguro por defecto).
   const TABS = ALL_TABS.filter(t => (!t.stockOnly || canSeeStock) && (lpOn || LP_TAB_IDS.indexOf(t.id) === -1));
 
@@ -283,6 +285,10 @@ function ProduccionHubPage() {
           window.LineaDashboardPage ? <window.LineaDashboardPage/> : null
         ) : lpOn && effTab === 'activar' && canSeeStock ? (
           window.LineaActivacionPage ? <window.LineaActivacionPage/> : null
+        ) : lpOn && effTab === 'tareas' ? (
+          window.LineaTareasPage ? <window.LineaTareasPage/> : null
+        ) : lpOn && effTab === 'config' && canSeeStock ? (
+          window.LineaConfigPage ? <window.LineaConfigPage/> : null
         ) : lpOn && effTab === 'carga-stock' && canSeeStock ? (
           window.LineaStockCargaPage ? <window.LineaStockCargaPage/> : null
         ) : (

@@ -135,6 +135,31 @@ El veredicto GO inicial fue **rechazado por el dueño**: faltaban 4 correcciones
 
 ## Registro de tareas
 
+### [2026-07-22c] RECONCILIACIÓN multijornada: LP consume el sistema `jornadas` EXISTENTE + coordinación reserva↔directa + cierre de auditoría (0146–0147)
+
+**Por qué se hizo:**
+El dashboard principal YA tenía un sistema multijornada real (`jornadas`: hasta 3 abiertas, una `is_active` "en ejecución", `orders.jornada_id` como asociación de ventas, RPC `rpc_open_jornada`/`rpc_set_active_jornada`/`rpc_close_jornada` con arrastre). El multijornada que se había agregado en 0138 sobre `prod_jornada` era un **sistema PARALELO** (segunda fuente de verdad). Requerimiento explícito: **no duplicar** — la Línea Productiva debe **conectarse** al multijornada existente, con los **mismos IDs** y las **mismas ventas**.
+
+**Cómo se hizo (append-only, sin reescribir migraciones):**
+- **0146 — coordinación reserva↔carga directa:** la carga directa de CNC/Pino ABSORBE (libera) toda reserva/en_proceso pendiente de su mismo output ANTES de consumir de disponible → una sola contabilidad transaccional del stock (sin bloqueo falso ni reserva colgada). Regla de reprogramado por fecha (`reprogramada_para <= hoy` vuelve elegible).
+- **0147 — reconciliación + auditoría:**
+  - `prod_jornada` pasa a ser un **ESPEJO 1:1 de `jornadas`** (MISMO id) mantenido por trigger `after insert/update on jornadas`: abrir/activar/pausar(=desactivar)/cerrar del dashboard se reflejan **de inmediato** en LP, con el mismo identificador. Backfill de las jornadas existentes.
+  - `prod_fn_jornada_activa()` resuelve la activa **real** (`jornadas.is_active`). Toda la LP la usa.
+  - El **tope de 3** lo controla SOLO `jornadas.rpc_open_jornada` (con `FOR UPDATE`, sin TOCTOU): se elimina el trigger propio `prod_tg_jornada_max_ins`.
+  - La **asociación de ventas** es `orders.jornada_id` (la del dashboard): `prod_fn_candidatos` —único punto de selección de vincular/sync— deriva de `orders.jornada_id` (FK única → un pedido nunca en 2 jornadas). Se conservó toda la lógica rica de `jornada_sync` (reactivación acotada a la jornada, cancelación/archivado que libera, cambios de cantidad/SKU).
+  - Las RPC de jornada de LP **DELEGAN** en las del dashboard: `abrir`→`fn_resolve_active_jornada`, `planificar`→`rpc_open_jornada`, `ejecutar`→`rpc_set_active_jornada`, `cerrar`→`rpc_close_jornada` (arrastre incluido); `pausar` deja de existir (se cambia la activa ejecutando otra).
+  - **Cierre de la auditoría adversarial de multijornada (5 hallazgos confirmados):** (H1) se ELIMINAN las policies RLS de escritura directa a `prod_jornada` (queda de solo lectura; sólo el trigger la escribe → no se puede desincronizar el espejo ni saltar guardas por PostgREST); (H2) doble-membresía de un pedido es estructuralmente imposible (FK único) + bloque de reactivación acotado a `o.jornada_id=v_j`; (H3) `reservar_jornada` opera SIEMPRE sobre la en_ejecucion (rechaza otro jornada_id); (H4) al cerrar una jornada se **liberan sus reservas/en_proceso** a disponible (vía el trigger de espejo); (H5) `crear_solicitud` usa `prod_fn_jornada_activa()`.
+- **Frontend:** el selector `JornadasPanel` consume `prod_v_jornadas` (vista sobre `jornadas`, no una tabla paralela); Planificar/Ejecutar delegan; "Pausar" se reemplaza por el indicador "activa"; la capacidad queda **informativa** (no bloquea, porque la activación la controla el dashboard). Se **montaron** las pantallas operativas nuevas en el hub (web + mobile): tabs "Tareas LP" (`LineaTareasPage`, ciclo reservado→en_proceso→finalizada) y "Configurar LP" (`LineaConfigPage`: materia prima, equivalencias a sets, mínimos, estados externos), con el mismo gateo fail-closed por flag.
+
+**Para qué sirve / resultado (validado en entorno AISLADO, NO en remoto):**
+- **Instalación limpia 147/147** (×13, una por suite). **Upgrade 0135→0147 OK.** **33 RPC mutantes** con kill-switch como primera sentencia.
+- **Batería completa VERDE (12 suites):** regresión 42/42 · concurrencia real PASS (60 iter) · gaps 12/12 · kill-switch 11/11 + exhaustivo 45/45 · multijornada reconciliada 20/20 · tareas 14/14 · capacidad/estados/mínimos 16/16 · día de fábrica 21/21 · audit-fixes 12/12 · coordina 6/6 · **reconciliación 17/17** (espejo mismo-id, escritura directa bloqueada por RLS, reservar sólo activa, cierre libera reservas, crear_solicitud, set_active del dashboard reflejado en LP).
+- Frontend: 10/10 componentes LP transpilan con Babel (runtime classic).
+
+**⚠️ PENDIENTE (fuera del alcance de software; requieren decisión/datos del dueño):** aplicar 0146+0147 al remoto y activar el flag `linea_productiva` son acciones **manuales controladas** (NO ejecutadas). Faltan por cargar: rendimientos/equivalencias reales, mapeo del Excel de catálogo y URL de fábrica. **Sin push/deploy/migraciones remotas ni activación de flag en esta ronda.**
+
+---
+
 ### [2026-07-22] Construcción integral de núcleo LP: reservas, materia prima, capacidad, estados, mínimos + UI de jornadas (0139–0144)
 
 **Estado de partida:** `b8f82c7`. Remoto intacto (0117–0135, flag OFF). Migraciones nuevas **`0139`–`0144` SOLO locales**. Sin push/redeploy/migración remota/flag/datos.

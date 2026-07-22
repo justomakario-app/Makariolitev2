@@ -122,7 +122,7 @@ window.LP_DATA = window.LP_DATA || (function () {
     pausarJornada:     (p) => rpc('prod_rpc_pausar_jornada', p),
     capacidad:         (p) => rpc('prod_rpc_capacidad', p),
     setSetsEquiv:      (p) => rpc('prod_rpc_set_sets_equiv', p),
-    listaJornadas: () => sel('prod_jornada', 'id,fecha,estado,fase,abierta_at,cerrada_at', (q) => q.neq('fase', 'cerrada').order('fecha', { ascending: false })),
+    listaJornadas: () => sel('prod_v_jornadas', 'id,fecha,estado,fase,is_active,pedidos_activos', (q) => q.neq('fase', 'cerrada').order('fecha', { ascending: false })), // consume las jornadas EXISTENTES del dashboard (vista sobre `jornadas`), no una tabla paralela
 
     // ── Tareas / reservas reservado→en_proceso (0140) ──
     reservarJornada: (p) => rpc('prod_rpc_reservar_jornada', p),

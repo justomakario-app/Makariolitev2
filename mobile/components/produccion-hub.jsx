@@ -199,6 +199,8 @@ function ProduccionHubPage() {
     { id:'linea-prod', label:'Línea productiva', stockOnly: false },
     { id:'tablero',    label:'Tablero LP',      stockOnly: false },
     { id:'activar',    label:'Activar LP',      stockOnly: true  },
+    { id:'tareas',     label:'Tareas LP',       stockOnly: false },
+    { id:'config',     label:'Configurar LP',   stockOnly: true  },
     { id:'carga-stock',label:'Carga stock',     stockOnly: true  },
   ];
 
@@ -221,7 +223,7 @@ function ProduccionHubPage() {
     return () => { window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onVis); clearInterval(id); };
   }, [readFlag]);
 
-  const LP_TAB_IDS = ['linea-prod', 'tablero', 'activar', 'carga-stock', 'fe-fabrica'];
+  const LP_TAB_IDS = ['linea-prod', 'tablero', 'activar', 'tareas', 'config', 'carga-stock', 'fe-fabrica'];
   const TABS = ALL_TABS.filter(t => (!t.stockOnly || canSeeStock) && (lpOn || LP_TAB_IDS.indexOf(t.id) === -1));
   const PROD_ROLES = ['encargado','cnc','melamina','pino','embalaje','carpinteria','logistica'];
   // Roles con pantalla de sector LP propia (aterrizan en 'linea-prod' con flag ON). carpinteria y
@@ -273,6 +275,10 @@ function ProduccionHubPage() {
           window.LineaDashboardPageMobile ? <window.LineaDashboardPageMobile/> : null
         ) : effTab === 'activar' && canSeeStock ? (
           window.LineaActivacionPage ? <window.LineaActivacionPage/> : null
+        ) : effTab === 'tareas' ? (
+          window.LineaTareasPage ? <window.LineaTareasPage/> : null
+        ) : effTab === 'config' && canSeeStock ? (
+          window.LineaConfigPage ? <window.LineaConfigPage/> : null
         ) : effTab === 'carga-stock' && canSeeStock ? (
           window.LineaStockCargaPage ? <window.LineaStockCargaPage/> : null
         ) : (
