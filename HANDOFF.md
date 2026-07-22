@@ -135,7 +135,18 @@ El veredicto GO inicial fue **rechazado por el dueño**: faltaban 4 correcciones
 
 ## Registro de tareas
 
-### [2026-07-22] RONDA de accesibilidad mobile + auditoría BOM real + reconciliación de alcance
+### [2026-07-22] Fase 8 (multi-jornada) BACKEND + kill-switch exhaustivo — **increment 1 del build de núcleo**
+
+**Estado de partida:** `b20b206` sobre `1c13375`/`d998ab2`. Remoto intacto (0117–0135, flag OFF). Migración nueva **`0138` SOLO local**. Sin push/redeploy/migración remota/flag/datos.
+
+**IMPLEMENTADO Y VALIDADO en aislado (backend):**
+- **`0138_multijornada` (Fase 8):** modelo de jornadas `planificada | en_ejecucion | pausada | cerrada`; **hasta N abiertas configurable** (tabla `prod_config`, default 3, enforced por trigger); **exactamente UNA `en_ejecucion`** (índice único parcial; se elimina `ux_prod_jornada_una_abierta`). Helper `prod_fn_jornada_activa()` reemplaza el resolver `estado='abierta' limit 1` en las 10 RPC operativas (regeneradas mecánicamente desde su def vigente, **preservando el guard 0136**). Nuevas RPC: `planificar_jornada`, `ejecutar_jornada` (marca una activa; la anterior pasa a pausada), `pausar_jornada`. `abrir_jornada`/`cerrar_jornada` reescritas para setear `fase`. **Backward-compatible:** al abrir se marca `en_ejecucion`, así con 1 jornada el motor se comporta idéntico (la regresión lo confirma).
+- **Reglas aplicadas (Fase 8):** stock físico central compartido; toda tarea/movimiento pertenece a una jornada; la activa asigna su terminado por FIFO; las otras no se apropian automáticamente; pedido **aislado** a una sola jornada abierta (candidatos excluye pedidos en otra abierta); ventas nuevas entran por sync explícito.
+- **Kill-switch ampliado a 22 RPC mutantes** (las 19 previas + `planificar/ejecutar/pausar`), guard como 1er statement, 1 vez c/u.
+
+**Resultados numéricos (aislado):** install limpia 0001→0138 **138/138 ×3** · upgrade 0135→0136/0137/0138 **PASS + idempotente** (22 guardadas) · regresión backward-compat **42/42** · gaps **12/12** · races **60/60** (una corrida intermedia marcó 4 fallos SÓLO en el muestreo de evidencia `dosTransacciones` —la conservación nunca falló— y la re-corrida dio 60/60 limpio) · **multi-jornada 18/18** (3 abiertas, tope, 1 activa, ejecutar/pausar, producción a la activa, aislamiento, cierre) · **kill-switch exhaustivo 33/33** (las 22 mutantes rechazadas con flag OFF + 0 mutación; lecturas no bloqueadas; anon bloqueado ON/OFF).
+
+**NO hecho en este increment (queda implementación real, no bloqueos de diseño):** UI de multi-jornada (planificar/ejecutar/pausar/selector en web+mobile); Fase 3/6 (ciclo tarea reservado→en_proceso con "Iniciar tarea"); Fase 4 (catálogo/stock de placas y MP de Pino + consumo con bloqueo por config faltante); Fase 9 (capacidad configurable con equivalencia a sets nullable); Fase 10 (estados canónicos demorado/reprogramado + mapeo configurable); Fase 11 (mínimos extendidos a placas/MP/intermedios/terminado). Y la prueba integral de día de fábrica + auditoría adversarial sobre todo eso. **Son increments siguientes; las reglas ya están definidas por el usuario, así que es construcción pura.**
 
 **Estado de partida:** `1c13375` sobre `d998ab2`. Remoto `ditmbqkvzreekqnkimqv` intacto (tracker 0117–0135, flag `linea_productiva` OFF). **No** se tocaron migraciones (0136/0137 siguen SOLO locales), remoto, flag ni app publicada.
 
