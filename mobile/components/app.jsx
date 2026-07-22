@@ -76,7 +76,10 @@ function App() {
 
     if (p === 'dashboard')   return <DashboardPage onNav={setPage}/>;
     if (p === 'scan')        return <ScanPage onNav={setPage}/>;
-    if (p === 'produccion')  return <ProduccionPage/>;
+    // F4: 'produccion' entra por el Hub (paridad con web). Con flag LP OFF el Hub renderiza
+    // Producción legacy directa (sin tabs LP) → comportamiento mobile actual preservado.
+    // Con flag ON, cada rol autorizado llega a su sector LP desde el router real.
+    if (p === 'produccion')  return window.ProduccionHubPage ? <window.ProduccionHubPage/> : <ProduccionPage/>;
     if (p === 'notificaciones') return <NotificacionesPage/>;
     if (p === 'perfil')      return <PerfilPage onLogout={handleLogout}/>;
     if (p === 'marketing') {

@@ -90,7 +90,7 @@
     if (!puede) return <div style={{ padding:40, textAlign:'center', color:U.inkMuted }}>Solo owner/admin/encargado pueden activar la Línea Productiva.</div>;
 
     return (
-      <div style={{ background:U.surface2, padding:'20px 24px 32px', minHeight:'60vh' }}>
+      <div style={{ background:U.surface2, padding:'20px clamp(12px,4vw,24px) 32px', minHeight:'60vh', boxSizing:'border-box', maxWidth:'100%', overflowX:'hidden' }}>
         {msg ? <div style={{ ...card, background:'#ECFDF5', borderColor:'#A7F3D0', color:'#065F46', fontWeight:700 }}>{msg}</div> : null}
         {err ? <div style={{ ...card, background:'#FEF2F2', borderColor:'#FECACA', color:'#991B1B', fontWeight:700 }}>{err}</div> : null}
 
@@ -110,13 +110,13 @@
               <div style={{ fontSize:12.5, color:U.inkSoft, marginBottom:14 }}>Elegí el origen de ventas, previsualizá y confirmá. Nada se vincula hasta que confirmes.</div>
               <div style={{ display:'flex', gap:10, flexWrap:'wrap', alignItems:'center', marginBottom:12 }}>
                 <select value={origenTipo} onChange={e => { setOrigenTipo(e.target.value); limpiar(); }}
-                        style={{ padding:'8px 10px', borderRadius:8, border:`1px solid ${U.border}`, fontSize:13 }}>
+                        style={{ padding:'8px 10px', borderRadius:8, border:`1px solid ${U.border}`, fontSize:13, flex:'1 1 150px', minWidth:0, maxWidth:'100%', boxSizing:'border-box' }}>
                   <option value="fecha_desde">Ventas desde una fecha</option>
                   <option value="arrastre">Pendientes de la jornada anterior</option>
                 </select>
                 {origenTipo === 'fecha_desde' ? (
                   <input type="date" value={fecha} onChange={e => { setFecha(e.target.value); limpiar(); }}
-                         style={{ padding:'8px 10px', borderRadius:8, border:`1px solid ${U.border}`, fontSize:13 }}/>
+                         style={{ padding:'8px 10px', borderRadius:8, border:`1px solid ${U.border}`, fontSize:13, flex:'1 1 130px', minWidth:0, maxWidth:'100%', boxSizing:'border-box' }}/>
                 ) : null}
                 {origenTipo === 'arrastre'
                   ? <button onClick={verArrastre} disabled={busy} style={btn(U.accent, !busy)}>Ver pendientes</button>

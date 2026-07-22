@@ -89,7 +89,10 @@
 - [x] **Aislamiento LP**: feature flag `linea_productiva` **fail-closed** (`0135`, default OFF; tabs LP ocultas hasta encender). Kill-switch sin redeploy.
 - [x] **Instalación limpia de la cadena**: 135/135 en aislado (gap real documentado: 0103 requiere catálogo `PAT001/PAT002` pre-cargado). **Regresión 42/42** (legacy+LP+permisos+limpieza=baseline).
 - [x] **Compatibilidad transitoria verificada**: bundle publicado (era-S2.23) no llama ningún `prod_*`; tráfico vivo 200. Gap pre-existente `check_cuils_exist` (desde `0076`, no de esta etapa) se cura con el redeploy.
-- [ ] **Pre-deploy (dueño)**: verificar backup en Supabase Dashboard → aplicar 0128–0135 → deploy → smoke → encender flag `linea_productiva`.
+- [x] **Migraciones 0128–0135 aplicadas en remoto** (2026-07-21, backup confirmado por el dueño; tracker numérico 0117–0135; flag OFF; baseline idéntico). Push `d998ab2` a `origin/master` hecho.
+- [ ] **⛔ AUDITORÍA FINAL [2026-07-22]: NO APTO para redeploy** — ver HANDOFF [2026-07-22]. Bloqueante: **F1 crítico** (flag fail-open: roles de producción entran a LP con flag OFF; tab inicial + tabpanel de `produccion-hub` no consultan el flag). Decidir además: F2 (kill-switch sin respaldo backend), F3 (carpinteria/logistica huérfanos), F4 (LP inaccesible en mobile — router `/m/` sin ruta al hub, pre-existente), F6 (embalaje acepta producto sin BOM → stock sin consumo).
+- [x] **CORRECCIÓN F1–F8 [2026-07-22]** (commit local correctivo, sin push) — ver HANDOFF [2026-07-22]. Gate fail-closed tri-estado web+mobile (F1/F3); kill-switch backend `0136` con guard en **19 RPC mutadoras** + re-lectura/desmontaje en vivo (F2); router mobile ruteando el hub, flag OFF = legacy (F4); `0137` embalaje exige BOM (F6); visual a 360/390 + iconos/favicon (F7/F8); F5 aceptado como SQL manual. **Validado en aislado:** install 137/137 ×3, upgrade 0135→0137 PASS, regresión 42/42, races 60/60, gaps 12/12, hooks PASS, kill-switch 11/11, gate 5/5, router mobile + flip dinámico PASS, visual 0 desbordes/0 console.error. **Migraciones `0136`/`0137` SOLO locales; remoto/flag/app publicada sin cambios.**
+- [ ] **Pre-deploy (dueño)**: aplicar `0136`/`0137` en remoto (backup confirmado) → redeploy EasyPanel → smoke URL pública (SW v14, tabs ocultas con flag OFF, CUIL→DNI) → autorización separada para encender flag `linea_productiva` + validación en fábrica.
 
 ---
 

@@ -212,34 +212,52 @@ function ProduccionHubPage() {
     { id:'carga-stock',label:'Carga stock',     stockOnly: true  },
   ];
 
-  // Aislamiento LP (0135): tabs de Línea Productiva visibles SOLO con el flag ON (fail-closed).
-  // La Producción legacy y Stock central no dependen del flag.
-  const [lpOn, setLpOn] = useState(false);
-  useEffect(() => {
-    let vivo = true;
-    const p = (window.LP_DATA && window.LP_DATA.lpFlag) ? window.LP_DATA.lpFlag() : Promise.resolve(false);
-    p.then(v => { if (vivo) setLpOn(!!v); }).catch(() => {});
-    return () => { vivo = false; };
+  // Aislamiento LP (F1/F2): flag TRI-ESTADO — 'loading' | true | false. loading/false/error ⇒ LP OFF
+  // (fail-closed). Se revalida al montar, al recuperar foco/visibilidad y periódicamente mientras el
+  // hub está abierto; si se apaga en caliente, LP se desmonta y el usuario queda en una tab permitida.
+  const [lpFlag, setLpFlag] = useState('loading');
+  const lpOn = lpFlag === true;
+  const readFlag = useCallback(() => {
+    if (!(window.LP_DATA && window.LP_DATA.lpFlag)) { setLpFlag(false); return; }
+    window.LP_DATA.lpFlag().then(v => setLpFlag(v === true)).catch(() => setLpFlag(false));
   }, []);
+  useEffect(() => {
+    readFlag();
+    const onFocus = () => readFlag();
+    const onVis = () => { if (document.visibilityState === 'visible') readFlag(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVis);
+    const id = setInterval(readFlag, 20000);
+    return () => { window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onVis); clearInterval(id); };
+  }, [readFlag]);
+
   const LP_TAB_IDS = ['linea-prod', 'tablero', 'activar', 'carga-stock', 'fe-fabrica'];
+  // Tabs AUTORIZADAS: LP sólo con flag ON. 'produccion' siempre está (destino seguro por defecto).
   const TABS = ALL_TABS.filter(t => (!t.stockOnly || canSeeStock) && (lpOn || LP_TAB_IDS.indexOf(t.id) === -1));
 
-  // Los roles de producción aterrizan directo en SU pantalla (Línea productiva
-  // = panel del encargado / sector). owner/admin abren en la vista general.
   const PROD_ROLES = ['encargado','cnc','melamina','pino','embalaje','carpinteria','logistica'];
-  const [tab, setTab] = useState(PROD_ROLES.includes(role) ? 'linea-prod' : 'produccion');
-  const active = TABS.find(t => t.id === tab) || TABS[0];
+  const [tab, setTab] = useState('produccion');
+  // Tab EFECTIVA derivada EXCLUSIVAMENTE de las tabs autorizadas: si la actual dejó de ser válida
+  // (p.ej. el flag se apagó y desapareció una tab LP), cae a la primera permitida.
+  const effTab = TABS.some(t => t.id === tab) ? tab : (TABS[0] ? TABS[0].id : 'produccion');
+  useEffect(() => { if (effTab !== tab) setTab(effTab); }, [effTab, tab]);
+  // Con flag ON, los roles productivos aterrizan en su pantalla LP (una vez, sólo desde 'produccion').
+  useEffect(() => { if (lpOn && PROD_ROLES.includes(role) && tab === 'produccion') setTab('linea-prod'); }, [lpOn]);
+
+  const isLPTab = LP_TAB_IDS.indexOf(effTab) !== -1;
+  const active = TABS.find(t => t.id === effTab) || TABS[0] || { id: 'produccion', label: 'Producción' };
 
   return (
     <div>
       <div style={{padding:'0 32px 0'}}>
-        <div className="tabs" role="tablist" style={{marginBottom:0}}>
+        <div className="tabs" role="tablist" style={{marginBottom:0, overflowX:'auto', flexWrap:'nowrap', WebkitOverflowScrolling:'touch', scrollbarWidth:'none'}}>
           {TABS.map(t => (
             <button
               key={t.id}
               role="tab"
-              aria-selected={tab === t.id}
-              className={`tab ${tab === t.id ? 'active' : ''}`}
+              aria-selected={effTab === t.id}
+              className={`tab ${effTab === t.id ? 'active' : ''}`}
+              style={{whiteSpace:'nowrap', flexShrink:0}}
               onClick={() => setTab(t.id)}
             >
               {t.label}
@@ -249,30 +267,27 @@ function ProduccionHubPage() {
       </div>
 
       <div role="tabpanel">
-        {tab === 'produccion' ? (
+        {/* Cada rama LP exige lpOn Y que la tab efectiva sea LP: nunca se monta LP con flag off/cargando. */}
+        {effTab === 'produccion' ? (
           window.ProduccionPage ? <window.ProduccionPage/> : null
-        ) : tab === 'stock' && canSeeStock ? (
+        ) : effTab === 'stock' && canSeeStock ? (
           window.StockPage ? <window.StockPage/> : null
-        ) : tab === 'linea-prod' ? (
+        ) : lpOn && effTab === 'linea-prod' ? (
           <LineaProductivaGuard role={role}/>
-        ) : tab === 'fe-fabrica' ? (
+        ) : lpOn && effTab === 'fe-fabrica' ? (
           <DeFabrica/>
-        ) : tab === 'tablero' ? (
+        ) : lpOn && effTab === 'tablero' ? (
           window.LineaDashboardPage ? <window.LineaDashboardPage/> : null
-        ) : tab === 'activar' && canSeeStock ? (
+        ) : lpOn && effTab === 'activar' && canSeeStock ? (
           window.LineaActivacionPage ? <window.LineaActivacionPage/> : null
-        ) : tab === 'carga-stock' && canSeeStock ? (
+        ) : lpOn && effTab === 'carga-stock' && canSeeStock ? (
           window.LineaStockCargaPage ? <window.LineaStockCargaPage/> : null
         ) : (
-          window.ProximamentePlaceholder
-            ? <window.ProximamentePlaceholder nombre={active.label}/>
-            : (
-              <div className="admin-empty-state">
-                <Icon n="tools" s={32} c="var(--ink-muted)"/>
-                <h3>{active.label}</h3>
-                <p>Próximamente</p>
-              </div>
-            )
+          <div className="admin-empty-state">
+            <Icon n="tools" s={32} c="var(--ink-muted)"/>
+            <h3>{active.label}</h3>
+            <p>{isLPTab ? 'Línea Productiva no está habilitada.' : 'Módulo no disponible.'}</p>
+          </div>
         )}
       </div>
     </div>
