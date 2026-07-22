@@ -24,6 +24,14 @@ window.LP_DATA = window.LP_DATA || (function () {
   };
 
   return {
+    // ── Feature flag (aislamiento LP) — FAIL-CLOSED: sin tabla/flag/err ⇒ deshabilitada ──
+    lpFlag: async () => {
+      try {
+        const { data, error } = await sb().from('app_flags').select('enabled').eq('name', 'linea_productiva').maybeSingle();
+        if (error) return false;
+        return !!(data && data.enabled);
+      } catch (e) { return false; }
+    },
     // ── Jornada ──
     jornadaHoy: () => rpc('prod_rpc_get_jornada_hoy'),
     abrirJornada:  () => rpc('prod_rpc_abrir_jornada'),   // owner/admin/encargado; abre la de HOY
@@ -70,11 +78,17 @@ window.LP_DATA = window.LP_DATA || (function () {
     pinoDia: (j) => sel('prod_pino', 'id, tamano, terminadas, masilladas, created_at, editable_hasta', q => q.eq('jornada_id', j).order('created_at', { ascending: false })),
 
     // ── Embalaje ──
-    registrarEmbalaje: (p) => rpc('prod_rpc_registrar_embalaje', p),
+    // M01/M03: request_id SIEMPRE presente (idempotencia backend 0123). El caller puede pasar el suyo
+    // (intent-estable para reintentos); si no, se genera uno por llamada como red de seguridad.
+    registrarEmbalaje: (p) => {
+      const q = Object.assign({}, p || {});
+      if (!q.request_id) q.request_id = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : 'rid-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+      return rpc('prod_rpc_registrar_embalaje', q);
+    },
     embalajePrecheck: (p) => rpc('prod_rpc_embalaje_precheck', p), // {producto_sku,unidades} → {componentes:[{componente,pool,sector,requerido,disponible,faltante,suficiente}],suficiente_total} — canónico BOM
     stockPreview:   (p) => rpc('prod_rpc_stock_preview', p),   // {lote_id,filas:[...]} → clasifica sin escribir (read-only)
     stockConfirmar: (p) => rpc('prod_rpc_stock_confirmar', p), // {lote_id,filas:[...]} → aplica idempotente (write EXPLÍCITO)
-    editarEmbalaje: (p) => rpc('prod_rpc_editar_embalaje', p),
+    // editarEmbalaje: DESHABILITADO — embalaje inmutable en este lanzamiento (guard backend 0126). Sin acceso desde la UI.
     embalajeDia: (j) => sel('prod_embalaje', 'id, producto_sku, unidades, canal, created_at', q => q.eq('jornada_id', j).order('created_at', { ascending: false })),
 
     // ── Encargado (panel de control) ──

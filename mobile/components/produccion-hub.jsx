@@ -202,7 +202,17 @@ function ProduccionHubPage() {
     { id:'carga-stock',label:'Carga stock',     stockOnly: true  },
   ];
 
-  const TABS = ALL_TABS.filter(t => !t.stockOnly || canSeeStock);
+  // Aislamiento LP (0135): tabs de Línea Productiva visibles SOLO con el flag ON (fail-closed).
+  // La Producción legacy y Stock central no dependen del flag.
+  const [lpOn, setLpOn] = useState(false);
+  useEffect(() => {
+    let vivo = true;
+    const p = (window.LP_DATA && window.LP_DATA.lpFlag) ? window.LP_DATA.lpFlag() : Promise.resolve(false);
+    p.then(v => { if (vivo) setLpOn(!!v); }).catch(() => {});
+    return () => { vivo = false; };
+  }, []);
+  const LP_TAB_IDS = ['linea-prod', 'tablero', 'activar', 'carga-stock', 'fe-fabrica'];
+  const TABS = ALL_TABS.filter(t => (!t.stockOnly || canSeeStock) && (lpOn || LP_TAB_IDS.indexOf(t.id) === -1));
 
   // Los roles de producción aterrizan directo en SU pantalla (Línea productiva
   // = panel del encargado / sector). owner/admin abren en la vista general.

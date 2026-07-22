@@ -14,7 +14,9 @@
   const btn = (bg, on) => ({ background: on?bg:'#CBD5E1', border:'none', borderRadius:10, color:'#fff', padding:'10px 16px', fontSize:13, fontWeight:800, cursor:on?'pointer':'not-allowed' });
 
   function LineaActivacionPage() {
-    const [role] = useState(() => ((window.useMockData && window.useMockData().user.role) || '').toLowerCase());
+    // FIX auditoría: NO llamar el hook useMockData() dentro del inicializador de useState
+    // (rompe el orden de hooks → crash en el primer re-render). role no necesita reactividad.
+    const [role] = useState(() => ((window.MOCK && window.MOCK.user && window.MOCK.user.role) || '').toLowerCase());
     const [jornada, setJornada] = useState(undefined); // undefined=cargando, null=sin jornada
     const [busy, setBusy] = useState(false);
     const [msg, setMsg] = useState('');
@@ -59,7 +61,10 @@
     const actualizar = async () => {
       if (busy) return; setBusy(true); setErr('');
       try { const r = await window.LP_DATA.jornadaSync({ origen: origen() });
-        setMsg('Sync: ' + (r.nuevas||0) + ' nuevas · ' + (r.actualizadas||0) + ' actualizadas · ' + (r.canceladas||0) + ' canceladas.'); }
+        setMsg('Sync: ' + (r.nuevas||0) + ' nuevas · ' + (r.actualizadas||0) + ' actualizadas · ' + (r.canceladas||0) + ' canceladas · '
+          + (r.cumplidas||0) + ' cumplidas · ' + (r.reactivadas||0) + ' reactivadas · '
+          + (r.liberadas_a_stock_libre||0) + ' u. liberadas a stock · ' + (r.auto_asignadas_de_stock_libre||0) + ' cubiertas con stock'
+          + ((r.anomalias_archivado_con_pendiente||0) > 0 ? ' · ⚠ ' + r.anomalias_archivado_con_pendiente + ' archivada(s) con pendiente' : '') + '.'); }
       catch (e) { setErr(e && e.message ? e.message : 'No se pudo actualizar'); }
       finally { setBusy(false); }
     };

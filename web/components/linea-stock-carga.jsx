@@ -16,7 +16,8 @@
   const nuevoLote = () => 'CI-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + Math.random().toString(36).slice(2,7);
 
   function LineaStockCargaPage() {
-    const [role] = useState(() => ((window.useMockData && window.useMockData().user.role) || '').toLowerCase());
+    // FIX auditoría: NO llamar el hook useMockData() dentro del inicializador de useState (rompe orden de hooks).
+    const [role] = useState(() => ((window.MOCK && window.MOCK.user && window.MOCK.user.role) || '').toLowerCase());
     const [lote, setLote] = useState(nuevoLote);
     const [filas, setFilas] = useState([nuevaFila()]);
     const [preview, setPreview] = useState(null);

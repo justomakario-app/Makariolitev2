@@ -322,7 +322,16 @@ function EmbScan({ U, jornadaAbierta, productos, armMap, melMap, patasMap, onReg
     if (!puedeEnviar) return;
     setSaving(true);
     try {
-      await window.LP_DATA.registrarEmbalaje({ producto_sku: sel.sku, unidades: u });
+      // M03: request_id estable por intento — si este mismo payload falló (red) y se reintenta,
+      // se reusa el rid y el backend (0123) devuelve el resultado original sin duplicar.
+      const _k = sel.sku + '|' + u;
+      const _prev = window.__lpEmbReq;
+      const _rid = (_prev && _prev.key === _k && !_prev.done)
+        ? _prev.rid
+        : ((window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : 'rid-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+      window.__lpEmbReq = { key: _k, rid: _rid, done: false };
+      await window.LP_DATA.registrarEmbalaje({ producto_sku: sel.sku, unidades: u, request_id: _rid });
+      window.__lpEmbReq.done = true;
       toast.success(`${u} ${sel.sku} listos para despacho`);
       setSel(null); setUnidades(1);
       await onRegistrado();

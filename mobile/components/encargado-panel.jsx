@@ -175,7 +175,7 @@ function EncargadoPanel() {
     cnc:      { titulo:'Editar corte',  campos:[{ key:'hojas', label:'Hojas' }, { key:'desperdicio', label:'Desperdicio' }], fn:'editarCorte',    extra:(r) => ({}) },
     melamina: { titulo:'Editar melamina', campos:[{ key:'terminadas', label:'Terminadas' }, { key:'fallas', label:'Fallas' }], fn:'editarMelamina', extra:(r) => ({}) },
     pino:     { titulo:'Editar pino',   campos:[{ key:'terminadas', label:'Terminadas' }, { key:'masilladas', label:'Masilladas' }], fn:'editarPino', extra:(r) => ({}) },
-    embalaje: { titulo:'Editar embalaje', campos:[{ key:'unidades', label:'Unidades' }], fn:'editarEmbalaje', extra:(r) => ({}) },
+    // Embalaje es INMUTABLE en este lanzamiento (asignación por pedido 0118/0123). No hay edición in situ.
   };
 
   return (
@@ -265,6 +265,7 @@ function EncargadoPanel() {
 
       {editing && (() => {
         const cfg = editarConfig[editing.sector];
+        if (!cfg) return null; // embalaje (u otro sector inmutable): sin modal de edición
         return (
           <LpEditModal U={U} titulo={cfg.titulo} motivoRequerido={true}
             campos={cfg.campos}
@@ -461,23 +462,26 @@ function EncSectores({ U, jornada, placaMap, cortes, melamina, pino, embalaje, o
 
             {d.rows.length > 0 && (
               <div style={{borderTop:`1px solid ${U.border}`, paddingTop:8}}>
-                {d.rows.slice(0, 6).map(r => (
-                  <div key={r.id} onClick={() => onEdit(s.id, r)}
-                       style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'7px 2px', cursor:'pointer'}}>
+                {d.rows.slice(0, 6).map(r => {
+                  const editable = s.id !== 'embalaje'; // embalaje confirmado = inmutable
+                  return (
+                  <div key={r.id} onClick={editable ? () => onEdit(s.id, r) : undefined}
+                       style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'7px 2px', cursor: editable ? 'pointer' : 'default'}}>
                     <span style={{fontSize:12, color:U.inkSoft, textTransform:'capitalize'}}>{d.label(r)}</span>
                     <span style={{display:'flex', alignItems:'center', gap:8}}>
                       <span style={{fontSize:11.5, color:U.inkMuted, fontVariantNumeric:'tabular-nums'}}>{d.val(r)}</span>
-                      <Icon n="edit" s={13} c={U.accentText}/>
+                      {editable ? <Icon n="edit" s={13} c={U.accentText}/> : null}
                     </span>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
         );
       })}
       <div style={{fontSize:11, color:U.inkMuted, textAlign:'center', padding:'4px 16px 8px', lineHeight:1.5}}>
-        Tocá cualquier carga para corregirla. Toda corrección exige motivo y queda auditada.
+        Tocá una carga de CNC, Melamina o Pino para corregirla (exige motivo y queda auditada). El embalaje confirmado es inmutable.
       </div>
     </div>
   );

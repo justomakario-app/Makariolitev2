@@ -67,6 +67,30 @@
 - [ ] **Rotación `service_role` / remediación INFORME**: **solo DESPUÉS** de verificar deploy sano (ventana de seguridad controlada).
 - [ ] **Residual**: `TAP025` pieza huérfana sin receta (pool `desconocido`, no bloquea BOM) → limpieza futura de datos.
 
+## Corrección integral post-auditoría — actualizado 2026-07-21b (0117–0127 en remoto · 0128–0135 locales · validado en AISLADO)
+
+> Inventario original de la auditoría: 72 hallazgos (4C/11A/16M/10B/31obs). **Todos los C/A y todos los M de integridad/stock/contratos/funcionamiento cerrados.** Validación en entorno aislado (Postgres embebido) — la base operativa solo recibió lecturas. Ver HANDOFF [2026-07-21b].
+
+- [x] **C01/C02 hooks (crash Activar LP / Carga stock)**: fix `window.MOCK` sin hook + **harness real de render 8/8** (web+mobile; buggy de `a3ecaba` reproduce el crash = control positivo).
+- [x] **C03/A02/A11 (M04) helpers definer expuestos a anon** → REVOKE (`0119`, refuerzo `0125/0127`). Único acceso anon restante: 9 RPC con guard de rol (rechazan en runtime).
+- [x] **C04/A06 archivado liberaba stock despachado** → archivado=cumplido, anomalía si pendiente (`0120`).
+- [x] **A01 jornada por fecha=HOY** → todo resuelve por `estado='abierta'` (`0122/0123/0124`).
+- [x] **A03/M05 sync/embalaje sin validar jornada** → validación existe+abierta, cero mutaciones (`0120/0123/0124`).
+- [x] **A04/A05/M07 (M01 UI) negativos/decimales en corte/melamina/pino** → `prod_fn_int_arg` (`0124`).
+- [x] **A07 bypass 0104 vinculaba las 506** → drop (`0121`); **M09 `set_jornada_estado` sin guarda** → drop (`0129`).
+- [x] **A08/A09 cancelación cross-jornada + reactivación** → barridos globales del sync (`0120`).
+- [x] **A10 embalaje sin locks de MP** → locks deterministas melamina→patas→insumo + chequeo de insumos (`0123`). **CONCURRENCIA REAL PASS** (aislado): 30 carreras de recurso compartido único (mel/patas/ins), 1 éxito + 1 error controlado, consumo exacto, evidencia `pg_locks` de espera + relectura post-lock.
+- [x] **A11 idempotencia rota bajo concurrencia** → insert-first + `op_hash` (`0123`). **PASS** 20 carreras (mismo rid+payload = 1 mutación; payload distinto = conflicto; stock del ganador exacto). UI manda `request_id` real (M01/M03).
+- [x] **Autoasignación bajo concurrencia**: 10 carreras 2×sync (asignado=3, libre=0, sin sobreasignación, conservación, 2ª transacción relee estado).
+- [x] **M02 SW shell desactualizado** → precache sin versiones + fallback solo navegación (+B02) · CACHE v12.
+- [x] **M08 stocks sin CHECK** → CHECKs NOT VALID en 9 tablas (`0128`; preflight remoto: 0 anomalías).
+- [x] **M10 BOM cíclico** → trigger anticiclo (`0130`; preflight: 0 ciclos). **M11 typo de año vincula legacy** → piso 90 días + casts claros (`0131`). **M12 doble conteo dual-registrado** → dedupe por pool (`0132`).
+- [x] **M13 ledger huérfano al borrar pedido** → trigger libera neto exacto (`0133`; preflight: 0 huérfanas). **M14 asigna a cancelados** + **M15 cambio de SKU** + **M16 FIFO lexicográfico** → estado actual + `prod_fn_asignado(uuid,sku)` + sync re-apunta + `prod_fn_natkey` (`0134`).
+- [x] **Aislamiento LP**: feature flag `linea_productiva` **fail-closed** (`0135`, default OFF; tabs LP ocultas hasta encender). Kill-switch sin redeploy.
+- [x] **Instalación limpia de la cadena**: 135/135 en aislado (gap real documentado: 0103 requiere catálogo `PAT001/PAT002` pre-cargado). **Regresión 42/42** (legacy+LP+permisos+limpieza=baseline).
+- [x] **Compatibilidad transitoria verificada**: bundle publicado (era-S2.23) no llama ningún `prod_*`; tráfico vivo 200. Gap pre-existente `check_cuils_exist` (desde `0076`, no de esta etapa) se cura con el redeploy.
+- [ ] **Pre-deploy (dueño)**: verificar backup en Supabase Dashboard → aplicar 0128–0135 → deploy → smoke → encender flag `linea_productiva`.
+
 ---
 
 # FASE 0 — CIMIENTOS Y DATOS MAESTROS

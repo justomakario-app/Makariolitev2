@@ -135,6 +135,32 @@ El veredicto GO inicial fue **rechazado por el dueño**: faltaban 4 correcciones
 
 ## Registro de tareas
 
+### [2026-07-21b] CORRECCIÓN INTEGRAL POST-NO-GO + VALIDACIÓN EN ENTORNO AISLADO — LP completa, operativa intacta
+
+**Contexto:** tras el NO-GO de la auditoría (72 hallazgos: 4C/11A/16M/10B/31obs), corrección integral con regla de oro: la app diaria NO se toca (remoto = solo lecturas). Migraciones **0119–0127 ya aplicadas en remoto** (solo objetos `prod_*`, superficie disjunta del bundle publicado); **0128–0135 SOLO locales** (aplicar en el deploy controlado).
+
+**Salud de la app publicada (verificada, solo lectura):** el artefacto servido es era-S2.23 (`7413e31`/`ae1e82d`; todo lo posterior figura "PENDIENTE redeploy"). Su superficie: 89 RPC legacy + 24 tablas/vistas, **cero objetos `prod_*`** → disjunta de 0119–0127. Tráfico vivo del día todo 200/101 (login/refresh/realtime/import/producción). Datos: 9863 orders (747 activas), 41 jornadas legacy, LP en 0, cero residuo sintético. **Gap pre-existente (NO causado por esta etapa):** el bundle publicado llama `rpc_admin_check_cuils_exist`, dropeada por la migración `0076` (CUIL→DNI) — el bulk-import de empleados con CUIL falla desde 0076; se corrige solo con el redeploy (el bundle nuevo usa `check_dnis_exist`).
+
+**Entorno aislado (Postgres 18 embebido vía npm, sin Docker/costo/credenciales):** scratchpad `iso/` — `step1-migrate.js` (instalación limpia), `step2-regression.js` (regresión), `step3-races.js` (concurrencia). Shims de infraestructura (roles anon/authenticated/service_role, auth.uid()/jwt(), storage, publication realtime, **default privileges de Supabase**) + seed documentado de 2 filas (`PAT001/PAT002` en `prod_pieza`: **gap real de la cadena** — 0103 asume catálogo cargado por Excel).
+
+**Resultados (evidencia en `iso/*.json` del scratchpad de la sesión):**
+- **Instalación limpia:** 135/135 migraciones aplicadas de cero, 0 fallas.
+- **Hooks C01/C02 (harness real jsdom+React, web+mobile, mount→interacción→re-render→unmount→remount):** 8/8 — las 4 variantes corregidas sin errores de hooks; las 4 buggy (a3ecaba) **reproducen el crash** (control positivo).
+- **Regresión completa:** **42/42 PASS** — legacy (open jornada, import + re-import sin duplicar, register_production, carrier recompute) + LP (vincular scopes, piso fecha 90d, flujo 4 sectores por rol, FIFO natural 99<100, idempotencia, archivado/cancelación/reactivación, cambio de SKU, skip cancelados, delete-pedido libera, CHECKs anti-negativo, BOM anticiclo, dedupe dual-registrado, flag OFF) + permisos (anon denegado, rol sin permiso denegado, sector lee vistas con security_invoker) + limpieza RID → baseline exacto.
+- **CONCURRENCIA REAL (A10/A11): PASS 60/60** — 2 backends (application_name race_w1/w2, PIDs distintos), transacciones solapadas (xact_start distintos en la misma muestra), **espera de lock observada** en `pg_stat_activity`/`pg_locks` (waiter granted=false), **relectura post-lock** (el perdedor resuelve tras el commit del ganador). A: autoasignación ×10 (asignado=3, libre=0, sin sobreasignación, auto1+auto2=3). B: ×10 por cada cuello único —melamina, patas, insumo— (1 éxito + 1 error controlado del material correcto, consumo exacto de los 3 materiales, sin negativos). C: idempotencia ×20 (mismo rid+payload → 1 mutación/1 fila idempotencia/mismo embalaje_id; payload distinto → 1 ganador + conflicto, stock del ganador exacto). Limpieza total por RID: cero filas, conteos == baseline.
+
+**Medios corregidos (todos):** M01/M03 `request_id` real (intent-estable con reuso en reintento) · M02 SW precache sin versiones + fallback solo navegación (+B02) · M04–M07 (0119/0123/0124/0125 previos) · M08 CHECKs NOT VALID (preflight remoto: 0 anomalías) `0128` · M09 drop `set_jornada_estado` (0 consumidores en toda la historia git) `0129` · M10 trigger BOM anticiclo `0130` · M11 piso 90 días `fecha_desde` + casts protegidos `0131` · M12 `prod_v_faltante` dedupe por pool `0132` · M13 trigger delete-pedido libera neto `0133` · M14+M15+M16 asignación por estado ACTUAL + filtro SKU en `prod_fn_asignado(uuid,text)` + sync detecta cambio de SKU + FIFO natural (`prod_fn_natkey`) `0134` · Aislamiento: **feature flag `linea_productiva` fail-closed** (`app_flags`, default OFF; tabs LP ocultas hasta encenderlo) `0135`.
+
+**Preflight de cada migración nueva (verificado read-only contra remoto):** 0128 → 0 filas negativas/cero-anómalas en todas las tablas alcanzadas; 0129 → 0 consumidores; 0130 → 0 ciclos existentes; 0131 → contrato intacto (misma firma/columnas); 0132 → mismas columnas/tipos, security_invoker re-fijado; 0133 → 0 asignaciones huérfanas hoy; 0134 → reescribe solo funciones `prod_*` (sin datos); 0135 → tabla nueva. **Impacto en objetos compartidos: cero** (todo es `prod_*`/`app_flags` salvo el trigger de 0133 sobre `orders`, aditivo, probado en regresión L+P14).
+
+**Rollback (preparado, NO ejecutar salvo emergencia):** 0128 `alter table … drop constraint ck_*` (9) · 0129 re-crear desde `0104` · 0130 `drop trigger prod_componente_anticiclo; drop function prod_tg_componente_anticiclo` · 0131 re-crear `prod_fn_candidatos` desde `0117` · 0132 re-crear `prod_v_faltante` desde `0117` + `security_invoker=on` · 0133 `drop trigger orders_delete_libera_lp on orders; drop function prod_tg_orders_delete_libera` · 0134 re-crear `prod_fn_asignado(uuid)` y funciones desde `0120/0123`; `drop function prod_fn_natkey, prod_fn_asignado(uuid,text)` · 0135 `drop table app_flags` (o `update … enabled=false` como kill-switch sin drop).
+
+**Backups:** no verificables desde este entorno (sin acceso al dashboard). **Checklist pre-deploy manual de Aaron:** confirmar en Supabase Dashboard → Database → Backups que exista backup del día antes de aplicar 0128–0135.
+
+**Plan de deploy controlado (cuando se autorice):** 1) verificar backup · 2) aplicar 0128–0135 en remoto (flag queda OFF) · 3) deploy del frontend · 4) smoke · 5) encender `app_flags.linea_productiva` → LP visible. Kill-switch: apagar el flag (sin redeploy).
+
+**NO se hizo:** push, redeploy, migraciones remotas nuevas, cambios en Producción legacy/Carrier/despacho, ni escrituras en la base operativa (solo lecturas).
+
 ### [2026-07-21] AUDITORÍA FINAL E2E de Línea Productiva — VEREDICTO: GO (listo para redeploy manual)
 
 **Alcance auditado:** todo el módulo Línea Productiva (previo + esta etapa). Producción legacy = baseline congelada (no auditada para cambio, solo regresión).

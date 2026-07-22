@@ -3,23 +3,14 @@
    No cachea queries de Supabase (siempre van a la red).
 */
 
-const CACHE = 'macario-mobile-v8';
+const CACHE = 'macario-mobile-v12';
+/* M02 (auditoría): el SHELL ya NO precachea archivos versionados (?v=N). Antes la lista quedaba
+   congelada en versiones viejas que el index.html actual nunca pedía (offline roto y riesgo de
+   servir JS viejo). Ahora se precachea solo el esqueleto sin versión; todos los .jsx/.js/.css
+   versionados entran al cache en runtime (network-first) con la URL EXACTA que pide el index. */
 const SHELL = [
   '/m/',
   '/m/index.html',
-  '/m/components/styles.css',
-  '/m/components/mobile.css',
-  '/m/components/data.js?v=49',
-  '/m/components/shared.jsx?v=11',
-  '/m/components/login.jsx?v=11',
-  '/m/components/bottombar.jsx?v=1',
-  '/m/components/dashboard.jsx?v=12',
-  '/m/components/carrier.jsx?v=11',
-  '/m/components/produccion.jsx?v=5',
-  '/m/components/scan.jsx?v=1',
-  '/m/components/modals.jsx?v=11',
-  '/m/components/pages.jsx?v=1',
-  '/m/components/app.jsx?v=1',
   '/m/manifest.webmanifest',
 ];
 
@@ -63,6 +54,12 @@ self.addEventListener('fetch', (e) => {
         }
         return resp;
       })
-      .catch(() => caches.match(e.request).then((m) => m || caches.match('/m/index.html')))
+      .catch(() => caches.match(e.request).then((m) => {
+        if (m) return m;
+        // B02: index.html como fallback SOLO para navegación — nunca para .jsx/.css/assets
+        // (devolver HTML a Babel/CSS producía errores confusos offline).
+        if (e.request.mode === 'navigate') return caches.match('/m/index.html');
+        return Response.error();
+      }))
   );
 });
