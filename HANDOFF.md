@@ -135,6 +135,15 @@ El veredicto GO inicial fue **rechazado por el dueño**: faltaban 4 correcciones
 
 ## Registro de tareas
 
+### [2026-07-23b] CIERRE 2 bloques productivos: CNC consume placas + Pino consume varilla (0149, probado 21/21 en aislado)
+
+**Alcance:** solo pantallas LP (CNC/Pino/Configurar LP). Sin tocar Ventas/ML/estados comerciales/despacho/logística/diseño.
+
+- **CNC / placas (resuelto con datos existentes):** las 29 placas del catálogo (`prod_placa`, con su `rendimiento` real) ahora son su **propia materia prima consumible**. `0149` auto-vincula cada placa a un `prod_materia_prima` + `prod_stock_mp` con su MISMO código (sin catálogo paralelo: reusa sku/nombre), y setea `prod_placa.mp_sku = sku`. Como `prod_rpc_registrar_corte` (0146) ya consume `-hojas` de `prod_stock_mp` **incondicionalmente** cuando hay `mp_sku` y bloquea si `disp < hojas`, **no queda ningún camino para cortar sin descontar placas**. El operario/encargado solo carga/ajusta CANTIDADES (`mp_ajuste`), nunca re-crea el código.
+- **Pino (mecanismo correcto, consumo re-exigido):** `0149` fija `mp_consumo_obligatorio=1` (revierte el '0' operativo de 0148). `prod_rpc_registrar_pino` (0146): con receta (`prod_pino_receta`: tamaño→varilla→patas_por_unidad) consume `ceil(patas/patas_por_unidad)` de la varilla y bloquea si falta; **sin receta → bloquea "Configuración incompleta"** (no produce sin consumir). Las patas terminadas quedan en `prod_stock_patas` para Embalaje. La receta de varilla es dato físico de Seba (no inventado): mientras no exista, Pino no produce, por diseño. El flag=1 NO afecta CNC (toda placa tiene `mp_sku`, su chequeo ya es incondicional).
+- **Prueba REAL (aislado embedded-postgres, instalación limpia 0001→0149 = 149/149, RPC ejecutados como cnc/pino/owner): 21/21 PASS.** CNC: corte sin stock BLOQUEA (`disp 0, requiere 2 hojas de PLB007`); con 5 cargadas → corte 2 hojas descuenta 5→3, genera 29 piezas (2×16−3), asiento `consumir=2`; corte 10 con disp 3 BLOQUEA, sin negativo. PINO: sin receta BLOQUEA; con receta sin varilla BLOQUEA (`disp 0, requiere 2`); con 10 varillas → 8 patas descuenta 10→8 (ceil 8/4), 8 patas disponibles para Embalaje, asiento `consumir=2`.
+- **Remoto:** `0149` aplicada (ledger 1×), 29/29 placas auto-vinculadas, 29 filas `prod_stock_mp` en 0 (listas para cargar), `mp_consumo_obligatorio=1`. Datos comerciales intactos (no tocados). Manual v4 actualizado (CNC/Pino consumo real). Frontend sin cambios (el consumo vive en los RPC ya desplegados).
+
 ### [2026-07-23] REGLA DE ALCANCE (dueño): LP NO maneja estados comerciales — verificación: esta etapa no los tocó
 
 El dueño delimitó el alcance EXCLUSIVO de Línea Productiva a lo productivo (vincular pedidos a jornada, despiece por SKU de sistema, stock, faltantes, tareas por sector, consumos/movimientos, traspasos, sobrantes, terminado, abrir/cerrar jornada). **Cancelaciones, demoras, reprogramaciones, despacho, transportistas, devoluciones y estados de `orders` pertenecen a Ventas/ML/Logística y LP solo los LEE, nunca los modifica.**
