@@ -135,6 +135,12 @@ El veredicto GO inicial fue **rechazado por el dueño**: faltaban 4 correcciones
 
 ## Registro de tareas
 
+### [2026-07-23] REGLA DE ALCANCE (dueño): LP NO maneja estados comerciales — verificación: esta etapa no los tocó
+
+El dueño delimitó el alcance EXCLUSIVO de Línea Productiva a lo productivo (vincular pedidos a jornada, despiece por SKU de sistema, stock, faltantes, tareas por sector, consumos/movimientos, traspasos, sobrantes, terminado, abrir/cerrar jornada). **Cancelaciones, demoras, reprogramaciones, despacho, transportistas, devoluciones y estados de `orders` pertenecen a Ventas/ML/Logística y LP solo los LEE, nunca los modifica.**
+
+**Verificado (greps + diff `92aa2e2..HEAD` + auditoría de 8 lectores previa):** ninguna migración 0136–0148 escribe `orders`/`free_stock`/`carrier_state`; cero triggers sobre `orders` en 0136–0148; el diff de esta etapa toca solo `0148`, `encargado-panel.jsx` (web+mobile), busters/SW y docs — nada de importador ML, carrier, ventas, despacho ni Edge Functions; `0148` no contiene ningún tema comercial. Los objetos LP que LEEN estados (`prod_orden_estado`/`prod_estado_map`/`prod_fn_orden_excluida`/`jornada_sync`) sólo afectan la planificación interna de LP y sus propios ledgers (`prod_asignacion`/`prod_stock_terminado`), jamás `orders` ni el stock comercial. **No hubo nada que revertir.** Manual corregido (v3): esos temas eliminados como funcionalidad de LP; la solapa "Estados externos" queda documentada como técnica, fuera del uso diario.
+
 ### [2026-07-22e] ACTIVACIÓN + verificación 9 puntos contra código → correctivo `0148` (cierre pendientes + MP operable) + confirmación de cierre en panel encargado
 
 **Autorizado por el dueño:** flag `linea_productiva` = **ON** (activado y verificado). Verificación de 9 puntos del cierre contra el código real de `92aa2e2` (workflow 8 lectores + consultas al remoto). Hallazgos reales corregidos en esta ronda:
