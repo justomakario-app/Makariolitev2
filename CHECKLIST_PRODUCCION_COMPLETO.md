@@ -21,6 +21,28 @@
 
 ---
 
+## ✅ PUBLICACIÓN CONTROLADA A PRODUCCIÓN — 2026-07-22 (0136→0147 en remoto · push `92aa2e2` · flag OFF)
+
+> Estado autoritativo actual. Autorizado por el dueño (aplicar 0136→0147 una sola vez y en orden, sin backup nuevo, push normal, deploy EasyPanel, smoke flag OFF). Cloudflare quedó **anulado** por el dueño. Ver HANDOFF [2026-07-22d].
+
+- [x] **Proyecto Supabase reconfirmado** `ditmbqkvzreekqnkimqv` antes de toda operación.
+- [x] **Migraciones 0136→0147 aplicadas al remoto** (MCP `apply_migration`, método único, 1 vez c/u) — 12/12 `{success:true}`. Ledger: **registradas exactamente una vez, en orden**, sin duplicados nuevos (los `00NN` históricos = deuda técnica, no tocados).
+- [x] 🔍 **Integridad intacta**: `orders`=**10.214**, `jornadas`=**42**. `prod_tarea`=0 / `prod_stock_mov`=0 (el backfill no tocó stock).
+- [x] 🔍 **Espejo `prod_jornada`←`jornadas` 1:1**: 42 filas, mismo `id`, 0 huérfanas, 0 faltantes; fase `cerrada:41 / en_ejecucion:1` = espejo exacto (1 activa, singleton respetado). Escritura sólo por trigger SECURITY DEFINER (RLS INS/UPD eliminadas).
+- [x] 🔍 **`orders.jornada_id` = única asociación de ventas** (`prod_fn_candidatos` deriva de ahí; FK único ⇒ un pedido nunca en 2 jornadas). Tope de 3 **sólo** en `jornadas.rpc_open_jornada` (trigger propio eliminado).
+- [x] 🔍 **Kill-switch fail-closed VERIFICADO**: flag ausente/`NULL`/OFF ⇒ `prod_fn_lp_habilitada()`=false ⇒ `prod_fn_guard_lp()` lanza 42501. **32 RPC mutantes gateadas**; las 10 sin guard son **lectura pura** (0 DML, verificado). Estado actual: **flag `linea_productiva` = true (ACTIVADA por el dueño, 2026-07-22)**.
+- [x] 🔍 **Advisors sin regresión explotable**: 191 hallazgos = genéricos-por-diseño o **preexistentes en `d998ab2`** (todos fail-closed con flag OFF). `prod_v_jornadas` sigue el patrón `security_definer` de las 3 vistas LP previas. → **endurecimiento post-piloto** (no se amplió alcance con migración no pedida).
+- [x] **Push a GitHub** `d998ab2..92aa2e2` fast-forward sin force (confirmado: `branches/master.sha`=`92aa2e2`). 5 commits LP (0136–0147 + mobile + legacy).
+- [x] **Artefacto de deploy auditado (estático)**: `Dockerfile` **elimina** `INFORME_TECNICO_BACKEND.md`/`uploads/`/`screenshots/` → **sin secretos servidos** (sólo key `anon`); `nginx.conf` con cache-busting coherente (HTML+`sw.js` no-cache, JS/CSS 60s, SPA fallback, headers de seguridad); SW `macario-mobile-v16`.
+- [x] **Correctivo `0148` aplicado al remoto + push `c113bc6`** (2026-07-22e): guardia de pendientes en cierre restaurada + `mp_upsert` auto-vincula placa del catálogo + `mp_consumo_obligatorio=0` (línea operable con catálogo real); confirmación de cierre en panel encargado (web+mobile, v13, SW v17). Ver HANDOFF [2026-07-22e].
+- [x] **Activación del flag `linea_productiva` = ON** (autorizada y ejecutada por el dueño).
+- [ ] 🔒 **Redeploy EasyPanel** `app_gestion_interna/makario_lite_nueva` — **manual del dueño** (Claude no toca EasyPanel). Debe servir `c113bc6` (o posterior).
+- [ ] 🔍 **Smoke sobre URL real, flag OFF** (post-deploy): login de roles · dashboard · multijornada existente · Producción legacy intacta · nav web/mobile (BottomBar/router/deep-links/refresh) · **tabs/rutas LP ausentes con flag OFF** · SW v16 sobre caché viejo · consola/red limpias · sin 404/blanco/mixed · sin mutaciones LP · orders/jornadas/stock/ventas sin alterar — a **360/390/tablet/1440**.
+- [ ] ⚠️ **Datos físicos antes del piloto** (medidos, NO inventados): `prod_materia_prima`=0 · `prod_stock_mp`=0 · `prod_pino_receta`=0 · `prod_producto.sets_equiv`=0/26 · `prod_minimo`=0 · `prod_pata_tamano`=2 (revisar) · `prod_placa`=29 (validar `mp_sku`/`rendimiento`). Presentes: `prod_config`=4, `estado_map`=10, `receta`=86, `componente`=161, `producto`=26. + mapeo Excel de catálogo, URL de fábrica, responsables por sector, fecha de piloto.
+- [ ] **Activación del flag `linea_productiva`** = **NO ejecutada** (autorización separada del dueño, tras smoke sano + datos físicos).
+
+---
+
 ## Estado etapa "operar la línea productiva" — actualizado 2026-07-20
 
 > Decisión: **`prod_*` = modelo canónico**; legacy como puente temporal. Ver HANDOFF [2026-07-20] · migración `0101`.
