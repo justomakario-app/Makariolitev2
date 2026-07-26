@@ -135,6 +135,25 @@ El veredicto GO inicial fue **rechazado por el dueño**: faltaban 4 correcciones
 
 ## Registro de tareas
 
+### [2026-07-26] Línea Productiva ANIDADA: las 5 pantallas LP dejan de ser tabs sueltas del hub y pasan adentro de "Línea productiva" (solo UI, sin backend)
+
+**Pedido del dueño:** *"Todo esto hace parte de línea productiva y lo dejaste como algo externo, quiero meterlo dentro de línea productiva."* El hub de Producción mostraba 9 tabs hermanas — `Producción · Stock · De fábrica · Línea productiva · Tablero LP · Activar LP · Tareas LP · Configurar LP · Carga stock` — y las 5 últimas se leían como módulos ajenos a LP aunque son LP.
+
+**Qué cambió (solo navegación):** el hub queda en **4 tabs** (`Producción · Stock · De fábrica · Línea productiva`) y dentro de "Línea productiva" hay una **sub-navegación propia (pills)** con: pantalla del sector · **Tablero** · **Tareas** · **Activar** · **Configurar** · **Carga stock**. Las 5 pantallas son las mismas (`window.LineaDashboardPage`/`LineaDashboardPageMobile`, `LineaTareasPage`, `LineaActivacionPage`, `LineaConfigPage`, `LineaStockCargaPage`) — no se tocó ni una línea de ellas, solo desde dónde se montan. La primera pill se rotula según el rol: `Panel` (encargado) · `Supervisión` (owner/admin) · `Mi sector` (cnc/melamina/pino/embalaje y roles sin sector). Estilo pill a propósito, para que se lea como 2º nivel y no compita con las tabs del hub (arriba) ni con las tabs internas de cada sector (abajo).
+
+**Lo que NO cambió (verificado, no asumido):**
+- **Permisos idénticos.** `Activar`/`Configurar`/`Carga stock` siguen siendo `stockOnly` ⇒ solo owner/admin/encargado; `Tablero`/`Tareas` siguen visibles para todo rol LP. El filtro es el mismo `canSeeStock`, ahora aplicado a las sub-tabs.
+- **Aislamiento LP fail-closed intacto.** El flag tri-estado (`'loading' | true | false`) sigue viviendo en `ProduccionHubPage`; todo el bloque LP solo se monta con flag ON. Si el flag se apaga en caliente, desaparece la tab "Línea productiva" completa (con sus 6 sub-tabs adentro) y el usuario cae a una tab permitida. `LP_TAB_IDS` pasó de 7 ids a `['linea-prod','fe-fabrica']` porque los otros 5 ya no son tabs del hub.
+- **Aterrizaje por rol.** `LP_SECTOR_ROLES` (encargado/cnc/melamina/pino/embalaje) siguen aterrizando en "Línea productiva" → ahora directo en su pantalla de sector. `carpinteria`/`logistica` siguen aterrizando en Producción legacy.
+- **"De fábrica" quedó donde estaba** (tab del hub, LP-gated). No estaba en el pedido; se puede mover adentro con una línea si el dueño lo quiere.
+- Cero backend: sin migraciones, sin RPCs, sin tocar Ventas/ML/estados comerciales/despacho.
+
+**Verificación:** (1) **143/143 JSX transpilan** con `@babel/standalone` 7.29.0 (misma versión que corre en el browser). (2) **Test de render real** (jsdom + React 18.3.1, con las pantallas LP stubeadas) sobre los **dos** hubs, web y mobile: **39/39 checks OK en cada uno** — 4 tabs en el hub, 6 sub-tabs para owner/encargado y 3 para cnc/melamina/pino/embalaje, cada pill monta la pantalla correcta, roles sin `canSeeStock` no pueden llegar a Activar/Configurar/Carga stock ni por estado residual, y con flag OFF no queda ni una tab ni una pantalla LP montada. (3) **Render headless con el CSS real** (Chrome + `styles.css` + `shared.jsx`) para validar el look de las pills.
+
+**Técnico:** `web|mobile/components/produccion-hub.jsx` — nuevos `LP_SUBNAV` + `LineaProductivaTab`; `LineaProductivaGuard` (router de sector por rol) queda igual y ahora se monta desde la sub-tab `sector`. Cache-buster `produccion-hub.jsx?v=16 → ?v=17` en `web/Macario Lite.html` y `mobile/index.html`. Diferencias web↔mobile mantenidas: padding lateral 32px vs 16px y `LineaDashboardPage` vs `LineaDashboardPageMobile`.
+
+**Pendiente (del dueño):** commit + push + **redeploy en EasyPanel `app_gestion_interna / makario_lite_nueva`** y verificación visual en la app real — desde acá no hay sesión autenticada para renderizar el sistema completo.
+
 ### [2026-07-23c] RESET operativo de jornadas (pedido de Seba): borrado de hoy(07-23)+07-24+07-25 — sin migración, solo datos
 
 **Qué pasó / por qué:** los chicos cerraron la jornada de hoy (07-23) antes de tiempo con **0 producción cargada**. El cierre disparó el arrastre normal (`rpc_close_jornada`): copió los 247 u pendientes como 241 pedidos `arrastrado` (sufijo `-A20260723`) a la jornada 07-24, y la 07-23 quedó `cerrada`. Resultado: **`rpc_register_production` bloquea** ("No podés cargar a una jornada cerrada"), y el equipo no podía cargar cantidades. Seba pidió resetear "de hoy en adelante" sin perder historial.

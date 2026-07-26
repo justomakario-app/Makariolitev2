@@ -4,7 +4,10 @@
    - Stock — renderea window.StockPage sin tocarla.
      SOLO visible para owner/admin/encargado (guard de rol en cliente).
    - De fábrica — panorama operativo: orden por sector + lista de compras + KPIs.
-   - Línea productiva — router por rol (guard FASE 1): cada sector ve su pantalla.
+   - Línea productiva — TODA la LP, con su propia sub-navegación adentro:
+     pantalla del sector (router por rol) + Tablero + Tareas + Activar +
+     Configurar + Carga stock. Antes eran tabs hermanas del hub y se leían
+     como módulos externos a LP (pedido del dueño 2026-07-26: meterlas adentro).
    ══ */
 
 /* ── FASE 1 · guard de rol: router de "Línea productiva" por sector ──
@@ -47,6 +50,85 @@ function LineaProductivaGuard({ role }) {
       <span style={{display:'inline-flex', alignItems:'center', gap:6, fontSize:11, fontWeight:700, padding:'6px 12px', borderRadius:999, background:t.color+'14', color:t.color}}>
         <Icon n="tools" s={12} c={t.color}/> En construcción · Fase 3
       </span>
+    </div>
+  );
+}
+
+/* ── Sub-navegación de "Línea productiva" ────────────────────────────
+   Todo lo que es LP vive DENTRO de esta tab: la pantalla del sector +
+   Tablero + Tareas + Activar + Configurar + Carga stock. Los permisos NO
+   cambian: 'activar'/'config'/'carga-stock' siguen siendo owner/admin/
+   encargado (stockOnly), y este bloque entero sólo se monta con el flag
+   LP en ON — el guard vive en ProduccionHubPage, igual que antes.
+   Estilo pill para que se lea como segundo nivel y no compita con las tabs
+   del hub (arriba) ni con las tabs internas de cada pantalla (abajo). */
+const LP_SUBNAV = [
+  { id:'sector',      label:'Mi sector',   icon:'tools',    stockOnly:false },
+  { id:'tablero',     label:'Tablero',     icon:'chart',    stockOnly:false },
+  { id:'tareas',      label:'Tareas',      icon:'check',    stockOnly:false },
+  { id:'activar',     label:'Activar',     icon:'clock',    stockOnly:true  },
+  { id:'config',      label:'Configurar',  icon:'settings', stockOnly:true  },
+  { id:'carga-stock', label:'Carga stock', icon:'upload',   stockOnly:true  },
+];
+
+function LineaProductivaTab({ role, canSeeStock }) {
+  // Sub-tabs AUTORIZADAS por rol. 'sector' siempre está (destino seguro por defecto).
+  const SUB = LP_SUBNAV.filter(s => !s.stockOnly || canSeeStock);
+  const [sub, setSub] = useState('sector');
+  // Sub-tab EFECTIVA derivada de las autorizadas: si la actual dejó de serlo, cae a 'sector'.
+  const effSub = SUB.some(s => s.id === sub) ? sub : 'sector';
+  useEffect(() => { if (effSub !== sub) setSub(effSub); }, [effSub, sub]);
+
+  const theme = SECTOR_THEME[role];
+  const sectorLabel = role === 'encargado' ? 'Panel'
+    : (role === 'owner' || role === 'admin') ? 'Supervisión'
+    : 'Mi sector';
+
+  return (
+    <div>
+      <div style={{display:'flex', gap:6, padding:'12px 16px', borderBottom:'1px solid var(--border)',
+                   overflowX:'auto', flexWrap:'nowrap', WebkitOverflowScrolling:'touch', scrollbarWidth:'none'}}>
+        {SUB.map(s => {
+          const on = effSub === s.id;
+          const label = s.id === 'sector' ? sectorLabel : s.label;
+          const icon  = s.id === 'sector' ? ((theme && theme.icon) || 'tools') : s.icon;
+          return (
+            <button
+              key={s.id}
+              type="button"
+              aria-pressed={on}
+              onClick={() => setSub(s.id)}
+              style={{display:'flex', alignItems:'center', gap:6, flexShrink:0, whiteSpace:'nowrap',
+                      padding:'7px 13px', borderRadius:999, cursor:'pointer', fontFamily:'inherit',
+                      border:`1px solid ${on ? 'transparent' : 'var(--border-md)'}`,
+                      background: on ? 'var(--ink)' : 'var(--paper)',
+                      color: on ? '#FFFFFF' : 'var(--ink-soft)',
+                      fontSize:12.5, fontWeight: on ? 800 : 600,
+                      transition:'background .15s ease, color .15s ease'}}
+            >
+              <Icon n={icon} s={14} c={on ? '#FFFFFF' : 'var(--ink-muted)'}/>
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div>
+        {/* Mismos guards que cuando eran tabs del hub: stockOnly ⇒ owner/admin/encargado. */}
+        {effSub === 'tablero' ? (
+          window.LineaDashboardPageMobile ? <window.LineaDashboardPageMobile/> : null
+        ) : effSub === 'tareas' ? (
+          window.LineaTareasPage ? <window.LineaTareasPage/> : null
+        ) : effSub === 'activar' && canSeeStock ? (
+          window.LineaActivacionPage ? <window.LineaActivacionPage/> : null
+        ) : effSub === 'config' && canSeeStock ? (
+          window.LineaConfigPage ? <window.LineaConfigPage/> : null
+        ) : effSub === 'carga-stock' && canSeeStock ? (
+          window.LineaStockCargaPage ? <window.LineaStockCargaPage/> : null
+        ) : (
+          <LineaProductivaGuard role={role}/>
+        )}
+      </div>
     </div>
   );
 }
@@ -197,11 +279,6 @@ function ProduccionHubPage() {
     { id:'stock',      label:'Stock',           stockOnly: true  },
     { id:'fe-fabrica', label:'De fábrica',      stockOnly: false },
     { id:'linea-prod', label:'Línea productiva', stockOnly: false },
-    { id:'tablero',    label:'Tablero LP',      stockOnly: false },
-    { id:'activar',    label:'Activar LP',      stockOnly: true  },
-    { id:'tareas',     label:'Tareas LP',       stockOnly: false },
-    { id:'config',     label:'Configurar LP',   stockOnly: true  },
-    { id:'carga-stock',label:'Carga stock',     stockOnly: true  },
   ];
 
   // Aislamiento LP (F1/F2): flag TRI-ESTADO 'loading'|true|false (fail-closed). Revalidado al montar,
@@ -223,7 +300,9 @@ function ProduccionHubPage() {
     return () => { window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onVis); clearInterval(id); };
   }, [readFlag]);
 
-  const LP_TAB_IDS = ['linea-prod', 'tablero', 'activar', 'tareas', 'config', 'carga-stock', 'fe-fabrica'];
+  // Tabs del hub que pertenecen a LP. Las ex-tabs 'tablero'/'activar'/'tareas'/'config'/
+  // 'carga-stock' ya no viven acá: son sub-tabs dentro de 'linea-prod' (LineaProductivaTab).
+  const LP_TAB_IDS = ['linea-prod', 'fe-fabrica'];
   const TABS = ALL_TABS.filter(t => (!t.stockOnly || canSeeStock) && (lpOn || LP_TAB_IDS.indexOf(t.id) === -1));
   const PROD_ROLES = ['encargado','cnc','melamina','pino','embalaje','carpinteria','logistica'];
   // Roles con pantalla de sector LP propia (aterrizan en 'linea-prod' con flag ON). carpinteria y
@@ -268,19 +347,9 @@ function ProduccionHubPage() {
         ) : effTab === 'stock' && canSeeStock ? (
           window.StockPage ? <window.StockPage/> : null
         ) : effTab === 'linea-prod' ? (
-          <LineaProductivaGuard role={role}/>
+          <LineaProductivaTab role={role} canSeeStock={canSeeStock}/>
         ) : effTab === 'fe-fabrica' ? (
           <DeFabrica/>
-        ) : effTab === 'tablero' ? (
-          window.LineaDashboardPageMobile ? <window.LineaDashboardPageMobile/> : null
-        ) : effTab === 'activar' && canSeeStock ? (
-          window.LineaActivacionPage ? <window.LineaActivacionPage/> : null
-        ) : effTab === 'tareas' ? (
-          window.LineaTareasPage ? <window.LineaTareasPage/> : null
-        ) : effTab === 'config' && canSeeStock ? (
-          window.LineaConfigPage ? <window.LineaConfigPage/> : null
-        ) : effTab === 'carga-stock' && canSeeStock ? (
-          window.LineaStockCargaPage ? <window.LineaStockCargaPage/> : null
         ) : (
           <div className="admin-empty-state">
             <Icon n="tools" s={32} c="var(--ink-muted)"/>
