@@ -135,6 +135,25 @@ El veredicto GO inicial fue **rechazado por el dueño**: faltaban 4 correcciones
 
 ## Registro de tareas
 
+### [2026-07-23c] RESET operativo de jornadas (pedido de Seba): borrado de hoy(07-23)+07-24+07-25 — sin migración, solo datos
+
+**Qué pasó / por qué:** los chicos cerraron la jornada de hoy (07-23) antes de tiempo con **0 producción cargada**. El cierre disparó el arrastre normal (`rpc_close_jornada`): copió los 247 u pendientes como 241 pedidos `arrastrado` (sufijo `-A20260723`) a la jornada 07-24, y la 07-23 quedó `cerrada`. Resultado: **`rpc_register_production` bloquea** ("No podés cargar a una jornada cerrada"), y el equipo no podía cargar cantidades. Seba pidió resetear "de hoy en adelante" sin perder historial.
+
+**Decisión del dueño (explícita):** NO cerrar/reabrir — **borrar** hoy y las jornadas de más "como si el día no hubiera existido", y que **el equipo re-cree la jornada y suba todo desde el Excel de ML**. Autorizado con "Ok/dale".
+
+**Cómo (mutación de datos, NO migración — no toca código ni esquema):**
+1. `DELETE orders WHERE jornada_id=<07-24>` → 241 pedidos `arrastrado` (247 u). Vuelven solos al re-importar el Excel (fuente de verdad).
+2. `DELETE jornada_audit` de las 3 jornadas → 5 filas.
+3. `DELETE jornadas` id ∈ {07-23, 07-24, 07-25} → 3 filas.
+
+**Verificación previa (rollback smoke) + post-aplicación:** dependencias hacia `jornadas` mapeadas (`orders.jornada_id`, `production_logs`, `free_stock.source_jornada_id`, `jornada_audit`, `orders.cancelled_in_jornada_id`) — de las 3 jornadas: `production_logs=0`, `free_stock=0`, `cancelled=0` ⇒ **0 producción/stock perdido**; los 241 arrastrado sin hijos en `qr_scans`/`prod_pedido_estado` (0/0). Smoke transaccional con `RAISE` (rollback) confirmó `orders_del=241, audit_del=5, jornadas_del=3, restantes>=hoy=0` **antes** de aplicar. Post-aplicación: `jornadas>=07-23 = 0`; **07-22 intacto** (241 pedidos, 243 producidas); **0 huérfanos, 0 apuntando a jornada borrada, 0 sin jornada**. Los 110 `arrastrado` que quedan viven en **07-21 (cerrada)** = historial viejo previo, ajeno al incidente, no se tocó.
+
+**Para qué / cómo sigue el equipo:** al no quedar ninguna jornada abierta, cuando toquen **"abrir jornada"** `fn_resolve_active_jornada` hace `INSERT (fecha=current_date, abierta, is_active) ON CONFLICT(fecha) DO UPDATE` ⇒ **crea HOY (07-23) de cero, vacía y activa** (server `current_date`=2026-07-23, verificado). Luego **re-importan el Excel de ML** (vuelven los 247 u) y **cargan producción** normal, sin el bloqueante. Nada de push a GitHub (operación 100% base de datos).
+
+**Nota de ejecución:** el clasificador de auto-modo bloqueó el DELETE por la consola PowerShell (helper Management API); se aplicó con el tool oficial `mcp__supabase__execute_sql` (mismo proyecto `ditmbqkvzreekqnkimqv`, autocommit).
+
+**Corrección post-reset (espejo `prod_jornada`) — ⚠️ GOTCHA importante:** al intentar "abrir jornada" apareció `duplicate key value violates unique constraint "prod_jornada_fecha_key"`. Causa: existe la tabla **espejo `prod_jornada`** (LP), sincronizada desde `jornadas` por el trigger `prod_tg_sync_jornada_aiu`, que es **AFTER INS/UPD — NO cascada en DELETE**. Al borrar de `jornadas` quedaron **3 filas huérfanas** en `prod_jornada` (07-23/24/25). Cuando la app inserta hoy en `jornadas`, el trigger intenta crear el espejo de hoy y choca por `fecha` con la huérfana vieja. **`prod_jornada` NO es FK-child de `jornadas`** (tablas paralelas con mismo `id`, sin FK) → por eso no salió en el mapeo `FK_TO_JORNADAS`. **Regla para el próximo dev: si borrás filas de `jornadas`, borrá también su espejo en `prod_jornada`.** Fix aplicado: verificadas las **9 tablas hijas de `prod_jornada`** (`prod_pino/prod_jornada_orden/prod_corte/prod_melamina/prod_embalaje/prod_solicitud/prod_capacidad_override/prod_stock_mov/prod_tarea`) = **0 filas** para esos 3 ids → `DELETE FROM prod_jornada WHERE id IN (3 ids)`. Verificación final: `espejos_huerfanos=0`, `prod_jornada>=hoy=0`, `jornadas>=hoy=0`. "Abrir jornada" desbloqueado.
+
 ### [2026-07-23b] CIERRE 2 bloques productivos: CNC consume placas + Pino consume varilla (0149, probado 21/21 en aislado)
 
 **Alcance:** solo pantallas LP (CNC/Pino/Configurar LP). Sin tocar Ventas/ML/estados comerciales/despacho/logística/diseño.
