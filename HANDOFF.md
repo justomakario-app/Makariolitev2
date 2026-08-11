@@ -135,7 +135,7 @@ El veredicto GO inicial fue **rechazado por el dueño**: faltaban 4 correcciones
 
 ## Registro de tareas
 
-### [2026-08-10] El cierre de Línea Productiva deja de arrastrar el cierre comercial — `0150` (30/30 en aislado, NO aplicada al remoto)
+### [2026-08-10] El cierre de Línea Productiva deja de arrastrar el cierre comercial — `0150` (30/30 en aislado · **APLICADA al remoto el 2026-08-11**)
 
 **Pedido de Seba (WhatsApp, 29/07):** *"cerré la jornada de línea productiva y me cerró la de producción arrastrando todo al día siguiente… eso es algo que no debería hacer ya que son 2 sectores distintos."* El RESET operativo de ese día ya se hizo (revertido el cierre erróneo). **Esto es el arreglo de raíz**, que quedó empezado.
 
@@ -158,7 +158,9 @@ El veredicto GO inicial fue **rechazado por el dueño**: faltaban 4 correcciones
 
 **Frontend (sólo copy, sin cambio de contrato):** `encargado-panel.jsx` y `linea-activacion.jsx` (web+mobile) ya no prometen arrastre. El confirm dice que se cierra **sólo** la jornada de Línea Productiva, que los pedidos y la jornada de Producción no se tocan, y **advierte que las tareas reservadas o en curso se cancelan y su material vuelve al stock** (reabrir no las recupera). El botón de abrir muestra "reabierta" cuando corresponde. Cache-busters: `linea-activacion.jsx?v=7→8`, `encargado-panel.jsx?v=13→14` en `web/Macario Lite.html` y `mobile/index.html`.
 
-**Estado: `0150` NO está aplicada al remoto** (verificado: `prod_jornada.cierre_lp_at` no existe allá). **Pendiente del dueño:** (1) autorizar la aplicación al remoto vía `mcp__supabase__apply_migration` con backup del día, (2) **redeploy en EasyPanel `app_gestion_interna / makario_lite_nueva`** (acción manual suya), (3) smoke con Seba: cerrar LP y confirmar que Producción sigue abierta y no aparecieron pedidos `-A2…`.
+**Aplicada al remoto — 2026-08-11**, autorizada por el dueño ("Sí, aplicala ahora"), **una sola vez** vía `mcp__supabase__apply_migration` sobre `ditmbqkvzreekqnkimqv` → `{success:true}`. **Verificación post-aplicación (solo lectura):** ledger con `0150` **una** entrada; `prod_jornada.cierre_lp_at` \ `cierre_lp_por` existen; el CHECK vigente es la implicación `CHECK (((fase <> 'cerrada') OR (estado = 'cerrada')))`; `prod_rpc_cerrar_jornada` **ya no menciona `rpc_close_jornada`**; `abrir` tiene la reapertura y `reservar` la guardia; `orders`=12.359 y `jornadas`=56 (2 abiertas) con espejo 56/56; **0 copias `-A2…` creadas** (la más reciente es del 2026-08-03, ninguna en la última hora); 0 filas violarían el CHECK y 0 quedaron con LP cerrada; flag `linea_productiva` sigue **ON**. Las 2 jornadas abiertas quedaron coherentes: 08-10 `fase=en_ejecucion`/`estado=abierta` y 08-11 `fase=pausada`/`estado=abierta`, ambas con `cierre_lp_at=NULL`.
+
+**Pendiente del dueño:** (1) **push del commit `f5e2a0d`** — desde esta PC el credential helper autentica como `ascendtech1` (cuenta prohibida, 403) y por protocolo no se tocan credenciales; (2) **redeploy en EasyPanel `app_gestion_interna / makario_lite_nueva`** (acción manual suya) — sin esto la app sigue sirviendo el copy viejo, aunque el backend ya está arreglado; (3) smoke con Seba: cerrar LP y confirmar que Producción sigue abierta y no aparecieron pedidos `-A2…`.
 
 ### [2026-07-26] Línea Productiva ANIDADA: las 5 pantallas LP dejan de ser tabs sueltas del hub y pasan adentro de "Línea productiva" (solo UI, sin backend)
 
