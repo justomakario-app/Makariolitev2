@@ -137,7 +137,7 @@
       if (busy) return; setBusy(true); setErr('');
       try { const r = await window.LP_DATA.cerrarJornada(forzar ? { forzar:true } : {});
         if (r && r.ok === false && r.requiere_confirmacion) { setCierre(r); }
-        else { setMsg('Jornada cerrada.'); setCierre(null); await cargar(); } }
+        else { setMsg('Jornada de Línea Productiva cerrada. Los pedidos y la jornada de Producción quedaron intactos.'); setCierre(null); await cargar(); } }
       catch (e) { setErr(e && e.message ? e.message : 'No se pudo cerrar'); }
       finally { setBusy(false); }
     };
@@ -213,13 +213,15 @@
             </div>
 
             <div style={card}>
-              <h3 style={h}>Cerrar jornada</h3>
+              <h3 style={h}>Cerrar jornada de Línea Productiva</h3>
               {cierre ? (
                 <div style={{ background:'#FFFBEB', border:'1px solid #FDE68A', borderRadius:10, padding:12, marginBottom:12 }}>
                   <div style={{ fontWeight:800, color:'#92400E', marginBottom:6 }}>Queda trabajo pendiente</div>
                   <div style={{ fontSize:12.5, color:'#92400E', marginBottom:8 }}>
                     Mesas por armar: <b>{cierre.mesas_pendientes_total}</b> · Piezas faltantes: <b>{cierre.faltantes_piezas_count}</b>.
-                    Lo pendiente se arrastra NETO a la próxima jornada (no se re-fabrica lo ya hecho).
+                    Se cierra sólo la jornada de Línea Productiva: los pedidos y la jornada de Producción no se tocan,
+                    y lo pendiente sigue ahí al reabrir. Las tareas reservadas o en curso se cancelan y su material
+                    vuelve al stock — reabrir no las recupera.
                   </div>
                   <button onClick={() => cerrar(true)} disabled={busy} style={btn(U.danger, !busy)}>Cerrar igual (forzar)</button>
                 </div>

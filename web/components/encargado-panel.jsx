@@ -106,9 +106,9 @@ function EncargadoPanel() {
     } catch (err) { toast.error(err && err.message ? err.message : 'No se pudo'); }
   }, [toast, cargar]);
 
-  // Jornada (reconciliada 0147/0148): abre/cierra la MISMA jornada del dashboard
-  // (delegación en fn_resolve_active_jornada / rpc_close_jornada con arrastre NETO).
-  // Si el cierre avisa trabajo pendiente (requiere_confirmacion), se confirma y se fuerza.
+  // Jornada de LÍNEA PRODUCTIVA (0150): cierra y reabre sólo la jornada de la línea. No toca los
+  // pedidos ni la jornada comercial de Producción — son dos sectores distintos y ya no se arrastran
+  // entre sí. Si el cierre avisa trabajo pendiente (requiere_confirmacion), se confirma y se fuerza.
   const jornadaAbierta = jornada && jornada.estado === 'abierta';
   const toggleJornada = useCallback(async () => {
     setJornadaBusy(true);
@@ -116,15 +116,16 @@ function EncargadoPanel() {
       if (jornada && jornada.estado === 'abierta') {
         let r = await window.LP_DATA.cerrarJornada();
         if (r && r.ok === false && r.requiere_confirmacion) {
-          const seguir = window.confirm('Queda trabajo pendiente (' + (r.mesas_pendientes_total || 0) + ' mesas por armar · ' + (r.faltantes_piezas_count || 0) + ' piezas faltantes). Lo pendiente pasa NETO a la próxima jornada, no se re-fabrica lo ya hecho. ¿Cerrar igual?');
+          const seguir = window.confirm('Queda trabajo pendiente (' + (r.mesas_pendientes_total || 0) + ' mesas por armar · ' + (r.faltantes_piezas_count || 0) + ' piezas faltantes).\n\nSe cierra SÓLO la jornada de Línea Productiva: los pedidos y la jornada de Producción no se tocan. Lo pendiente sigue ahí cuando vuelvas a abrir.\n\nOJO: las tareas reservadas o en curso se cancelan y su material vuelve al stock. Reabrir no las recupera.\n\n¿Cerrar igual?');
           if (!seguir) { toast.info('Cierre cancelado: queda trabajo pendiente.'); return; }
           r = await window.LP_DATA.cerrarJornada({ forzar: true });
         }
         const rs = (r && r.resumen) || {};
-        toast.success('Jornada cerrada · ' + (rs.cortes || 0) + ' cortes · ' + (rs.melamina || 0) + ' melamina · ' + (rs.pino || 0) + ' pino · ' + (rs.embalaje || 0) + ' embalaje');
+        const lib = (r && r.tareas_liberadas) || 0;
+        toast.success('Jornada de Línea Productiva cerrada · ' + (rs.cortes || 0) + ' cortes · ' + (rs.melamina || 0) + ' melamina · ' + (rs.pino || 0) + ' pino · ' + (rs.embalaje || 0) + ' embalaje' + (lib ? ' · ' + lib + ' tareas liberadas al stock' : ''));
       } else {
-        await window.LP_DATA.abrirJornada();
-        toast.success('Jornada de producción abierta');
+        const r = await window.LP_DATA.abrirJornada();
+        toast.success(r && r.reabierta ? 'Jornada de Línea Productiva reabierta' : 'Jornada de Línea Productiva abierta');
       }
       await cargar({ silent: true });
     } catch (err) { toast.error(err && err.message ? err.message : 'No se pudo gestionar la jornada'); }

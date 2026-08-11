@@ -135,6 +135,31 @@ El veredicto GO inicial fue **rechazado por el dueño**: faltaban 4 correcciones
 
 ## Registro de tareas
 
+### [2026-08-10] El cierre de Línea Productiva deja de arrastrar el cierre comercial — `0150` (30/30 en aislado, NO aplicada al remoto)
+
+**Pedido de Seba (WhatsApp, 29/07):** *"cerré la jornada de línea productiva y me cerró la de producción arrastrando todo al día siguiente… eso es algo que no debería hacer ya que son 2 sectores distintos."* El RESET operativo de ese día ya se hizo (revertido el cierre erróneo). **Esto es el arreglo de raíz**, que quedó empezado.
+
+**Causa raíz (verificada contra el remoto, no supuesta):** `prod_rpc_cerrar_jornada` delegaba el cierre en `public.rpc_close_jornada` — el cierre **COMERCIAL** — que archiva los pedidos de la jornada y crea las copias de arrastre `-AYYYYMMDD` en la jornada siguiente. LP no tenía cierre propio porque `prod_jornada` es un **espejo 1:1 derivado de `jornadas`**, escrito únicamente por el trigger `prod_tg_sync_jornada_aiu → prod_fn_sync_jornada`.
+
+**Qué hace `0150` (append-only, 5 cambios):**
+- **(A)** `prod_jornada` gana `cierre_lp_at` / `cierre_lp_por`, y el CHECK que ataba fase↔estado pasa de bicondicional a **implicación**: comercial cerrada ⇒ LP cerrada, pero **LP puede cerrar sola**.
+- **(B)** `prod_fn_sync_jornada` respeta ese cierre: **`fase` = ciclo COMERCIAL** (`is_active`/`status`), **`estado` = ciclo de LP**. El sello sobrevive a las re-sincronizaciones (no viaja en el `on conflict`).
+- **(C)** `prod_rpc_cerrar_jornada` **ya NO llama a `rpc_close_jornada`**: marca el espejo y libera las reservas de LP. Mismo contrato que consume el frontend (`ok` / `requiere_confirmacion` / `mesas_pendientes_total` / `faltantes_piezas_count` / `resumen`) + `ambito='linea_productiva'`, `arrastre=false`, `tareas_liberadas`.
+- **(D)** `prod_rpc_abrir_jornada` limpia el cierre de LP ⇒ **el mismo botón funciona como "reabrir"**, sólo mientras la comercial siga abierta. Re-sincroniza el espejo antes de tocar `estado` (si `fn_resolve_active_jornada` no toca `jornadas`, el trigger no corre).
+- **(E)** `prod_rpc_reservar_jornada` gana la guardia de jornada abierta. Antes no le hacía falta: tras el cierre comercial, `prod_fn_jornada_activa()` ya devolvía la jornada NUEVA. Al desacoplar, la comercial sigue activa ⇒ sin esta guardia se podrían re-crear reservas sobre una jornada de LP ya cerrada.
+
+**Por qué se reusa `estado` y no una columna nueva:** las RPC que ya bloquean carga cuando la jornada no está abierta — `registrar_corte`/`melamina`/`pino`/`embalaje`, `vincular_confirmar` y `jornada_sync` — **leen `prod_jornada.estado`**. Reusarlo hace que el cierre de LP frene la línea **sin tocar ninguna de ellas**. `fase` se deja intacta a propósito: `prod_tg_jornada_max` cuenta por `fase` (tope de jornadas abiertas) y `prod_rpc_get_jornada_hoy` filtra `fase='en_ejecucion'` — moverla alteraría el tope comercial y dejaría al panel sin jornada que mostrar.
+
+**⚠️ GOTCHA que encontró la prueba aislada (no estaba previsto):** la `0138` había atado las dos columnas con `CHECK ((fase='cerrada') = (estado='cerrada'))`. Con ese bicondicional, **cerrar sólo LP es imposible** — el `UPDATE` viola el constraint. Por eso `0150` lo reemplaza por `CHECK (fase <> 'cerrada' or estado = 'cerrada')`. Pre-flight de solo lectura en el remoto: **0 de 56 filas** de `prod_jornada` violarían el nuevo CHECK (el bicondicional garantizaba que no).
+
+**Lo que NO toca:** `orders`, `jornadas`, `free_stock`, `production_logs` ni ninguna función comercial. LP no maneja estados comerciales (regla de alcance del dueño, 2026-07-23).
+
+**Prueba real (embedded-postgres aislado, instalación limpia `0001→0150` = **150/150 migraciones**, RPC ejecutados como owner): **30/30 PASS**.** Cierra LP con trabajo pendiente → avisa y NO cierra; con `forzar` cierra y devuelve `ambito=linea_productiva`, `arrastre=false`, `tareas_liberadas`. **`orders` y `jornadas` quedan idénticas bit a bit (md5)**, `free_stock` intacta, `production_logs` sin filas nuevas, **cero copias `-A2…`**, y la jornada comercial sigue `abierta`+`is_active`. El espejo queda `estado='cerrada'` con `fase` intacta y los sellos puestos; las tareas reservadas se cancelan y su material vuelve a disponible. Con LP cerrada, `registrar_corte`/`reservar_jornada`/`vincular_confirmar` bloquean y el doble cierre se rechaza. Un `UPDATE` posterior sobre `jornadas` **no reabre** LP. Reabrir limpia el sello sin tocar nada comercial, incluso con el espejo desfasado a mano. Flag OFF ⇒ `42501` (fail-closed). Y el **cierre COMERCIAL sigue funcionando y arrastrando** igual que antes. *Caveat honesto: el sandbox corre PostgreSQL **18.4** y el remoto es **17.0.6** — valida lógica y sintaxis, no diferencias de versión.*
+
+**Frontend (sólo copy, sin cambio de contrato):** `encargado-panel.jsx` y `linea-activacion.jsx` (web+mobile) ya no prometen arrastre. El confirm dice que se cierra **sólo** la jornada de Línea Productiva, que los pedidos y la jornada de Producción no se tocan, y **advierte que las tareas reservadas o en curso se cancelan y su material vuelve al stock** (reabrir no las recupera). El botón de abrir muestra "reabierta" cuando corresponde. Cache-busters: `linea-activacion.jsx?v=7→8`, `encargado-panel.jsx?v=13→14` en `web/Macario Lite.html` y `mobile/index.html`.
+
+**Estado: `0150` NO está aplicada al remoto** (verificado: `prod_jornada.cierre_lp_at` no existe allá). **Pendiente del dueño:** (1) autorizar la aplicación al remoto vía `mcp__supabase__apply_migration` con backup del día, (2) **redeploy en EasyPanel `app_gestion_interna / makario_lite_nueva`** (acción manual suya), (3) smoke con Seba: cerrar LP y confirmar que Producción sigue abierta y no aparecieron pedidos `-A2…`.
+
 ### [2026-07-26] Línea Productiva ANIDADA: las 5 pantallas LP dejan de ser tabs sueltas del hub y pasan adentro de "Línea productiva" (solo UI, sin backend)
 
 **Pedido del dueño:** *"Todo esto hace parte de línea productiva y lo dejaste como algo externo, quiero meterlo dentro de línea productiva."* El hub de Producción mostraba 9 tabs hermanas — `Producción · Stock · De fábrica · Línea productiva · Tablero LP · Activar LP · Tareas LP · Configurar LP · Carga stock` — y las 5 últimas se leían como módulos ajenos a LP aunque son LP.
