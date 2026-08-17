@@ -1001,17 +1001,101 @@ function UsuarioEditModal({ editing, onClose, onSave, onRemove }) {
   );
 }
 
-/* ── Notificaciones ── */
-function NotificacionesPage() {
+/* ── Notificaciones ──────────────────────────────────────────────────────
+   La lista trae las ultimas 50 (loadNotifications); el contador sin leer sale
+   de una consulta aparte y es el total real. Los dos numeros no coinciden a
+   proposito y la pantalla lo dice, en vez de mostrar "50 de 50" como si no
+   hubiera nada mas atras.
+
+   El filtro por tipo esta porque "Producción completada" se lleva casi todo el
+   volumen: sin el, un aviso de pedido nuevo de la tienda queda enterrado. Con
+   el chip "Pedidos de la tienda" se ven solo esos.                          */
+/* Cada aviso puede traer un link (public.notifications.link) y hasta ahora la
+   pantalla lo ignoraba: el dueño leía "Pedido B2B nuevo: Fulano" y después
+   tenía que ir a buscar el pedido a mano. Esto lo convierte en un salto
+   directo, que es la mitad que faltaba de "que nos llegue una notificación
+   con su pedido".
+
+   Formas que escribe la base hoy:
+     /canal/<id>                       → la pantalla de ese canal
+     /ventas?tab=mayoristas&pedido=X   → pedido nuevo / anulado de la tienda
+     /ventas?tab=b2b&sub=usuarios      → alguien pidió acceso a la tienda
+   Cualquier otra cosa devuelve null y la tarjeta queda como estaba: un link
+   que no sabemos abrir es peor que ninguno. */
+const NAV_CANALES = ['colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino'];
+
+function destinoDeAviso(link) {
+  if (!link || typeof link !== 'string') return null;
+  const [ruta, query] = link.split('?');
+  const qs = new URLSearchParams(query || '');
+
+  if (ruta.indexOf('/canal/') === 0) {
+    const canal = ruta.slice(7);
+    return NAV_CANALES.includes(canal) ? { page: canal } : null;
+  }
+
+  if (ruta === '/ventas') {
+    const tab = qs.get('tab');
+    /* El pedido de la tienda queda en dos lugares: como cotización en la ficha
+       del mayorista, y con su número B2B en "Tienda mayorista", que es la única
+       pantalla desde la que se lo puede mover de estado y facturar. Se manda
+       ahí, con el número ya escrito en el buscador, porque es donde el aviso
+       se puede convertir en una acción. */
+    if (tab === 'mayoristas' || tab === 'b2b' || tab === 'tienda-b2b') {
+      return {
+        page: 'ventas',
+        ventasTab: 'tienda-b2b',
+        b2bSub: qs.get('sub') === 'usuarios' ? 'solicitudes' : 'pedidos',
+        buscar: qs.get('pedido') || '',
+      };
+    }
+    return { page: 'ventas' };
+  }
+
+  return null;
+}
+
+function NotificacionesPage({ onNav }) {
   const M = window.useMockData();
   const items = M.notifications || [];
+  const sinLeer = M.notificationsSinLeer || 0;
   const toast = useToast();
+  const [filtro, setFiltro] = useState(null);
   const ICONS = { stock_critico:'alert', pedido_urgente:'flame', nuevo_pedido:'box', produccion:'tools', sistema:'info' };
   const COLORS = { stock_critico:'var(--red)', pedido_urgente:'var(--amber)', nuevo_pedido:'var(--blue)', produccion:'var(--green)', sistema:'var(--ink)' };
+  const NOMBRES = { stock_critico:'Stock crítico', pedido_urgente:'Pedidos urgentes', nuevo_pedido:'Pedidos de la tienda', produccion:'Producción', sistema:'Sistema' };
+
+  /* Solo los tipos que realmente aparecen: chips vacios serian ruido. */
+  const tipos = useMemo(() => {
+    const c = {};
+    items.forEach(n => { c[n.tipo] = (c[n.tipo] || 0) + 1; });
+    return Object.keys(c).sort((a, b) => c[b] - c[a]).map(t => ({ tipo: t, n: c[t] }));
+  }, [items]);
+
+  const visibles = filtro ? items.filter(n => n.tipo === filtro) : items;
 
   const marcarTodas = async () => {
     try { await window.MOCK_ACTIONS.marcarTodasLeidas(); toast.success('Notificaciones marcadas como leídas'); }
     catch (e) { toast.error(e.message || 'Error'); }
+  };
+
+  /* Un aviso es clickeable solo si sabemos abrirlo Y el usuario tiene permiso
+     para esa pantalla. Un admin permisionado sin el módulo 'ventas' ve el
+     aviso (lo recibe por rol) pero no debería poder entrar: mostrarle un
+     botón que lo rebota al dashboard sería peor que no mostrar nada. */
+  const destinoVisible = (n) => {
+    if (!onNav) return null;
+    const d = destinoDeAviso(n.link);
+    if (!d) return null;
+    if (window.canSeeNav && !window.canSeeNav(d.page)) return null;
+    return d;
+  };
+
+  const abrir = (d) => {
+    /* La intención viaja por window (ver app.jsx): VentasPage se monta como
+       window.VentasPage, sin props, y el panel B2B está dos niveles más abajo. */
+    window.NAV_INTENT = d;
+    onNav(d.page);
   };
 
   return (
@@ -1019,32 +1103,78 @@ function NotificacionesPage() {
       <div className="page-header">
         <div>
           <div className="page-title">Notificaciones</div>
-          <div className="page-sub">{items.filter(n=>!n.leida).length} sin leer · {items.length} en total</div>
+          <div className="page-sub">
+            {sinLeer} sin leer
+            {sinLeer > items.length && ` · se muestran las ${items.length} más recientes`}
+          </div>
         </div>
-        <button className="btn-ghost" onClick={marcarTodas} disabled={items.every(n=>n.leida)}>
-          <Icon n="check" s={13}/> Marcar todo como leído
+        <button className="btn-ghost" onClick={marcarTodas} disabled={!sinLeer}>
+          <Icon n="check" s={13}/> Marcar todo como leído{sinLeer ? ` (${sinLeer})` : ''}
         </button>
       </div>
 
+      {tipos.length > 1 && (
+        <div style={{display:'flex', gap:8, flexWrap:'wrap', marginBottom:14}}>
+          {[{ tipo:null, n:items.length }].concat(tipos).map(t => {
+            const on = filtro === t.tipo;
+            return (
+              <button key={t.tipo || 'todo'} onClick={() => setFiltro(t.tipo)}
+                style={{
+                  padding:'6px 12px', borderRadius:20, fontSize:11, fontWeight:600, cursor:'pointer',
+                  border:`1px solid ${on ? (COLORS[t.tipo] || 'var(--ink)') : 'var(--border)'}`,
+                  background: on ? `${COLORS[t.tipo] || 'var(--ink)'}1a` : 'var(--paper)',
+                  color: on ? (COLORS[t.tipo] || 'var(--ink)') : 'var(--ink-soft)',
+                }}>
+                {t.tipo ? (NOMBRES[t.tipo] || t.tipo) : 'Todo'} · {t.n}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <div className="card">
-        {items.map(n => (
-          <div key={n.id} style={{
-            display:'flex', gap:14, padding:'16px 22px', borderBottom:'1px solid var(--border)',
-            background: n.leida ? 'var(--paper)' : 'var(--paper-off)',
-          }}>
-            <div style={{width:32, height:32, borderRadius:6, background:`${COLORS[n.tipo]}1a`, color:COLORS[n.tipo], display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
-              <Icon n={ICONS[n.tipo]} s={16}/>
-            </div>
-            <div style={{flex:1, minWidth:0}}>
-              <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:3}}>
-                <div style={{fontSize:13, fontWeight: n.leida?500:700}}>{n.titulo}</div>
-                {!n.leida && <span style={{width:7, height:7, borderRadius:'50%', background:COLORS[n.tipo]}}/>}
-              </div>
-              <div style={{fontSize:12, color:'var(--ink-soft)', marginBottom:4}}>{n.mensaje}</div>
-              <div style={{fontSize:10, color:'var(--ink-muted)', fontWeight:600}}>{fmt.agoSimple(n.created_at)}</div>
-            </div>
+        {!visibles.length && (
+          <div style={{padding:'26px 22px', fontSize:12, color:'var(--ink-soft)'}}>
+            No hay notificaciones de este tipo entre las más recientes.
           </div>
-        ))}
+        )}
+        {visibles.map(n => {
+          const dest = destinoVisible(n);
+          return (
+            <div key={n.id}
+              onClick={dest ? () => abrir(dest) : undefined}
+              role={dest ? 'button' : undefined}
+              tabIndex={dest ? 0 : undefined}
+              onKeyDown={dest ? (e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(dest); }
+              } : undefined}
+              title={dest ? 'Abrir' : undefined}
+              style={{
+                display:'flex', gap:14, padding:'16px 22px', borderBottom:'1px solid var(--border)',
+                background: n.leida ? 'var(--paper)' : 'var(--paper-off)',
+                cursor: dest ? 'pointer' : 'default',
+              }}>
+              <div style={{width:32, height:32, borderRadius:6, background:`${COLORS[n.tipo]}1a`, color:COLORS[n.tipo], display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
+                <Icon n={ICONS[n.tipo]} s={16}/>
+              </div>
+              <div style={{flex:1, minWidth:0}}>
+                <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:3}}>
+                  <div style={{fontSize:13, fontWeight: n.leida?500:700}}>{n.titulo}</div>
+                  {!n.leida && <span style={{width:7, height:7, borderRadius:'50%', background:COLORS[n.tipo]}}/>}
+                </div>
+                <div style={{fontSize:12, color:'var(--ink-soft)', marginBottom:4}}>{n.mensaje}</div>
+                <div style={{fontSize:10, color:'var(--ink-muted)', fontWeight:600}}>{fmt.agoSimple(n.created_at)}</div>
+              </div>
+              {/* La flecha es la única señal de que la fila se puede abrir:
+                  sin ella el cursor de mano se descubre de casualidad. */}
+              {dest && (
+                <div style={{alignSelf:'center', display:'flex', alignItems:'center', gap:5, fontSize:11, fontWeight:700, color:'var(--ink-muted)', flexShrink:0}}>
+                  Ver <Icon n="chev-right" s={13}/>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

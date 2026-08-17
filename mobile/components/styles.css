@@ -1088,6 +1088,125 @@ select.field-input { cursor: pointer; }
 .cal-day.has-prod .cal-day-num { color:var(--green); font-weight:700; }
 .cal-day-units { font-family:var(--mono); font-size:10px; font-weight:700; color:var(--green); }
 
+/* ── Tienda mayorista: pantallas de administración ──────────────────
+   Las usan los 5 tabs de b2b (solicitudes, clientes, catálogo, pedidos,
+   tienda). El HTML es el mismo que en escritorio, los números no: acá la
+   barra de filtros se apila, el vacío no ocupa media pantalla y todo lo
+   que se toca llega a los 40px de alto que pide un dedo. ── */
+
+.admin-tab-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+/* Ocupa el ancho completo y empuja los botones a la fila de abajo: en un
+   teléfono, buscador y botones en la misma línea dejan el campo en 90px. */
+.admin-search {
+  position: relative;
+  flex: 1 1 100%;
+  display: flex;
+  align-items: center;
+}
+.admin-search > svg {
+  position: absolute;
+  left: 10px;
+  pointer-events: none;
+}
+.admin-search-input { padding-left: 30px; width: 100%; }
+
+.admin-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--ink-muted);
+}
+.admin-empty-state h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 4px 0 0;
+}
+.admin-empty-state p {
+  font-size: 12px;
+  margin: 0;
+  max-width: 34ch;
+  line-height: 1.5;
+}
+
+.admin-tab-footer {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--ink-muted);
+  text-align: right;
+}
+
+.admin-toggle-inactive {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  cursor: pointer;
+  user-select: none;
+}
+.admin-toggle-inactive input { cursor: pointer; width: 16px; height: 16px; }
+
+tr.row-inactive { opacity: 0.55; }
+tr.row-inactive td { font-style: italic; }
+
+.field-input.has-error { border-color: var(--red, #dc2626); }
+.field-error {
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--red, #dc2626);
+  font-weight: 600;
+}
+.field-help {
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--ink-muted);
+  line-height: 1.45;
+}
+
+/* Botón chico de acción dentro de una fila (aprobar, rechazar, ver). El
+   padding es más grande que en escritorio a propósito: son botones que
+   deciden cosas (aprobar un mayorista) y están pegados uno al lado del
+   otro dentro de una tabla que se scrollea de costado. */
+.btn-ghost-sm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  background: none;
+  border: 1px solid var(--border-md);
+  border-radius: 4px;
+  cursor: pointer;
+  margin-left: 4px;
+  white-space: nowrap;
+}
+.btn-ghost-sm:hover { background: var(--paper-dim); color: var(--ink); }
+.btn-ghost-sm.danger { color: var(--red); }
+.btn-ghost-sm.danger:hover { background: #fef2f2; color: var(--red); }
+.btn-ghost-sm:disabled { opacity: .5; cursor: default; }
+
+.cta-cte-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }

@@ -9,7 +9,9 @@ function App() {
   const [skuModal, setSkuModal] = useState(null);
 
   const logged = !!(M.user && M.user.name);
-  const unread = (M.notifications || []).filter(n => !n.leida).length;
+  /* El total real, no el de las 50 cargadas: si no, el badge se satura y un
+     pedido nuevo de la tienda no mueve el numero. Ver loadNotifications. */
+  const unread = M.notificationsSinLeer || 0;
 
   /* Landing por rol al loguear */
   useEffect(() => {
@@ -82,8 +84,21 @@ function App() {
     // 'produccion' se mantiene como alias de compatibilidad (bookmarks/landing viejos).
     if (p === 'produccion-hub' || p === 'produccion')
       return window.ProduccionHubPage ? <window.ProduccionHubPage/> : <ProduccionPage/>;
-    if (p === 'notificaciones') return <NotificacionesPage/>;
-    if (p === 'perfil')      return <PerfilPage onLogout={handleLogout}/>;
+    /* onNav es setPage pelado a propósito: la pantalla de notificaciones deja
+       su "intención" en window.NAV_INTENT justo antes de navegar (qué pestaña
+       de Ventas abrir, con qué pedido buscado) y limpiarla en el camino la
+       rompería. La limpian VentasPage al montar y la BottomBar al navegar. */
+    if (p === 'notificaciones') return <NotificacionesPage onNav={setPage}/>;
+    if (p === 'perfil')      return <PerfilPage onLogout={handleLogout} onNav={setPage}/>;
+    if (p === 'ventas') {
+      /* Mismo criterio que en web: owner siempre, admin sólo con el módulo
+         'ventas'. La pantalla y el permiso ya existían; lo que faltaba era la
+         ruta — mobile nunca renderizaba VentasPage, así que el panel de la
+         tienda mayorista, que vive adentro, no se podía abrir desde el
+         celular por más que el rol lo tuviera habilitado. */
+      if (!window.canSeeNav || !window.canSeeNav('ventas')) return <DashboardPage onNav={setPage}/>;
+      return window.VentasPage ? <window.VentasPage/> : <DashboardPage onNav={setPage}/>;
+    }
     if (p === 'marketing') {
       const role = (M.user.role || '').toLowerCase();
       if (['owner','admin','marketing'].indexOf(role) < 0) return <DashboardPage onNav={setPage}/>;
@@ -116,7 +131,9 @@ function App() {
         <main className="m-main">
           {renderPage()}
         </main>
-        <BottomBar current={page} onNav={setPage} unread={unread}/>
+        {/* Navegar desde la barra borra cualquier intención pendiente: si no,
+            volver a Ventas caería en la pestaña del último aviso abierto. */}
+        <BottomBar current={page} onNav={(p) => { window.NAV_INTENT = null; setPage(p); }} unread={unread}/>
       </div>
       {skuModal && <GlobalSkuModal modal={skuModal} onClose={() => setSkuModal(null)}/>}
     </ToastProvider>

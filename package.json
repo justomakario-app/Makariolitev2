@@ -6,6 +6,13 @@
   "scripts": {
     "dev:web": "echo 'web/ es estático — abrí web/Macario Lite.html con un static server (npx serve web)'",
     "dev:mobile": "echo 'mobile/ es estático — npx serve mobile, abrí http://localhost:3000/'",
-    "build": "echo 'No requiere build — todo es estático.'"
+    "build": "echo 'No requiere build — todo es estático.'",
+    "test": "node tests/run-all.js"
+  },
+  "devDependencies": {
+    "@babel/standalone": "7.29.0",
+    "jsdom": "^29.1.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
   }
 }

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Justo Makario Home · Tienda mayorista</title>
+  <meta name="description" content="Tienda mayorista de Justo Makario Home. Acceso solo para clientes con invitación.">
+  <!-- Tienda cerrada: no queremos que Google la indexe ni la muestre. -->
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#0A0A0A">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="stylesheet" href="tienda.css?v=3">
+</head>
+<body>
+  <noscript>
+    <div style="padding:40px;text-align:center;font-family:sans-serif">
+      La tienda necesita JavaScript activado para funcionar.
+    </div>
+  </noscript>
+
+  <div id="root"></div>
+
+  <!-- React + Babel + Supabase JS (UMD).
+       Mismo stack que el sistema interno: sin build, Babel compila el JSX en
+       el browser. La tienda carga MUCHO menos que /: no trae xlsx, jspdf,
+       pdfmake, chart.js ni qrcode — el mayorista no necesita nada de eso y
+       son megabytes que no tiene por qué bajar desde el celular. -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
+  <!-- Cliente Supabase propio de la tienda (storageKey distinta del interno).
+       Va ANTES que b2b-data.js. -->
+  <script src="components/tienda-supa.js?v=1"></script>
+
+  <!-- ⚠ Capa de datos COMPARTIDA con el sistema interno, a propósito.
+       Es la ruta absoluta /components/b2b-data.js: el mismo archivo que carga
+       la app de la planta. Se comparte en vez de copiarse porque define el
+       contrato con las RPC (nombres, payloads, códigos de error) y una copia
+       propia de la tienda se iba a desincronizar en el primer cambio de
+       backend, justo del lado que ve el cliente. Es el único archivo del
+       sistema interno que la tienda toca: no carga shared.jsx, ni data.js, ni
+       nada de administración. -->
+  <script src="/components/b2b-data.js?v=4"></script>
+
+  <!-- Componentes de la tienda, en orden de dependencia.
+       tienda-ui.jsx declara los globales (Icon, useToast, hooks) que usan
+       todos los demás, igual que shared.jsx en el sistema interno. -->
+  <script type="text/babel" src="components/tienda-ui.jsx?v=1"></script>
+  <script type="text/babel" src="components/tienda-acceso.jsx?v=2"></script>
+  <script type="text/babel" src="components/tienda-catalogo.jsx?v=1"></script>
+  <script type="text/babel" src="components/tienda-carrito.jsx?v=2"></script>
+  <script type="text/babel" src="components/tienda-pedidos.jsx?v=2"></script>
+  <script type="text/babel" src="components/tienda-app.jsx?v=3"></script>
+
+  <!-- Boot ------------------------------------------------------------------
+       Babel compila los .jsx de forma asíncrona, así que se espera a que los
+       globales aparezcan. A diferencia del sistema interno, acá SÍ hay corte
+       por tiempo: el interno lo usa gente que puede llamar por teléfono si ve
+       una pantalla en blanco; un mayorista se va y no vuelve. A los 20s se le
+       dice qué pasó y cómo seguir. -->
+  <script>
+    (function () {
+      var t0 = Date.now();
+      var LIMITE = 20000;
+
+      function listo() {
+        return window.TiendaRoot && window.B2B_DATA && window.supabase && window.SUPA;
+      }
+
+      function rendir() {
+        var root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(React.createElement(window.TiendaRoot));
+      }
+
+      function fallar() {
+        document.getElementById('root').innerHTML =
+          '<div class="t-acceso"><div class="t-acceso-caja">' +
+          '<div class="t-marca"><span class="t-marca-1">JUSTO</span>' +
+          '<span class="t-marca-2">MAKARIO</span><span class="t-marca-3">Home</span></div>' +
+          '<h2 class="t-espera-titulo">No pudimos abrir la tienda</h2>' +
+          '<p class="t-espera-texto">Puede ser la conexión. Probá recargar la página; ' +
+          'si sigue igual, escribinos y te tomamos el pedido por WhatsApp.</p>' +
+          '<div class="t-espera-acciones">' +
+          '<button class="t-btn t-btn-primary" onclick="location.reload()">Recargar</button>' +
+          '</div></div></div>';
+      }
+
+      (function boot() {
+        if (listo()) { rendir(); return; }
+        if (Date.now() - t0 > LIMITE) { fallar(); return; }
+        setTimeout(boot, 40);
+      })();
+    })();
+  </script>
+</body>
+</html>

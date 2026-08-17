@@ -1,0 +1,487 @@
+/* ══ TIENDA MAYORISTA · ESTILOS ═══════════════════════════════════════════
+   A propósito NO importa components/styles.css del sistema interno. Ese
+   archivo trae `#root { display: flex }` (el shell con sidebar), tipografía
+   de 13px pensada para tablas densas y 2700 líneas de estilos de admin. La
+   tienda es una página pública: tiene que poder cambiar sin tocar el
+   sistema, y el sistema sin romperle la vidriera al cliente.
+
+   Lo que sí se comparte son los tokens de marca de abajo, copiados tal cual
+   de styles.css para que las dos cosas se vean de la misma familia.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --ink:        #0A0A0A;
+  --ink-soft:   #3A3A3A;
+  --ink-muted:  #888888;
+  --ink-faint:  #C4C4C4;
+  --paper:      #FFFFFF;
+  --paper-off:  #F8F8F8;
+  --paper-dim:  #F1F1F1;
+  --border:     rgba(0,0,0,0.06);
+  --border-md:  rgba(0,0,0,0.11);
+  --border-str: rgba(0,0,0,0.20);
+
+  --red:    #DC2626;  --red-bg:   #FEF2F2;
+  --amber:  #D97706;  --amber-bg: #FFFBEB;
+  --green:  #16A34A;  --green-bg: #F0FDF4;
+  --blue:   #2563EB;  --blue-bg:  #EFF6FF;
+
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-sm: 0 1px 4px rgba(0,0,0,0.05), 0 2px 10px rgba(0,0,0,0.04);
+  --shadow-lg: 0 24px 64px rgba(0,0,0,0.10), 0 8px 24px rgba(0,0,0,0.05);
+
+  --font: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --mono: 'JetBrains Mono', 'SF Mono', ui-monospace, monospace;
+  --radius: 8px;
+  --ancho: 1180px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font);
+  background: var(--paper-off);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  font-size: 14px;
+  line-height: 1.55;
+  min-height: 100dvh;
+}
+
+img { max-width: 100%; display: block; }
+button { font: inherit; color: inherit; }
+
+/* ── Marca ─────────────────────────────────────────────────────────────── */
+.t-marca { display: flex; flex-direction: column; line-height: 1; user-select: none; }
+.t-marca-1 { font-size: 11px; letter-spacing: .28em; font-weight: 700; color: var(--ink-muted); }
+.t-marca-2 { font-size: 21px; letter-spacing: .06em; font-weight: 800; }
+.t-marca-3 { font-size: 11px; letter-spacing: .22em; font-weight: 500; color: var(--ink-muted); }
+.t-marca-chico .t-marca-1 { font-size: 9px; }
+.t-marca-chico .t-marca-2 { font-size: 16px; }
+.t-marca-chico .t-marca-3 { font-size: 9px; }
+
+/* ── Botones ───────────────────────────────────────────────────────────── */
+.t-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 9px 16px; border-radius: var(--radius); border: 1px solid transparent;
+  font-size: 13.5px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  transition: background .12s, border-color .12s, opacity .12s;
+}
+.t-btn:disabled { opacity: .45; cursor: not-allowed; }
+.t-btn-primary { background: var(--ink); color: var(--paper); }
+.t-btn-primary:not(:disabled):hover { background: #262626; }
+.t-btn-ghost { background: var(--paper); border-color: var(--border-md); }
+.t-btn-ghost:not(:disabled):hover { background: var(--paper-dim); }
+.t-btn-peligro { background: var(--red); color: #fff; }
+.t-btn-peligro:not(:disabled):hover { background: #B91C1C; }
+.t-btn-block { width: 100%; }
+
+.t-icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: var(--radius);
+  background: transparent; border: none; cursor: pointer; color: var(--ink-soft);
+}
+.t-icon-btn:hover { background: var(--paper-dim); }
+
+.t-link {
+  background: none; border: none; cursor: pointer; padding: 6px 0;
+  color: var(--ink-soft); font-size: 13px; font-weight: 600;
+  display: inline-flex; align-items: center; gap: 6px; text-decoration: underline;
+  text-underline-offset: 3px; text-decoration-color: var(--ink-faint);
+}
+.t-link:hover { color: var(--ink); }
+.t-link-inline { padding: 0; }
+
+/* ── Campos ────────────────────────────────────────────────────────────── */
+.t-label { display: block; font-size: 12px; font-weight: 600; color: var(--ink-soft); margin: 12px 0 5px; }
+.t-opt { font-weight: 400; color: var(--ink-muted); }
+.t-input {
+  width: 100%; padding: 9px 11px; border: 1px solid var(--border-md);
+  border-radius: var(--radius); background: var(--paper); font: inherit; font-size: 14px;
+}
+.t-input:focus { outline: none; border-color: var(--ink); box-shadow: 0 0 0 3px rgba(0,0,0,.05); }
+.t-textarea { resize: vertical; min-height: 68px; }
+.t-mono { font-family: var(--mono); font-size: 13px; }
+.t-help { font-size: 12px; color: var(--ink-muted); margin-top: 5px; }
+.t-num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Radios de "repetir pedido": el área clickeable es la etiqueta entera, no
+   el circulito de 13px — se elige desde el celular, con el pulgar. */
+.t-radios { display: flex; flex-direction: column; gap: 6px; }
+.t-radio {
+  display: flex; align-items: center; gap: 9px; padding: 9px 11px; cursor: pointer;
+  border: 1px solid var(--border-md); border-radius: var(--radius); font-size: 14px;
+}
+.t-radio:hover { background: var(--paper-off); }
+.t-radio input { accent-color: var(--ink); margin: 0; }
+.t-radio:has(input:checked) { border-color: var(--ink); background: var(--paper-off); }
+
+/* Las listas de "esto no entró / esto cambió" al repetir un pedido. */
+.t-lista-motivos { margin: 0; padding-left: 18px; font-size: 13px; color: var(--ink-soft); }
+.t-lista-motivos li { margin-bottom: 4px; }
+
+.t-pass { position: relative; display: flex; align-items: center; }
+.t-pass .t-input { padding-right: 40px; }
+.t-pass .t-icon-btn { position: absolute; right: 3px; }
+
+/* ── Avisos ────────────────────────────────────────────────────────────── */
+.t-aviso {
+  display: flex; gap: 9px; align-items: flex-start; padding: 10px 12px;
+  border-radius: var(--radius); font-size: 13px; margin: 12px 0; border: 1px solid;
+}
+.t-aviso b { display: block; margin-bottom: 2px; }
+.t-aviso-info  { background: var(--blue-bg);  border-color: #BFDBFE; color: #1E40AF; }
+.t-aviso-ok    { background: var(--green-bg); border-color: #BBF7D0; color: #166534; }
+.t-aviso-warn  { background: var(--amber-bg); border-color: #FDE68A; color: #92400E; }
+.t-aviso-error { background: var(--red-bg);   border-color: #FECACA; color: #991B1B; }
+
+/* ── Cargando / vacío ──────────────────────────────────────────────────── */
+.t-loading {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  padding: 64px 20px; color: var(--ink-muted); font-size: 13px;
+}
+.t-spinner {
+  width: 26px; height: 26px; border: 2px solid var(--border-md);
+  border-top-color: var(--ink); border-radius: 50%; animation: t-giro .7s linear infinite;
+}
+@keyframes t-giro { to { transform: rotate(360deg); } }
+
+.t-vacio {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 64px 24px; text-align: center;
+}
+.t-vacio h3 { font-size: 16px; font-weight: 700; }
+.t-vacio p { color: var(--ink-muted); max-width: 420px; font-size: 13.5px; }
+
+/* ── Acceso ────────────────────────────────────────────────────────────── */
+.t-acceso {
+  min-height: 100dvh; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 16px; padding: 32px 20px;
+}
+.t-acceso-caja {
+  width: 100%; max-width: 400px; background: var(--paper); padding: 30px;
+  border-radius: 14px; box-shadow: var(--shadow-sm); border: 1px solid var(--border);
+  display: flex; flex-direction: column; align-items: center;
+}
+.t-acceso-caja > .t-marca { align-items: center; }
+.t-acceso-bajada {
+  font-size: 12px; color: var(--ink-muted); margin-top: 10px;
+  letter-spacing: .1em; text-transform: uppercase; font-weight: 600;
+}
+.t-acceso-pie { font-size: 12.5px; color: var(--ink-muted); text-align: center; }
+.t-form { width: 100%; margin-top: 14px; display: flex; flex-direction: column; }
+.t-form .t-btn { margin-top: 16px; }
+.t-form .t-link { margin: 10px auto 0; }
+
+.t-espera {
+  width: 56px; height: 56px; border-radius: 50%; margin: 20px 0 4px;
+  display: flex; align-items: center; justify-content: center;
+}
+.t-espera-info  { background: var(--blue-bg);  color: var(--blue); }
+.t-espera-ok    { background: var(--green-bg); color: var(--green); }
+.t-espera-warn  { background: var(--amber-bg); color: var(--amber); }
+.t-espera-error { background: var(--red-bg);   color: var(--red); }
+.t-espera-titulo { font-size: 17px; font-weight: 700; text-align: center; margin-top: 10px; }
+.t-espera-texto { font-size: 13.5px; color: var(--ink-soft); text-align: center; margin-top: 8px; }
+.t-espera-acciones { display: flex; gap: 8px; margin-top: 20px; }
+
+/* ── Shell ─────────────────────────────────────────────────────────────── */
+.t-app { min-height: 100dvh; display: flex; flex-direction: column; }
+
+.t-header {
+  position: sticky; top: 0; z-index: 30; background: var(--paper);
+  border-bottom: 1px solid var(--border);
+}
+.t-header-in {
+  max-width: var(--ancho); margin: 0 auto; padding: 12px 20px;
+  display: flex; align-items: center; gap: 20px;
+}
+.t-nav { display: flex; gap: 4px; margin-left: auto; }
+.t-tab {
+  position: relative; display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 13px; border-radius: var(--radius); border: none; background: none;
+  cursor: pointer; font-size: 13.5px; font-weight: 600; color: var(--ink-muted);
+}
+.t-tab:hover { background: var(--paper-dim); color: var(--ink); }
+.t-tab-on { background: var(--paper-dim); color: var(--ink); }
+.t-badge {
+  font-style: normal; font-size: 11px; font-weight: 700; min-width: 18px;
+  padding: 1px 5px; border-radius: 9px; background: var(--ink); color: var(--paper);
+  text-align: center;
+}
+.t-header-user { display: flex; align-items: center; gap: 8px; }
+.t-header-cli { display: flex; flex-direction: column; line-height: 1.25; text-align: right; }
+.t-header-cli b { font-size: 13px; }
+.t-header-cli span { font-size: 11.5px; color: var(--ink-muted); }
+
+.t-main { flex: 1; width: 100%; max-width: var(--ancho); margin: 0 auto; padding: 22px 20px 48px; }
+.t-footer {
+  border-top: 1px solid var(--border); padding: 18px 20px; text-align: center;
+  font-size: 12px; color: var(--ink-muted);
+}
+
+/* ── Filtros ───────────────────────────────────────────────────────────── */
+.t-filtros { display: flex; flex-direction: column; gap: 12px; margin-bottom: 18px; }
+.t-buscador {
+  display: flex; align-items: center; gap: 9px; padding: 0 11px;
+  background: var(--paper); border: 1px solid var(--border-md); border-radius: var(--radius);
+  max-width: 420px;
+}
+.t-buscador:focus-within { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(0,0,0,.05); }
+.t-buscador-input { flex: 1; border: none; outline: none; padding: 10px 0; font: inherit; font-size: 14px; background: none; }
+.t-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.t-chip {
+  padding: 5px 12px; border-radius: 999px; border: 1px solid var(--border-md);
+  background: var(--paper); cursor: pointer; font-size: 12.5px; font-weight: 600;
+  color: var(--ink-soft);
+}
+.t-chip:hover { border-color: var(--border-str); }
+.t-chip-on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.t-conteo { font-size: 12px; color: var(--ink-muted); margin-bottom: 12px; }
+
+/* ── Grilla de productos ───────────────────────────────────────────────── */
+.t-grilla {
+  display: grid; gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(238px, 1fr));
+}
+.t-prod {
+  background: var(--paper); border: 1px solid var(--border); border-radius: 12px;
+  overflow: hidden; display: flex; flex-direction: column;
+  transition: box-shadow .15s, border-color .15s;
+}
+.t-prod:hover { box-shadow: var(--shadow-sm); border-color: var(--border-md); }
+.t-prod-foto { position: relative; aspect-ratio: 4 / 3; background: var(--paper-dim); }
+.t-prod-foto img { width: 100%; height: 100%; object-fit: cover; }
+.t-prod-sinfoto { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+.t-prod-encarrito {
+  position: absolute; left: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: 4px;
+  background: var(--ink); color: var(--paper); font-size: 11px; font-weight: 600;
+  padding: 3px 8px; border-radius: 999px;
+}
+.t-prod-cuerpo { padding: 13px; display: flex; flex-direction: column; gap: 7px; flex: 1; }
+.t-prod-nombre { font-size: 14.5px; font-weight: 700; line-height: 1.3; }
+.t-prod-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--ink-muted); }
+.t-prod-color { display: inline-flex; align-items: center; gap: 5px; }
+.t-swatch { width: 11px; height: 11px; border-radius: 3px; border: 1px solid var(--border-md); display: inline-block; }
+.t-prod-sku { font-family: var(--mono); font-size: 11px; }
+.t-prod-desc { font-size: 12.5px; color: var(--ink-soft); }
+.t-prod-precio { display: flex; align-items: baseline; gap: 8px; margin-top: auto; padding-top: 6px; }
+.t-prod-precio b { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.t-prod-iva { font-size: 11.5px; color: var(--ink-muted); }
+.t-prod-regla { font-size: 11.5px; color: var(--ink-muted); }
+.t-prod-accion { display: flex; gap: 8px; margin-top: 4px; }
+.t-prod-accion .t-btn { flex: 1; padding: 8px 10px; }
+
+/* ── Selector de cantidad ──────────────────────────────────────────────── */
+.t-cant {
+  display: inline-flex; align-items: center; border: 1px solid var(--border-md);
+  border-radius: var(--radius); background: var(--paper); overflow: hidden;
+}
+.t-cant-btn {
+  width: 32px; height: 34px; border: none; background: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; color: var(--ink-soft);
+}
+.t-cant-btn:hover:not(:disabled) { background: var(--paper-dim); }
+.t-cant-btn:disabled { opacity: .3; cursor: not-allowed; }
+.t-cant-input {
+  width: 46px; border: none; outline: none; text-align: center; font: inherit;
+  font-size: 14px; font-variant-numeric: tabular-nums; background: none;
+  border-left: 1px solid var(--border); border-right: 1px solid var(--border); height: 34px;
+}
+.t-cant-chico .t-cant-btn { width: 28px; height: 30px; }
+.t-cant-chico .t-cant-input { width: 40px; height: 30px; font-size: 13px; }
+
+/* ── Carrito ───────────────────────────────────────────────────────────── */
+.t-carrito { display: grid; grid-template-columns: 1fr 300px; gap: 20px; align-items: start; }
+.t-carrito-items {
+  background: var(--paper); border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+}
+.t-items-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; border-bottom: 1px solid var(--border);
+  font-size: 12.5px; color: var(--ink-muted); font-weight: 600;
+}
+.t-item {
+  display: grid; grid-template-columns: 1fr auto auto auto 36px; gap: 14px;
+  align-items: center; padding: 13px 16px; border-bottom: 1px solid var(--border);
+}
+.t-item-nombre { font-weight: 600; font-size: 14px; }
+.t-item-meta { display: flex; gap: 8px; font-size: 12px; color: var(--ink-muted); }
+.t-item-sku { font-family: var(--mono); font-size: 11px; }
+.t-item-regla, .t-item-nota { font-size: 11.5px; color: var(--ink-muted); margin-top: 2px; }
+.t-item-nota { font-style: italic; }
+.t-item-lbl { display: block; font-size: 10.5px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: .06em; }
+.t-item-unit, .t-item-sub { text-align: right; font-variant-numeric: tabular-nums; font-size: 13.5px; }
+.t-item-quitar { color: var(--ink-muted); }
+.t-item-quitar:hover { color: var(--red); background: var(--red-bg); }
+
+/* Línea que dejó de estar disponible (b2b_rpc_carrito → disponible:false).
+   Se ve apagada y con el precio tachado porque ese número ya no se puede
+   cobrar; el botón de sacarla es lo único que queda en color. */
+.t-item-baja { background: var(--amber-bg); }
+.t-item-baja .t-item-nombre { color: var(--ink-muted); }
+.t-item-baja-txt {
+  display: flex; align-items: center; gap: 5px; margin-top: 3px;
+  font-size: 11.5px; font-weight: 600; color: var(--amber);
+}
+.t-item-tachado { color: var(--ink-faint); text-decoration: line-through; }
+.t-item-cant-fija {
+  display: inline-block; min-width: 34px; text-align: center;
+  font-variant-numeric: tabular-nums; font-size: 13.5px; color: var(--ink-faint);
+}
+.t-item-quitar-urge { color: var(--red); }
+
+.t-entrega { padding: 16px; }
+.t-entrega h3 { font-size: 14px; font-weight: 700; }
+.t-entrega .t-btn { margin-top: 14px; }
+
+.t-resumen {
+  background: var(--paper); border: 1px solid var(--border); border-radius: 12px;
+  padding: 16px; position: sticky; top: 78px;
+}
+.t-resumen h3 { font-size: 14px; font-weight: 700; margin-bottom: 12px; }
+.t-resumen-linea { display: flex; justify-content: space-between; font-size: 13.5px; padding: 4px 0; font-variant-numeric: tabular-nums; }
+.t-resumen-suave { color: var(--ink-muted); }
+.t-resumen-total {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 11px 0 4px; margin-top: 6px; border-top: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+.t-resumen-total b { font-size: 19px; font-weight: 800; }
+.t-resumen .t-btn { margin-top: 14px; }
+.t-resumen-nota, .t-resumen-pie { font-size: 11.5px; color: var(--ink-muted); margin-top: 10px; }
+
+.t-minimo { margin-top: 12px; }
+.t-minimo-txt { font-size: 12px; color: var(--amber); display: flex; align-items: center; gap: 5px; }
+.t-minimo-ok .t-minimo-txt { color: var(--green); }
+.t-minimo-barra { height: 4px; background: var(--paper-dim); border-radius: 2px; margin-top: 5px; overflow: hidden; }
+.t-minimo-barra i { display: block; height: 100%; background: var(--amber); transition: width .2s; }
+.t-minimo-ok .t-minimo-barra i { background: var(--green); }
+
+/* ── Pedido enviado ────────────────────────────────────────────────────── */
+.t-enviado {
+  background: var(--paper); border: 1px solid var(--border); border-radius: 14px;
+  padding: 40px 28px; text-align: center; max-width: 480px; margin: 24px auto;
+  display: flex; flex-direction: column; align-items: center;
+}
+.t-enviado-icono { margin-bottom: 12px; }
+.t-enviado h2 { font-size: 20px; font-weight: 800; }
+.t-enviado-num { font-family: var(--mono); font-size: 15px; font-weight: 700; margin-top: 6px; }
+.t-enviado-txt { font-size: 13.5px; color: var(--ink-soft); margin-top: 10px; }
+.t-enviado-datos { display: flex; gap: 28px; margin: 20px 0; }
+.t-enviado-datos div { display: flex; flex-direction: column; }
+.t-enviado-datos span { font-size: 11px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: .06em; }
+.t-enviado-datos b { font-size: 17px; font-variant-numeric: tabular-nums; }
+.t-enviado-acciones { display: flex; gap: 8px; }
+
+/* ── Mis pedidos ───────────────────────────────────────────────────────── */
+.t-pedidos { display: flex; flex-direction: column; gap: 10px; }
+.t-pedido { background: var(--paper); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.t-pedido-head {
+  display: flex; align-items: center; gap: 14px; width: 100%; padding: 13px 16px;
+  background: none; border: none; cursor: pointer; text-align: left;
+}
+.t-pedido-head:hover { background: var(--paper-off); }
+.t-pedido-num { display: flex; flex-direction: column; line-height: 1.3; }
+.t-pedido-num b { font-family: var(--mono); font-size: 13.5px; }
+.t-pedido-num span { font-size: 11.5px; color: var(--ink-muted); }
+.t-chip-estado { padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700; }
+.t-pedido-tot { margin-left: auto; display: flex; align-items: baseline; gap: 12px; font-variant-numeric: tabular-nums; }
+.t-pedido-tot span { font-size: 12px; color: var(--ink-muted); }
+.t-pedido-cuerpo { padding: 0 16px 16px; border-top: 1px solid var(--border); }
+.t-pedido-ayuda { font-size: 12.5px; color: var(--ink-soft); padding: 11px 0; }
+.t-pedido-dato { font-size: 12.5px; color: var(--ink-soft); padding-bottom: 10px; }
+.t-pedido-pie { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; }
+
+.t-tabla { width: 100%; border-collapse: collapse; font-size: 13px; }
+.t-tabla th {
+  text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--ink-muted); padding: 7px 8px; border-bottom: 1px solid var(--border);
+}
+.t-tabla th.t-num { text-align: right; }
+.t-tabla td { padding: 7px 8px; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+.t-tabla tfoot td { border-bottom: none; padding-top: 10px; }
+
+/* ── Modal ─────────────────────────────────────────────────────────────── */
+.t-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.42); z-index: 100;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.t-modal {
+  background: var(--paper); border-radius: 14px; box-shadow: var(--shadow-lg);
+  width: 100%; max-width: 440px; max-height: 88dvh; display: flex; flex-direction: column;
+}
+.t-modal-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 16px 18px; border-bottom: 1px solid var(--border);
+}
+.t-modal-head h2 { font-size: 15.5px; font-weight: 700; }
+.t-modal-body { padding: 18px; overflow-y: auto; font-size: 13.5px; }
+.t-modal-body p + p { margin-top: 9px; }
+.t-modal-sec { color: var(--ink-muted); font-size: 12.5px; }
+.t-modal-foot {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 13px 18px; border-top: 1px solid var(--border);
+}
+
+/* ── Toasts ────────────────────────────────────────────────────────────── */
+.t-toasts {
+  position: fixed; right: 16px; bottom: 16px; z-index: 200;
+  display: flex; flex-direction: column; gap: 8px; max-width: min(380px, calc(100vw - 32px));
+}
+.t-toast {
+  display: flex; align-items: flex-start; gap: 9px; padding: 11px 12px;
+  border-radius: var(--radius); box-shadow: var(--shadow-sm); font-size: 13px;
+  background: var(--paper); border: 1px solid var(--border-md);
+  animation: t-entra .18s ease-out;
+}
+@keyframes t-entra { from { opacity: 0; transform: translateY(6px); } }
+.t-toast span { flex: 1; }
+.t-toast-x { background: none; border: none; cursor: pointer; padding: 0; color: inherit; opacity: .6; }
+.t-toast-error   { background: var(--red-bg);   border-color: #FECACA; color: #991B1B; }
+.t-toast-success { background: var(--green-bg); border-color: #BBF7D0; color: #166534; }
+.t-toast-info    { background: var(--blue-bg);  border-color: #BFDBFE; color: #1E40AF; }
+
+/* ── Responsive ────────────────────────────────────────────────────────
+   El mayorista carga pedidos desde el celular en el depósito tanto como
+   desde la computadora del escritorio. */
+@media (max-width: 900px) {
+  .t-carrito { grid-template-columns: 1fr; }
+  .t-resumen { position: static; }
+}
+
+@media (max-width: 720px) {
+  .t-header-in { flex-wrap: wrap; gap: 10px 14px; padding: 10px 14px; }
+  .t-nav { order: 3; width: 100%; margin-left: 0; overflow-x: auto; }
+  .t-tab { flex: 1; justify-content: center; }
+  .t-header-user { margin-left: auto; }
+  .t-header-cli span { display: none; }
+  .t-main { padding: 16px 14px 40px; }
+  .t-grilla { grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); gap: 12px; }
+  .t-prod-cuerpo { padding: 11px; }
+
+  /* La fila del carrito pasa de tabla a ficha: en 360px no entran 5 columnas. */
+  .t-item {
+    grid-template-columns: 1fr auto; grid-template-areas:
+      "datos quitar" "unit sub" "cant cant";
+    gap: 8px 12px;
+  }
+  .t-item-datos  { grid-area: datos; }
+  .t-item-quitar { grid-area: quitar; }
+  .t-item-unit   { grid-area: unit; text-align: left; }
+  .t-item-sub    { grid-area: sub; }
+  .t-item-cant   { grid-area: cant; }
+  .t-pedido-tot { width: 100%; margin-left: 0; justify-content: space-between; }
+  .t-pedido-head { flex-wrap: wrap; }
+  .t-enviado-acciones { flex-direction: column; width: 100%; }
+
+  /* Pie de "Mis pedidos". En 360px no entran la ayuda y los dos botones en
+     una sola fila: los botones tienen white-space:nowrap, así que no achican,
+     y como .t-pedido es overflow:hidden lo que sobra no se ve cortado — se
+     va afuera de la tarjeta. "Dar de baja" desaparecía entera y el cliente se
+     quedaba sin cómo anular desde el celular. Ayuda arriba, botones abajo
+     repartiéndose el ancho. */
+  .t-pedido-pie { flex-wrap: wrap; gap: 10px; }
+  .t-pedido-pie .t-help { flex: 1 1 100%; margin-top: 0; }
+  .t-pedido-pie .t-btn { flex: 1 1 auto; }
+}

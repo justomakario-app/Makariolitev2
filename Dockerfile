@@ -17,6 +17,12 @@ RUN cp "/usr/share/nginx/html/Macario Lite.html" /usr/share/nginx/html/index.htm
 # Mobile (PWA) — sirve en /m/*
 COPY mobile /usr/share/nginx/html/m
 
+# Tienda mayorista (B2B) — sirve en /tienda/
+# Es la cara al cliente: la abre el mayorista, no el empleado. Comparte el
+# mismo nginx y el mismo /components/b2b-data.js del sistema interno, así que
+# no necesita ni imagen ni servicio aparte.
+COPY tienda /usr/share/nginx/html/tienda
+
 # Limpiar archivos pesados que no son parte del deploy
 RUN rm -rf /usr/share/nginx/html/uploads \
            /usr/share/nginx/html/screenshots \

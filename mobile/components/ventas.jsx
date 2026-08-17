@@ -72,18 +72,36 @@ function venDrawCompanyHeader(doc, company, x, y) {
 }
 
 function VentasPage() {
-  const TABS = [
-    { id:'alta-clientes',    label:'Alta y mod. clientes' },
-    { id:'cta-cte-clientes', label:'Cta cte clientes' },
-    { id:'facturacion',      label:'Facturación' },
-    { id:'presupuestos',     label:'Presupuestos' },
-    { id:'remitos',          label:'Remitos' },
-    { id:'ventas-ml',        label:'Ventas ML' },
-    { id:'ventas-tienda',    label:'Ventas tienda' },
-    { id:'mayoristas',       label:'Clientes mayoristas' },
-    { id:'base-productos',   label:'Base de productos' },
-  ];
-  const [tab, setTab] = useState('alta-clientes');
+  /* El rol 'ventas' entra a esta sección SOLO por la tienda mayorista: es lo
+     único que la base le autoriza (b2b_rpc_admin_pedidos y b2b_rpc_admin_clientes
+     aceptan owner/admin/ventas; el resto de las RPC le devuelve 42501). Cta cte,
+     Facturación, Presupuestos, Remitos y Base de productos no se listan, en vez
+     de mostrarlas y que fallen al abrirse. */
+  const role = (window.MOCK?.user?.role || '').toLowerCase();
+  const TABS = role === 'ventas'
+    ? [{ id:'tienda-b2b', label:'Tienda mayorista' }]
+    : [
+        { id:'alta-clientes',    label:'Alta y mod. clientes' },
+        { id:'cta-cte-clientes', label:'Cta cte clientes' },
+        { id:'facturacion',      label:'Facturación' },
+        { id:'presupuestos',     label:'Presupuestos' },
+        { id:'remitos',          label:'Remitos' },
+        { id:'ventas-ml',        label:'Ventas ML' },
+        { id:'ventas-tienda',    label:'Ventas tienda' },
+        { id:'mayoristas',       label:'Clientes mayoristas' },
+        { id:'tienda-b2b',       label:'Tienda mayorista' },
+        { id:'base-productos',   label:'Base de productos' },
+      ];
+  /* Deep-link desde la campanita (window.NAV_INTENT, ver app.jsx y pages.jsx).
+     Se lee UNA sola vez, al construir el estado, y se limpia en un efecto —no
+     durante el render— porque B2BTiendaTab también lo lee y los hijos se
+     renderizan antes de que corra ningún efecto. Si no se limpiara, la próxima
+     vez que se entrara a Ventas caería en la misma pestaña sin pedirlo. */
+  const intent = window.NAV_INTENT || null;
+  const [tab, setTab] = useState(
+    intent && TABS.some(t => t.id === intent.ventasTab) ? intent.ventasTab : TABS[0].id
+  );
+  useEffect(() => { window.NAV_INTENT = null; }, []);
   const [ctaCteFocus, setCtaCteFocus] = useState(null);     // S2.25: cliente_id para abrir su cta cte
   const [mayoristasFocus, setMayoristasFocus] = useState(null); // S2.26: cliente_id del pedido generado
   const active = TABS.find(t => t.id === tab) || TABS[0];
@@ -113,6 +131,10 @@ function VentasPage() {
 
       <div role="tabpanel">
         {tab === 'mayoristas'       ? <MayoristasTab focusClienteId={mayoristasFocus} onClearFocus={() => setMayoristasFocus(null)}/> :
+         /* Tienda mayorista (B2B, migraciones 0151-0154). El componente se
+            auto-protege: chequea el flag app_flags.b2b y el rol antes de
+            mostrar nada. Si todavía no cargó, cae al placeholder de abajo. */
+         tab === 'tienda-b2b' && window.B2BTiendaTab ? <window.B2BTiendaTab/> :
          tab === 'alta-clientes'    ? <ClientesB2BTab onVerCtaCte={(id) => { setCtaCteFocus(id); setTab('cta-cte-clientes'); }}/> :
          tab === 'cta-cte-clientes' ? <CtaCteClientesTab focusClienteId={ctaCteFocus} onClearFocus={() => setCtaCteFocus(null)}/> :
          tab === 'presupuestos'     ? <PresupuestosTab onVerPedido={(clienteId) => { setMayoristasFocus(clienteId); setTab('mayoristas'); }}/> :

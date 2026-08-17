@@ -250,7 +250,8 @@ window.MOCK = {
   prod: { todos: { producidoHoy:0, kpis:{ faltante:0, totalPedido:0, producido:0 }, table:[] } },
 
   prodLogs: [],
-  notifications: [],
+  notifications: [],        // las ultimas 50, para la lista
+  notificationsSinLeer: 0,  // el total real sin leer, para el badge (ver loadNotifications)
   users: [],
   // S2.22: módulos permitidos del usuario admin actual (['administracion',...]).
   // Vacío salvo para admins con filas en user_module_permissions.
@@ -281,7 +282,10 @@ window.MOCK = {
     pino:      { landing:'produccion-hub',   items:['produccion-hub','registrar','perfil'] },
     embalaje:  { landing:'produccion-hub',   items:['produccion-hub','registrar','perfil'] },
     logistica: { landing:'produccion-hub',   items:['produccion-hub','registrar','perfil'] },
-    ventas:    { landing:'dashboard',        items:['dashboard','colecta','flex','tiendanube','distribuidor','catalogo','notificaciones','perfil'] },
+    /* 'ventas' entra a la sección Ventas SOLO para la tienda mayorista; adentro
+       VentasPage le deja una sola pestaña. Es el permiso que la base ya le daba
+       (b2b_rpc_admin_pedidos / _clientes aceptan owner/admin/ventas). */
+    ventas:    { landing:'dashboard',        items:['dashboard','colecta','flex','tiendanube','distribuidor','catalogo','ventas','notificaciones','perfil'] },
     carpinteria:{ landing:'produccion-hub',  items:['produccion-hub','registrar','perfil'] },
     marketing: { landing:'marketing',        items:['marketing','notificaciones','perfil'] },
   },
@@ -518,6 +522,15 @@ async function loadProfiles() {
   }));
 }
 
+/* La campanita lee notifications directo: la policy "notifications: select own"
+   ya deja ver solo las propias.
+
+   Se bajan las ultimas 50 para la lista, pero el CONTADOR no puede salir de
+   esas 50. Hay miles acumuladas (casi todas "Producción completada") y con el
+   conteo hecho sobre la lista el badge quedaba clavado en 50 para siempre: un
+   pedido nuevo de la tienda no movia el numero y la campanita dejaba de avisar
+   justo de lo que tiene que avisar. Por eso el total va en una consulta aparte
+   con head: true — lo cuenta el servidor y no baja ni una fila. */
 async function loadNotifications() {
   const { data: { session } } = await supa.auth.getSession();
   if (!session) return;
@@ -533,6 +546,15 @@ async function loadNotifications() {
     leida: n.leida,
     created_at: n.created_at,
   }));
+
+  const { count, error: errCount } = await supa
+    .from('notifications').select('id', { count: 'exact', head: true })
+    .eq('leida', false);
+  /* Si el conteo falla se cae a lo que se ve en la lista: el badge puede
+     quedar corto, nunca inventado. */
+  window.MOCK.notificationsSinLeer = errCount
+    ? window.MOCK.notifications.filter(n => !n.leida).length
+    : (count || 0);
 }
 
 async function loadCarriers() {
@@ -1479,10 +1501,20 @@ window.MOCK_ACTIONS = {
     window.MOCK_BUS.emit();
   },
 
+  /* Marca TODAS las del usuario, no solo las 50 que estan cargadas en pantalla.
+     Con miles acumuladas, marcar de a 50 no terminaba nunca de limpiar la
+     campanita: habia que apretar el boton decenas de veces. Filtrar por
+     user_id ademas de por leida es redundante con la policy "notifications:
+     update own" — se deja explicito para que se lea en el codigo que esto no
+     puede tocar las de otra persona. */
   async marcarTodasLeidas() {
-    const ids = window.MOCK.notifications.filter(n => !n.leida).map(n => n.id);
-    if (!ids.length) return;
-    await supa.from('notifications').update({ leida: true }).in('id', ids);
+    const { data: { session } } = await supa.auth.getSession();
+    if (!session) return;
+    const { error } = await supa.from('notifications')
+      .update({ leida: true })
+      .eq('user_id', session.user.id)
+      .eq('leida', false);
+    if (error) throw new Error(error.message);
     await loadNotifications();
     window.MOCK_BUS.emit();
   },

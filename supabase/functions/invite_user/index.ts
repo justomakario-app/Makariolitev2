@@ -91,10 +91,23 @@ serve(async (req) => {
     }
 
     // Crear user con Auth Admin (el trigger handle_new_user crea el profile)
+    //
+    // ── app_metadata.interno (0155) ────────────────────────────────────────
+    // Esta marca es la que autoriza a handle_new_user a crear el profile del
+    // empleado. Va en app_metadata y NO en user_metadata a proposito:
+    // /auth/v1/signup deja que quien se registra escriba user_metadata entero
+    // (ahi es donde viaja 'role'), pero app_metadata solo lo puede escribir el
+    // service_role — GoTrue ignora cualquier app_metadata que venga en el body
+    // de un signup publico. O sea que sin esta linea nadie se puede fabricar un
+    // empleado, y menos un owner, aunque el registro publico este abierto.
+    // Si se saca, el trigger deja de crear profiles y esta pantalla se rompe.
     const { data: created, error: createErr } = await admin.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
+      app_metadata: {
+        interno: 'true',
+      },
       user_metadata: {
         username,
         name,

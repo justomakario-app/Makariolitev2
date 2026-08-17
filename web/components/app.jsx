@@ -11,7 +11,9 @@ function App() {
   const [skuModal, setSkuModal] = useState(null);
 
   const logged = !!(M.user && M.user.name);
-  const unread = (M.notifications || []).filter(n => !n.leida).length;
+  /* El total real, no el de las 50 cargadas: si no, el badge se satura y un
+     pedido nuevo de la tienda no mueve el numero. Ver loadNotifications. */
+  const unread = M.notificationsSinLeer || 0;
 
   /* Cuando se loguea, ir a la landing del rol (una sola vez) */
   useEffect(() => {
@@ -121,7 +123,11 @@ function App() {
     if (p === 'admin')        return window.AdministracionPage ? <window.AdministracionPage/> : <DashboardPage onNav={setPage}/>;
     if (p === 'cash-flow')    return window.FinanzasPage ? <window.FinanzasPage/> : <DashboardPage onNav={setPage}/>;
     if (p === 'contabilidad') return window.FinanzasPage ? <window.FinanzasPage/> : <DashboardPage onNav={setPage}/>;
-    if (p === 'notificaciones') return <NotificacionesPage/>;
+    /* onNav acá es setPage pelado a propósito: la pantalla de notificaciones
+       deja su "intención" en window.NAV_INTENT justo antes de navegar (a qué
+       pestaña de Ventas ir, con qué pedido buscado) y limpiarla en el camino
+       la rompería. La limpian VentasPage al montar y el Sidebar al navegar. */
+    if (p === 'notificaciones') return <NotificacionesPage onNav={setPage}/>;
     if (p === 'perfil' || p === 'config') return <ConfigPage/>;
     return <DashboardPage onNav={setPage}/>;
   };
@@ -135,7 +141,11 @@ function App() {
   return (
     <ToastProvider>
       <div className="app-layout">
-        <Sidebar current={page} onNav={setPage} onLogout={handleLogout} unread={unread}/>
+        {/* Navegar desde el menú borra cualquier intención pendiente: si no,
+            entrar a Ventas por el menú podría caer en la pestaña del último
+            aviso que se abrió. */}
+        <Sidebar current={page} onNav={(p) => { window.NAV_INTENT = null; setPage(p); }}
+                 onLogout={handleLogout} unread={unread}/>
         <main className="main-content">
           {renderPage()}
         </main>

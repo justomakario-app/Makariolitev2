@@ -135,6 +135,230 @@ El veredicto GO inicial fue **rechazado por el dueño**: faltaban 4 correcciones
 
 ## Registro de tareas
 
+### [2026-08-17] ✅ Tienda **cargada y publicada** (14 productos con precio propio por canal) · el rol `ventas` entra al panel · los chequeos pasan a vivir en el repo (`npm test`)
+
+Salió de la instrucción del dueño — *"Todo esto puedes hacerlo vos"* — sobre la lista que la entrada del 16 había dejado como "del dueño". Se hizo todo lo que estaba al alcance. Lo que **no** está, está abajo con el motivo concreto, no como pendiente genérico.
+
+**1 · Los precios están cargados y la tienda está publicada.** 14 SKU, con **precio propio en los dos canales** (28 filas en `b2b_precio_canal`), `orden` 1–14 y `publicado = true`. Verificado leyendo de vuelta **por `b2b_fn_precio`**, no por la tabla: los números que ve el mayorista son exactamente los del catálogo de julio. La carga fue una sola sentencia atómica (CTE que modifican) y devolvió `14 / 14 / 14`. Al momento de publicar la tienda tenía **0 usuarios, 0 invitaciones y 0 pedidos**: no había ningún carrito ni precio viejo que romper.
+
+| # | SKU | Producto | minorista (derivado) | mayorista | distribuidor | ratio |
+|---|---|---|---|---|---|---|
+| 1-2 | MAD095 / MAD096 | Set Nórdicas Redondas B/N | 42.062,86 | 29.444,00 | 25.015,00 | 0,8496 |
+| 3-4 | MAD190 / MAD191 | Set Nórdicas Símil Mármol B/N | 57.174,29 | 40.022,00 | 34.753,00 | 0,8683 |
+| 5-6 | MAD061 / MAD062 | Set Gota/Púas B/N | 39.574,29 | 27.702,00 | 23.490,00 | 0,8480 |
+| 7-8 | MAD301 / MAD302 | Set Ratonas Boomerang B/N | 48.784,29 | 34.149,00 | 25.764,00 | 0,7545 |
+| 9-10 | MAD304 / MAD303 | Set Ratonas Gota XL B/N | 51.814,29 | 36.270,00 | 30.223,00 | 0,8333 |
+| 11-12 | MAD201 / MAD200 | Mesa Ratona 65×45 B/N | 31.878,57 | 22.315,00 | 18.290,00 | 0,8196 |
+| 13 | MAD401 | Mesa de Luz Hikari | 34.860,69 | 24.402,48 | 22.380,00 | 0,9171 |
+| 14 | MAD300 | Organizador Yori | 74.106,74 | 51.874,72 | 47.567,00 | 0,9170 |
+
+**Por qué son 14 y no 61.** Los "61 SKU" del sistema no son 61 productos vendibles: **34 son internos** — 29 placas de CNC y 5 ACCESORIOS — y no van nunca a la tienda. Quedan 27 terminados. De esos, los que el catálogo lista **y** existen en el sistema son estos 14. Los 14 cubren **12.849 de 13.669 unidades vendidas = 94,0% del volumen real** (medido sobre `orders`, las ventas de ML).
+
+**Lo que falta cargar y por qué no se puede todavía.** La **Línea 3D completa** (16 productos con precio: Set Dona, Florero Hevo, Figura Muditando, Florero Cara/U/Acanalado/cristal/Boho/Atenas/Andorra/Pekín/Baires/Curvado, Nudo Infinito, Difusor, Box Aroma) y la **Línea Iluminación** (Velador Bali, Lámpara de Pie) **no tienen SKU en el sistema**: se buscó en `sku_catalog` por florero, dona, velador, lámpara, muditando, nudo, box, aroma y difusor y no hay **ninguna** fila. No es que falte publicarlos — no existen. Hasta que Seba los dé de alta en el catálogo no hay nada que publicar. Los dos sin stock del catálogo (**Set Mesas Gota XS** y **Lámpara de Pie**) quedaron **sin publicar**, como pidió el dueño.
+
+**El `precio_base` es derivado, no inventado.** `b2b_producto_publicado_ck` prohíbe publicar sin `precio_base`, y `precio_base` **es** el precio minorista (coeficiente 1,0000). En la base **no hay ninguna lista minorista**: `pedidos_mayoristas_items`, `presupuestos_items` y `remitos_items` están vacías, y `orders` (13.499 filas) no guarda precio. Así que se puso `precio_base = round(mayorista / 0,70; 2)` — el valor que hace que el propio coeficiente del sistema reproduzca **exacto** el precio mayorista del catálogo. Y aparte se escribieron los dos precios de canal como precio propio, así que **el número que se cobra es el del catálogo aunque alguien mueva un coeficiente**. Si algún día aparece la lista minorista de verdad, se pisa `precio_base` y no cambia nada de lo que ve el mayorista.
+
+**Corrección de la entrada del 16.** Ahí escribí que dejar el coeficiente le cobraría al distribuidor *"hasta 19% de menos en la línea 3D"*. **Está mal**: la línea 3D no existe en el sistema, así que ese caso no se podía dar. Entre los productos que **sí** están cargados, el error más grande del coeficiente es de **14,3%** — Organizador Yori **−$6.808,29** y Hikari **−$3.206,62** — y en **Boomerang el coeficiente cobraba $1.067,36 de MÁS**. O sea: erraba para los dos lados, no solo en contra. La conclusión de fondo (el coeficiente único no alcanza, hace falta precio por producto) queda igual de firme.
+
+**2 · El rol `ventas` entra al panel de la tienda. Era un bug, no una decisión.** La entrada del 16 lo dejó como algo a decidir por el dueño; revisándolo contra la base, no había nada que decidir: **la base ya lo autorizaba** — `b2b_rpc_admin_pedidos` y `b2b_rpc_admin_clientes` aceptan `owner, admin, ventas`, y todas las demás (`_catalogo`, `_canales`, `_facturar_pedido`, `_set_cliente`, `_set_producto`) le devuelven `42501`. Y `b2b-tienda-tab.jsx` **ya estaba escrito para él** (`puedeVer = isAdmin || role === 'ventas'`, y le muestra una sola sub-pestaña). Lo único que faltaba era la entrada en el menú. Se agregó, y **se filtró `VentasPage`**: con rol `ventas` la sección muestra **una sola pestaña, "Tienda mayorista"**. Cta cte, Facturación, Presupuestos, Remitos y Base de productos **no se listan**, en vez de mostrarse y explotar al abrirse — que es lo que el dueño quería evitar y por eso lo había frenado. 6 ediciones en 4 archivos (`data.js` y `ventas.jsx` de web y mobile) + cache-busters. Un aviso de la campanita que apunte a una pestaña que su rol no tiene lo deja igual en la tienda.
+
+**Nota al margen:** `admin` sigue **sin** llegar a Ventas (nunca llegó: esa sección es del dueño). Si algún día se le abre, hay que filtrarle las pestañas igual que a `ventas`, si no se le abren las 10 de una. Hay un check que lo recuerda.
+
+**3 · Los chequeos ahora viven en el repo.** Hasta hoy las suites estaban en una carpeta temporal de la sesión: se perdían al cerrar y la próxima sesión arrancaba sin red. Pasaron a **`tests/`**, con runner propio:
+
+```bash
+npm install     # una sola vez
+npm test        # 10/10 suites en verde · 398 checks ok · 0 fail
+```
+
+`package.json` clava las versiones **sin `^`** (React 18.3.1, Babel standalone 7.29.0) porque tienen que ser **las mismas que carga el HTML**; si se prueba con una y el navegador corre otra, el chequeo no significa nada. La suite nueva es `rol-ventas-test.js` (23 checks en web + 23 en mobile), y **se validó con dos mutaciones**: sacar el filtro por rol tira 12 checks, sacar `'ventas'` del `ROLE_NAV` tira 1. Detalle de qué protege cada suite en `tests/README.md`.
+
+**Lo que quedó afuera, con el motivo:**
+
+| Pendiente | Por qué no se pudo |
+|---|---|
+| Apagar *"Allow new users to sign up"* · prender leaked-password protection | El MCP de Supabase **no tiene herramienta de configuración de Auth** (tiene SQL, migraciones, edge functions y advisors, nada más). Se hace desde el Dashboard, o por Management API con un PAT — que está prohibido usar acá. El advisor confirma que leaked-password **sigue apagado**. |
+| `git push` | **No hay credencial guardada** para `justomakario-app`: el helper (`manager`) quiere abrir su ventana de login. Leer del remoto funciona (el repo deja leer sin cuenta), escribir no. Por la regla de aislamiento **no se toca ninguna credencial ni se prueba otra cuenta**: lo tiene que autenticar el dueño. El commit local **sí** está hecho. |
+| Redeploy en EasyPanel | Regla permanente: Claude no toca EasyPanel. |
+| URL pública · smoke con Seba | La URL no está en el repo, y el smoke necesita el sitio ya desplegado y una persona. Lo más cerca que se puede correr desde acá es el E2E contra la base real dentro de un bloque con `rollback` (hecho el 15: 36 asserts). |
+
+### [2026-08-16] ✅ B2B — auditoría de las dos puntas · **precio propio por canal** (`0158`–`0161`) · headers de nginx · export a Excel
+
+Salió del pedido del dueño: *"un chequeo de que funcione 100% bien"*, sobre la instrucción de fondo — *"que ambas partes queden bien, la parte de administración… y la parte de mayoristas, la lógica de ellos, de compra, de registro"*. **Todo lo que se encontró se arregló; no quedó nada solo reportado.** Las cuatro migraciones están **aplicadas y verificadas en el remoto**.
+
+**Migraciones** (`apply_migration`, una por vez):
+
+| Migración | Qué resuelve |
+|---|---|
+| `0158_b2b_correcciones_auditoria` | La barrida completa del módulo con un mayorista adentro. **El precio se congela al ENVIAR, no al agregar al carrito** (un carrito abandonado compraba a la lista vieja para siempre, y cambiarle el canal al cliente dejaba UN pedido con DOS listas). **El carrito se bloquea mientras se envía** (con dos pestañas se colaban renglones después del corte: quedaban en el pedido del cliente y no llegaban nunca a la administración). **Un pedido despachado no se puede anular** aunque el dueño retroceda el estado para corregirse (`avanzado_at` se sella una vez y no se borra). El carrito devuelve `disponible` por renglón y `no_disponibles` a nivel carrito. Suma `b2b_rpc_admin_facturar_pedido`, `facturado_at` y `factura_nro`. La marca `b2b` pasa a **`app_metadata`**: en `user_metadata` la escribe quien se registra, así que un signup público con `{"data":{"b2b":"true"}}` salía por la puerta del B2B y ni siquiera quedaba anotado en `auth_alta_bloqueada`. |
+| `0159_b2b_publicar_sin_reescribir_precio` | Tildar *"En la tienda"* en un producto que **ya tenía** precio devolvía `23514` y volteaba el lote entero. Postgres evalúa los CHECK sobre la fila propuesta del `insert` **antes** de resolver el `on conflict`, y la grilla manda solo lo que se tocó. Era exactamente el paso que falta para poner la tienda en marcha. |
+| `0160_b2b_precio_por_canal` | **Precio propio por canal.** Ver abajo: es la decisión de fondo de esta tanda. |
+| `0161_b2b_facturado_visible` | La vista del admin no devolvía `estado_tienda` ni los datos de factura, así que el panel no tenía cómo saber si un pedido ya estaba facturado. Además el espejo admin→tienda **degradaba un pedido facturado**: corregir el estado interno lo devolvía a `despachado` dejando `facturado_at` y `factura_nro` cargados — un registro que se contradice solo. |
+
+**La decisión de fondo — el coeficiente por canal no alcanzaba.** El dueño dejó los dos catálogos de julio en `Catologo mayorista/` (lista mayorista y lista distribuidor, precio por precio). Cruzados, dicen que el modelo de `0152` estaba mal: calculaba **todo** como `precio_base × coeficiente`, lo que obliga a que la razón distribuidor/mayorista sea idéntica en los 61 productos (0,55/0,70 = **0,7857** siempre). Las listas reales van de **0,7545** (Set Mesas Boomerang) a **1,0000** (Figura Muditando), promedio 0,8851 sobre 27 productos comparables: cada producto tiene su margen puesto a mano. Cargar los 61 precios con el modelo viejo le iba a cobrar mal al distribuidor **en todos los productos** — hasta 19% de menos en la línea 3D (Box Aroma: la fórmula da 5.421, la lista dice 6.700) y de más en las mesas. **⚠ Corregido el 17** — la línea 3D **no tiene SKU en el sistema**, así que ese caso no se podía dar: entre los productos que sí existen el error máximo es 14,3% (Yori, Hikari) y en Boomerang el coeficiente cobraba de MÁS. La conclusión no cambia; el ejemplo estaba mal. Ver la entrada del 2026-08-17. Ahora `b2b_fn_precio(sku, canal, precio_base, coef) = coalesce(<precio propio del canal>, round(precio_base*coef, 2))`: **el coeficiente queda como valor por defecto y el precio de lista manda**. En la grilla, el precio derivado es el **placeholder** de la celda (gris, se ve pero no es un valor); escribir arriba crea el precio propio y esa celda deja de seguir al coeficiente; **vaciarla la devuelve a la fórmula**. Mover un coeficiente **no pisa** los precios propios, y la confirmación lo dice con esas palabras.
+
+**Lo que se arregló del lado de la tienda (las 4 cosas que le pasan a un cliente real):**
+- **Los productos caídos.** El backend mandaba `disponible` desde `0158` y la tienda lo ignoraba: el cliente chocaba contra un `P0002` recién al apretar *Enviar*, sin saber cuál renglón era, y la barra del mínimo contaba plata que iba a tener que sacar. Ahora la línea sale marcada, con el precio tachado y sin selector de cantidad (solo se puede quitar), queda fuera de los totales y del mínimo, y el botón de enviar explica qué falta.
+- **El mínimo se mide sin IVA** y no lo decía, con un total **con** IVA justo arriba. El backend valida sin IVA (`"El minimo de compra es % (sin IVA)"`), así que el cliente veía que llegaba y el servidor lo rechazaba.
+- **La tienda cerrada** (el kill-switch del flag) se leía como código de invitación inválido o como conexión rota. Ahora tiene pantalla propia: *"La tienda mayorista está cerrada… no es nada de tu cuenta, que sigue habilitada igual que siempre"*. La frase vieja de `MOTIVO_TEXTO` se borró: estaba en dos lados diciendo cosas distintas.
+- **El canje estando logueado vinculaba a ciegas.** La RPC ya devolvía a qué cliente iba a quedar pegada la cuenta y el código lo tiraba a la basura. Ahora son dos pasos (validar → confirmar) mostrando el nombre del cliente, porque **ese error no se puede deshacer desde la tienda**: el comprador queda comprando con el canal y los precios de otra empresa y hay que ir a la base a despegarlo.
+
+**Panel interno.** Facturar el pedido desde *Pedidos de la tienda* (número de factura + fecha, y el estado que ve el cliente pasa a *Facturado*), revocar invitación y badge *Vencida*, aviso de la campanita **clickeable** que cae en el pedido, y **exportar a Excel**. El CSV está hecho para el Excel de acá y no para el default global: separador **`;`** (la coma ya es el separador decimal en es-AR), **BOM** al principio (sin BOM, "Corralón" se lee "CorralÃ³n") y decimales con coma sin separador de miles. Exporta **lo que está filtrado en pantalla**, no la lista entera. **No** lleva el detalle por renglón, a propósito: el rol `ventas` no lo puede leer y el archivo saldría distinto según quién aprieta el botón.
+
+**Headers de nginx (7 bloques).** `add_header` **no se acumula**: un `location` con un solo `add_header` propio descarta todos los del nivel de arriba. Como casi todos los `location` agregan su `Cache-Control`, los tres headers de seguridad se estaban perdiendo justo en los archivos que importan — entre ellos `/tienda/index.html`, la portada del mayorista, que quedaba **sin `X-Frame-Options`** (embebible en un iframe ajeno). Se repiten bloque por bloque; es feo y es la única forma sin njs.
+
+**`b2b_signup` v3** desplegada y sincronizada con el repo (`ACTIVE`, `verify_jwt: true`, que **tiene que quedar en true**: la anon key es un JWT válido y es lo que le permite a la tienda sin sesión invocarla).
+
+**Regresión — 313 checks locales, 0 fallas.** `checkjsx.js`: **173 compilados · 0 errores · 0 choques de scope** (con babel 7.29.0, el mismo del runtime). `b2b-render-test.js`: **81/81 en web y 81/81 en mobile** — incluye el pegado de precios desde Excel (tab, `;`, espacio, `$`, miles con punto, SKU repetido, SKU inexistente, importe basura) y el CSV verificado sobre los **bytes** del blob. `tienda-render-test.js`: **62/62**. `hub-render-test.js`: **39/39**. `deeplink-test.js`: **23/23 web · 27/27 mobile**. Dos fallas de la corrida fueron **expectativas viejas del test**, no del código: cuando un assert falla, primero hay que dudar del assert (ya había pasado en la tanda del 15).
+
+**Cache-busters** (una sola pasada, al final): `b2b-data.js` `?v=3→4` en **los tres** HTML — la tienda lo carga por ruta absoluta `/components/b2b-data.js`, o sea el archivo de `web/`; los cinco tabs `b2b-*` +1; `pages.jsx`, `ventas.jsx`, `app.jsx` y `data.js` de web y mobile; `tienda.css` `?v=2→3` y `tienda-acceso/carrito/app`; y `mobile/components/styles.css`, que **no tenía versión ninguna**, pasó a `?v=1`. Verificado que las 3 entradas HTML no referencian ningún archivo inexistente.
+
+**Lo que sigue siendo del dueño** (nada de esto lo puede hacer Claude): cargar los **61 precios** y publicar — los dos catálogos ya están mapeados, y **"Set Mesas Gota XS" y "Lámpara de Pie" figuran sin stock: no publicarlos**; apagar *"Allow new users to sign up"* (verificado el 15: **sigue en ON**); prender leaked-password protection; push; redeploy manual en EasyPanel `app_gestion_interna / makario_lite_nueva`; la URL pública; y el smoke con Seba. **Nota aparte:** el rol `ventas` **no llega** al panel B2B. Ampliar `ROLE_NAV` es decisión del dueño porque el mismo cambio le abre también Cta cte, Presupuestos, Remitos, Facturación y Base de productos. **⚠ Resuelto el 17** — no hacía falta decidir nada: la base ya autorizaba a `ventas` en las dos RPC del panel y le negaba el resto. Se agregó la entrada al menú **y se filtró `VentasPage`**, así que no se le abre ninguna de esas cinco. Ver la entrada del 2026-08-17.
+
+### [2026-08-15] ✅ B2B **PRENDIDO** — `0155` · `0156` · `0157` aplicadas, `b2b_signup` desplegada, circuito completo verde (36 asserts)
+
+Cierra el pedido del dueño: *"que quede funcionando bien… y que ambas partes queden bien, la parte de administración y la parte de mayoristas, la lógica de ellos, de compra, de registro"*. **El flag `b2b` quedó en `true`.** Lo que falta para que un mayorista compre de verdad es del dueño y está listado abajo — nada de eso lo puede hacer Claude.
+
+**Migraciones nuevas** (`apply_migration`, una por vez):
+
+| | Qué cierra |
+|---|---|
+| `0155_cerrar_alta_publica_y_admin_cliente` | El agujero del alta: `handle_new_user` ahora exige la marca `app_metadata.interno`, que **solo** el `service_role` puede poner. Un alta hecha por afuera queda con credencial y sin `profile` — entra y no ve nada — y se registra en `auth_alta_bloqueada`. Suma `b2b_rpc_admin_clientes` / `b2b_rpc_admin_set_cliente` (la ficha por **empresa**, que es como se factura) y `rpc_admin_alta_interna` como escotilla owner-only. |
+| `0156_bucket_b2b_fotos` | El bucket `b2b_fotos` **ya creado** con sus políticas (lectura para clientes aprobados, escritura owner/admin). En `DEPLOY.md` figuraba como paso manual del dueño; ya no lo es. |
+| `0157_b2b_repetir_pedido` | El **pedido recurrente**. |
+
+**Sobre el pedido recurrente (`0157`), porque no es lo que decía el brief.** El brief pedía pedidos recurrentes automáticos. **No hay `pg_cron` en este proyecto**, así que no existe el disparo por fecha, y montar un scheduler externo choca con la regla de aislamiento. Lo que se hizo es lo que el mayorista realmente hace: **"repetir este pedido"**, un botón en *Mis pedidos* que vuelca un pedido propio ya enviado en el carrito actual. Tres decisiones que importan:
+
+1. **Se recarga a precio de HOY**, no al congelado del pedido viejo. El precio congelado existe para proteger un pedido ya enviado (`0153`), no para habilitar a comprar para siempre a la lista del año pasado.
+2. **Lo que ya no se vende no se cuela.** SKU despublicado, sin precio o fuera del catálogo: se omite y **se informa cuál y por qué**. El cliente lee "estos 2 no están disponibles", no recibe un pedido distinto al que creyó hacer.
+3. **Si cambió el múltiplo de venta, la cantidad se redondea para arriba** y se avisa. Nunca para abajo: nadie quiere recibir menos de lo que pidió sin enterarse.
+
+**Frontend de esta tanda.** Panel interno: solapa **Clientes** (canal, habilitación, condición de pago, notas — con guardado **parcial**: mandar un campo no borra los otros) y **pegado masivo de precios** desde Excel en la solapa Catálogo. Tienda: botón *"Repetir este pedido"* con modal de confirmación (sumar a lo que ya hay / vaciar y dejar solo este) y un segundo modal con el saldo de lo omitido y lo ajustado. `b2b-data.js` suma `repetirPedido` — **y ese archivo lo cargan las tres apps**, así que se subieron los tres cache-busters a `?v=3`.
+
+**La campanita, que era el corazón del pedido y no servía.** El requisito era *"que nos llegue una notificación con su pedido"*. La RPC ya la emitía bien; el problema estaba en la UI y era doble: **(a)** el badge se calculaba sobre la página de 50 filas que se traía, así que con 2.614 notificaciones viejas marcaba `50` fijo y **un pedido nuevo de la tienda no movía el número**; **(b)** "Marcar todo como leído" solo limpiaba esas 50 — hacían falta ~53 clicks. Ahora el badge usa un `count` real del servidor (`head: true`, sin bajar filas) y el botón hace un `update` por filtro: **un click, todas**. Se agregó filtro por tipo, para poder aislar `nuevo_pedido` de las 2.348 "Producción completada". **No se tocó ni una fila de las viejas del dueño** — se le dio un botón que funciona, no se le borró el historial por cuenta propia.
+
+**Edge function `b2b_signup` desplegada** (v2, `ACTIVE`, `verify_jwt: true`). El `verify_jwt` **tiene que quedar en true**: la anon key es un JWT válido, y es justo lo que le permite a la tienda sin sesión invocarla. El archivo del repo y lo desplegado son ahora el mismo.
+
+**Verificación — circuito completo de las dos puntas, contra la base real, dentro de un bloque con `rollback`** (nada quedó escrito). **36 asserts, 0 fallas.** En orden: el dueño publica 2 SKU con precio y **es rechazado al publicar sin precio** (`23514`) → 2 invitaciones (en la tabla queda el **hash**, no el token) → alta de credencial simulando `b2b_signup`, que **no crea `profile` interno** → canje (`pendiente` + aviso al equipo) y **la invitación no se puede reusar** (`0A000`) → sin aprobar **no ve catálogo ni puede enviar** (`42501`) → aprobación + habilitación desde el panel, y **guardar un solo campo no pisa `condicion_pago`** → **mayorista ve 7000 y distribuidor 5500 por el mismo SKU**, y **el payload no contiene `precio_base` ni `coeficiente`** → múltiplo de 6 rechaza 5 unidades (`22023`), el carrito suma bien, cantidad 0 saca la línea → **envío: entra en `pedidos_mayoristas` como `cotizacion`, con los ítems copiados solos** → **9 avisos `nuevo_pedido` sin leer a owner+admin**, con el texto real:
+
+> **Pedido B2B nuevo: E2E MAYORISTA SRL** — Ana Compradora cargo el pedido MAY-0006 (1 productos, 12 unidades, $84.000,00 neto). Ya esta en Ventas > Mayoristas como cotizacion. → `/ventas?tab=mayoristas&pedido=MAY-0006`
+
+→ subir la lista a 99999 **no toca** el pedido ya enviado (sigue en 7000, de los dos lados) → **el otro cliente ve 0 pedidos**, no entra al panel de admin (`42501`) y `b2b_pedido` **ni siquiera es legible directo** (`0154` le quitó el grant) → el puente de estados admin→tienda: `confirmado`→`confirmado`, `en_produccion`→`en_produccion`, `entregado`→**`despachado`**.
+
+Aparte, **14 asserts** solo para `0157` (precio de hoy, despublicado omitido, redondeo al múltiplo, agregar vs reemplazar, herencia de dirección, id ajeno rechazado) y un **barrido como `anon` con el flag ya prendido**: no lee catálogo, no entra al panel, no crea invitaciones, no lee `b2b_producto`, y un token inventado se rechaza.
+
+**Dos aserciones mías estaban mal, no el código** — vale anotarlo porque se repitió el patrón: `b2b_pedido` no devuelve 0 filas a `authenticated`, tira `42501` **porque `0154` le sacó el grant entero** (el aislamiento es más fuerte que lo que la prueba asumía); y las notificaciones "no aparecían" porque el corte era `clock_timestamp()` mientras las filas se insertan con `now()` — 19 ms antes. **Cuando un assert falla, primero hay que dudar del assert.**
+
+**Estado real de la base ahora:** flag `b2b` **`true`** · 61 productos, **0 publicados, 0 con precio** · 0 invitaciones, 0 compradores, 0 pedidos. **Prender el flag no expuso nada**: no hay catálogo publicado, no existe ningún cliente, y la URL pública no existe hasta que el dueño redespliegue.
+
+**Lo que falta es todo del dueño** (en orden):
+1. **Cargar el `precio_base` de los 61 SKU y publicarlos** — es su dato, Claude no lo puede inventar. Se hace en *Ventas → Tienda mayorista → Catálogo*, pegando desde Excel.
+2. **Verificar que "Allow new users to sign up" esté OFF** en el Dashboard de Supabase (Authentication → Providers → Email). **Se comprobó que sigue ON.** `0155` ya cierra el agujero por abajo, pero esto es la puerta.
+3. **Push** de los commits locales (sigue pendiente el acceso a GitHub).
+4. **Redeploy manual** en EasyPanel `app_gestion_interna / makario_lite_nueva` — sin esto la tienda no existe en internet.
+5. **Smoke con Seba**: invitar → registrarse → aprobar → comprar → ver el aviso en la campanita → mover el estado desde Mayoristas y verlo cambiar en la tienda.
+
+### [2026-08-15] ✅ `0151` → `0152` → `0153` → `0154` **APLICADAS AL REMOTO** (autorizadas por el dueño · el flag `b2b` quedó APAGADO)
+
+Se aplicaron las cuatro por MCP `apply_migration`, una por vez y en orden, revisando el resultado de cada una antes de la siguiente. Quedaron registradas como `20260815062129`, `20260815062500`, `20260815062642` y `20260815062716`.
+
+**Lo que hay ahora en la base:**
+
+| | |
+|---|---|
+| flag `b2b` | **`false`** — el módulo existe y está apagado |
+| canales | `distribuidor=0.55` · `mayorista=0.70` · `minorista=1.00` |
+| `b2b_producto` | **61 filas** (los SKU vendibles), **0 con precio**, **0 publicados** |
+| usuarios / invitaciones / pedidos B2B | 0 / 0 / 0 |
+| RPCs `b2b_rpc_*` | 16 |
+| privilegios de `anon` sobre las tablas `b2b_*` | **0** |
+| rama B2B en `handle_new_user` | presente |
+
+**Los tres tripwires de `0154` corrieron sin abortar** (si el perímetro no hubiera quedado limpio, la migración se caía con `0A000` y no se aplicaba nada): 0 policies SELECT con `qual=true`, 0 vistas sin `security_invoker` (excluida `b2b_v_pedidos_admin`, que es definer a propósito y está revocada), 0 tablas sin RLS legibles por `authenticated`.
+
+**Verificación posterior, en solo lectura y actuando como cada rol** — no alcanza con que la migración diga "ok":
+
+- **Como `anon`** (el visitante sin sesión): `prod_v_stock_mp` y `prod_v_tareas` ahora responden **`42501 permission denied`**. Antes de `0154` devolvían filas con la anon key, sin iniciar sesión. `prod_pata_tamano` quedó con RLS. Y de las tablas que siguen teniendo el `GRANT` por defecto de Supabase (`orders`, `profiles`, `customers_b2b`, `pedidos_mayoristas`…), `anon` lee **0 filas** en todas: el grant está, la RLS lo anula. **No queda ninguna tabla sin RLS con SELECT para `anon`.**
+- **Como un empleado `cnc` activo** (el rol más restringido de los que tocó `0154`): sigue leyendo todo lo suyo, sin un solo *permission denied* — `prod_config` 4, `prod_materia_prima` 29, `prod_stock_mp` 29, `prod_pata_tamano` 2, `prod_v_jornadas` 4, `prod_v_stock_mp` 29, `app_flags` 2, `orders` 13.246. Los ceros que aparecen (`prod_asignacion`, `prod_tarea`, `prod_minimo`, las vistas de demanda) se cotejaron contra la base sin rol simulado: **son tablas realmente vacías** por el RESET operativo de LP, no bloqueo de RLS.
+- **Como el `owner`**: `b2b_rpc_catalogo` corta con **`42501 · El modulo B2B no esta habilitado`** y `b2b_rpc_mi_cuenta` devuelve `{"ok":false,"motivo":"b2b_deshabilitado"}`. O sea que el kill-switch manda incluso para el dueño: **esconder la UI es cosmético, la puerta está en la base.**
+
+**⚠ Prender el flag es una decisión aparte y todavía no está tomada.** El `UPDATE app_flags SET enabled = true WHERE name = 'b2b'` no se ejecutó ni se va a ejecutar sin pedido explícito. Antes de prenderlo faltan cuatro cosas que son del dueño (detalle y orden en `DEPLOY.md`): desplegar la edge function `b2b_signup`, verificar que **"Allow new users to sign up" esté OFF** (si está ON, cualquiera se da de alta eligiendo su propio `role` — ese es el riesgo real), cargar el `precio_base` de los 61 SKU, y opcionalmente el bucket `b2b_fotos`. Con el flag apagado no hay ninguna urgencia: nadie ve nada.
+
+**Nota de higiene para la próxima sesión:** los encabezados de `0151`–`0154` ya dicen "APLICADA EN REMOTO". Varias migraciones viejas (`0128`–`0139`) siguen diciendo *"LOCAL: NO aplicada en remoto"* aunque hace rato que se aplicaron — es ruido heredado, no un pendiente. La fuente de verdad de qué está aplicado es `list_migrations`, no el comentario del archivo.
+
+### [2026-08-15] B2B · **la tienda del cliente** (storefront en `/tienda/`, sin ninguna migración nueva)
+
+Es la mitad de afuera del pedido del dueño. Con esto el circuito queda cerrado: el mayorista arma el pedido solo, y al enviarlo `0153` lo inserta en `pedidos_mayoristas` con el mismo numerador del admin y le avisa al equipo — *"que automáticamente se llene todo y nos llegue una notificación"*.
+
+**⚠ Decisión de stack que hay que saber:** el brief proponía **Next.js 14 en Vercel**. La tienda **no** se hizo así: es el mismo stack estático que ya corre este proyecto (HTML + JSX compilado en el browser con Babel standalone, servido por el nginx que ya está en EasyPanel), publicada como subcarpeta `/tienda/` del mismo contenedor. Dos razones: Vercel sería un servicio externo nuevo que el dueño tendría que crear y mantener, y la regla de aislamiento prohíbe reutilizar infraestructura de otros proyectos. **Esto es reversible barato**: toda la lógica vive en las RPC `b2b_rpc_*`, así que rehacer la vista en Next.js más adelante no toca la base.
+
+**Archivos nuevos:** `tienda/index.html`, `tienda/tienda.css`, `tienda/components/tienda-supa.js` y los 6 `tienda/components/tienda-{ui,acceso,catalogo,carrito,pedidos,app}.jsx`. **Editados:** `Dockerfile` (`COPY tienda …`) y `nginx.conf` (4 bloques). Fuera del repo, sin desplegar: `supabase/functions/b2b_signup/index.ts`.
+
+**Cinco decisiones que conviene no deshacer sin pensarlo:**
+1. **El alta pasa por una edge function con `service_role`, no por `auth.signUp`.** `handle_new_user` lee el rol de `raw_user_meta_data`, que en un signup público lo elige quien se registra: cualquiera con la anon key pediría `role='owner'`. `b2b_signup` valida el código contra la base **antes** de crear nada y fija el metadata a mano (`b2b:'true'`, sin `role`). **Requisito: "Allow new users to sign up" tiene que quedar OFF.**
+2. **`storageKey: 'makario-tienda-auth'`, distinta de la `'macario-auth'` del sistema interno.** `/` y `/tienda/` son el mismo origen: con la clave compartida, un cliente que entra a la tienda desde la notebook del depósito le pisaría la sesión al empleado.
+3. **`tienda.css` no importa `components/styles.css`.** Ese archivo trae `#root { display:flex }` (el shell con sidebar) y 2700 líneas de estilos de tablas densas. Se comparten **solo los tokens de marca**, copiados. Así un retoque del CSS interno no puede romperle la tienda a un cliente.
+4. **`b2b-data.js` se comparte, no se copia.** La tienda carga el mismo `/components/b2b-data.js` que el panel interno, por ruta absoluta. Es el contrato con las RPC: una tercera copia se desincroniza en el primer cambio de backend.
+5. **`/tienda/` tiene su propio `try_files`.** Sin eso, un `/tienda/loquesea` inexistente caería en el `index.html` del sistema interno y el mayorista terminaría mirando el login del personal.
+
+**Verificación:** `157/157` JSX transpilan con el Babel 7.29.0 del browser · **`58/58` checks de render en jsdom** (harness `tienda-render-test.js`) · **`171` archivos sin un solo choque de scope** en las 3 páginas (`scope-check.js`). Los checks cubren la escalera de acceso completa (6 situaciones, y en **ninguna** se dispara una RPC de catálogo o carrito antes de estar aprobado), que **`precio_base` y el coeficiente no aparecen nunca** en el DOM, múltiplo/mínimo por SKU, el mínimo del canal, que enviar guarde la dirección tipeada aunque no se haya apretado "Guardar", que los rótulos de estado sean idénticos a los del panel interno, y que un pedido "en producción" **no** ofrezca darse de baja.
+
+**Un bug real que encontró el harness, que vale para todo el proyecto:** los `<script type="text/babel">` son scripts **clásicos** — sus `const` de primer nivel viven todos en el **mismo** scope léxico global. `tienda-app.jsx` hacía `const { PantallaAcceso } = window.TiendaAcceso`, redeclarando el const que ya había creado `tienda-acceso.jsx`: el browser corta con *"Identifier 'PantallaAcceso' has already been declared"* y **la página entera queda en blanco**. Los archivos tienen que referirse a los componentes de sus hermanos **por nombre pelado**; los `window.*` son para el boot gate del HTML y los tests. El test de render del panel interno **no puede ver esta clase de bug** porque carga cada archivo en su propio `new Function()`; por eso se agregó `scope-check.js`, que lee el orden real de `<script>` de cada HTML. Corrió sobre los 4 `b2b-*.jsx` del panel interno y sobre los 171 archivos de las 3 páginas: **0 choques**.
+
+**El frontend sigue sin desplegar** (falta el redeploy de EasyPanel, que es del dueño). Las migraciones **sí** están aplicadas desde el 2026-08-15 (entrada de arriba), pero la tienda todavía no sirve para nada hasta que se despliegue `b2b_signup`, se cargue el `precio_base` de los 61 SKU y se prenda el flag. Con el flag `b2b` en OFF la tienda muestra "cerrada en este momento" y no da altas — igual que el panel interno, fail-closed en los dos lados.
+
+### [2026-08-15] B2B · panel interno de la tienda mayorista (frontend, **sin ninguna migración nueva**)
+
+Es la mitad de adentro del pedido del dueño: *"que esto tenga conexión con la parte de mayorista de administración para que automáticamente se llene todo"*. El lote `0151`–`0154` (abajo) construye el puente en la base; esto es la pantalla desde la que el equipo lo maneja. La mitad de afuera — la tienda del cliente — es la entrada de arriba.
+
+**Dónde está:** `Ventas → Tienda mayorista`, con tres solapas.
+
+| Solapa | Quién entra | Qué hace |
+|---|---|---|
+| **Pedidos** | owner · admin · **ventas** | Los pedidos que entraron por la tienda, con su detalle y el estado que ve el cliente. Solo el dueño avanza el estado. |
+| **Accesos** | owner · admin | Emitir invitaciones y aprobar / rechazar / suspender a los que se registran. Badge con los que esperan. |
+| **Catálogo** | owner · admin | `precio_base` y publicación por SKU, con el precio de cada canal calculado al lado. Los coeficientes los toca **solo el dueño**. |
+
+**Archivos nuevos** (los 5, espejados byte a byte en `web/` y `mobile/`): `components/b2b-data.js` (capa de datos, `window.B2B_DATA`) y `components/admin/b2b-{tienda,pedidos,solicitudes,catalogo}-tab.jsx`. **Editados:** `components/ventas.jsx` (la solapa nueva) y los dos HTML de entrada (script tags + `ventas.jsx?v=9→10`).
+
+**Cuatro decisiones que conviene no deshacer sin pensarlo:**
+1. **Cero migraciones nuevas.** La hipótesis previa era que hacía falta una `0155` para listar los usuarios pendientes y otra para el detalle del pedido. Las dos resultaron falsas: el admin ya lee `b2b_usuario` bajo la RLS de `is_owner_or_admin()`, y **`rpc_mayoristas_list_pedidos` ya devuelve los ítems** (`0066_s2_23_mayoristas.sql:261-297`). El detalle se cruza por `pedido_mayorista_id` contra `pedidos_mayoristas_items`, así que **la línea del pedido tiene una sola fuente de verdad**, no una copia B2B que se pueda desincronizar.
+2. **El estado se avanza por `rpc_mayoristas_update_estado`, nunca al revés.** El trigger espeja admin → tienda. Es la lección de `0150` aplicada de entrada: el espejo no maneja al maestro.
+3. **La UI refleja el permiso real del backend, no uno propio.** *Ventas* ve las cabeceras pero no el detalle (su rol no lee `pedidos_mayoristas`) y se le avisa en pantalla, en lugar de mostrarle una solapa que le va a tirar `42501` al abrirla.
+4. **Los globales del B2B quedan afuera del boot check del HTML** (a propósito, comentado ahí). Si uno de estos archivos fallara, la app tiene que arrancar igual y la solapa caer al placeholder — no dejar sin sistema a toda la planta por un módulo que además viene apagado.
+
+**Verificación:** `151/151` JSX transpilan con el mismo Babel 7.29.0 del browser · **`52/52` checks de render en jsdom, iguales en `web` y en `mobile`** — montando los componentes de verdad contra la capa de datos de verdad y un Supabase falso. Cubre: flag apagado y flag que rompe al leerse (fail-closed en los dos casos, sin una sola RPC disparada), las 4 combinaciones de rol, el payload exacto de aprobación, el recálculo de precios por canal mientras se tipea, el bloqueo de "publicar sin precio" **antes** de mandar nada (el `22023` del backend), el guardado en un solo lote, y que cambiar coeficientes pida confirmación. Harness en el scratchpad (`b2b-render-test.js`).
+
+**Se puede desplegar antes que las migraciones y no pasa nada:** sin `0151` no existe la fila `b2b` en `app_flags`, la lectura da false y la solapa muestra "apagada". El flag es además fail-closed **y** el backend revalida con `b2b_fn_guard()` en cada RPC — esconder la UI es cosmético, la puerta está en la base.
+
+### [2026-08-14] Plataforma B2B (tienda cerrada para mayoristas) — `0151`–`0154` (**validadas en aislado · APLICADAS al remoto el 2026-08-15 — ver la entrada de arriba**)
+
+**Pedido:** tienda cerrada por invitación, precios por canal, y — textual — *"que esto tenga conexión con la parte de mayorista de administración para que automáticamente se llene todo y nos llegue una notificación con su pedido y todo"*. **Decisiones del dueño:** sin n8n; el esquema lo escribe Claude desde cero adaptado al sistema real (no el Next.js/Vercel del brief — ver la entrada del storefront, arriba, para por qué se descartó).
+
+**Las 4 migraciones (append-only, idempotentes, `security definer set search_path`):**
+- **`0151` identidad** — `b2b_canal` (coeficientes: distribuidor 0.55 · mayorista 0.70 · minorista 1.00), `b2b_usuario`, `b2b_invitacion`. El cliente externo **no tiene fila en `profiles`**: por eso `is_active_user()` le da false y todo el perímetro interno le queda cerrado por construcción. Rama nueva en `handle_new_user` (si el alta se declara `b2b`, no se crea profile). Flag `b2b` fail-closed, espejo de `prod_fn_lp_habilitada()`.
+- **`0152` catálogo y precios** — `b2b_producto` (un `precio_base` por SKU) + `b2b_precio_historial`. El cliente **nunca** recibe `precio_base` ni el coeficiente: la RPC devuelve solo `precio` y `precio_con_iva` ya calculados.
+- **`0153` pedidos y EL PUENTE** — el carrito vive en la base como pedido en `borrador` (no en localStorage). Al enviar: numera con el **mismo** `fn_next_numero_pedido_mayorista()` del admin, inserta en `pedidos_mayoristas` + `pedidos_mayoristas_items` con el precio congelado, y notifica al equipo. El espejo de estado es **de una sola dirección** (admin → tienda), lección de `0150`.
+- **`0154` cierre del perímetro** — **no es una migración B2B**: arregla agujeros que existen HOY. Ver abajo.
+
+**⚠ Dos agujeros PRE-EXISTENTES que encontró este trabajo (verificados solo-lectura contra el remoto, independientes del B2B):**
+1. **14 policies SELECT con predicado literal `true`** (`app_flags`, `prod_tarea`, `prod_stock_mov`, `prod_materia_prima`, `prod_stock_mp`…). Las policies permisivas se suman con OR: una con `qual=true` concede lectura total a cualquier `authenticated`.
+2. **4 vistas sin `security_invoker`** (las creadas después de `0125`), que corren con los permisos de `postgres` (BYPASSRLS) y saltean la RLS de sus tablas base. **`prod_v_stock_mp` y `prod_v_tareas` se leen HOY con la anon key, sin iniciar sesión.** Más `prod_pata_tamano`, única tabla de `public` sin RLS y con ACL `arwdDxtm` para `anon` (anon puede leerla **y escribirla**).
+Nadie lo notó porque hasta hoy los 16 usuarios de `auth.users` tienen los 16 su profile: *authenticated* y *empleado* eran sinónimos. `0151` rompe esa equivalencia al crear el primer authenticated sin profile. **`0154` es requisito para prender el flag `b2b`.**
+
+**Regresión encontrada y corregida ANTES de aplicar nada — la parte `(B0)` de `0154`:** dar vuelta `prod_v_jornada_demanda_neta` a invoker **le rompía los números a la planta**. Esa vista resta lo ya asignado con un subquery escalar sobre `prod_asignacion` (policy owner/admin/encargado); sin permiso de lectura el subquery no falla, devuelve 0, y la demanda sale **inflada** — mandar a fabricar de nuevo lo ya asignado, en silencio y sin ningún error visible. Medido A/B en replay local (0001–0153 vs. +0154), con 1 orden de 10 unidades y 4 ya asignadas:
+
+| rol | antes de `0154` | con `(B)` sin `(B0)` | con `0154` corregida |
+|---|---|---|---|
+| owner / encargado | 6 | 6 | 6 |
+| cnc · melamina · pino · embalaje | 6 | **10** ❌ | 6 |
+
+Son **10 vistas** las que dependen de `prod_asignacion`, y las cuatro pantallas de sector entran por ahí (`cnc-sector.jsx:65`, `melamina-sector.jsx:56`, `pino-sector.jsx:55`, `embalaje-sector.jsx:61`). El arreglo abre el **SELECT** de `prod_asignacion` a cualquier empleado activo: no concede nada nuevo — es exactamente lo que la planta ya ve hoy a través de la vista definer — y deja afuera al cliente B2B, que no tiene profile. Las escrituras no se tocan.
+
+**Cómo se validó (primera vez que hubo entorno aislado real en este proyecto):** se levantó un cluster PostgreSQL 18 desechable en `127.0.0.1:5433` con un shim de Supabase (roles `anon`/`authenticated`, schema `auth` + `auth.uid()`, pgcrypto/uuid-ossp **en `extensions`**, storage, y **el default ACL de `public` que concede todo a anon/authenticated en cada objeto nuevo** — sin eso el hallazgo de los grants no se reproduce). Resultados: **154/154 migraciones OK**; **smoke funcional end-to-end 49/49 OK** (alta por invitación → aprobación → catálogo con precio por canal → carrito → puente a `pedidos_mayoristas` → notificación → espejo de estado → anulación); **regresión LP 10/10 OK**; **idempotencia**: las 4 vuelven a correr limpias. El tripwire de `0154` funciona (abortó al detectar una tabla sin RLS creada después).
+
+**Estado: las 4 se aplicaron al remoto el 2026-08-15** con autorización expresa del dueño, una sola vez y en orden. El detalle de la aplicación y la verificación posterior está en la entrada del 2026-08-15, arriba.
+
 ### [2026-08-10] El cierre de Línea Productiva deja de arrastrar el cierre comercial — `0150` (30/30 en aislado · **APLICADA al remoto el 2026-08-11**)
 
 **Pedido de Seba (WhatsApp, 29/07):** *"cerré la jornada de línea productiva y me cerró la de producción arrastrando todo al día siguiente… eso es algo que no debería hacer ya que son 2 sectores distintos."* El RESET operativo de ese día ya se hizo (revertido el cierre erróneo). **Esto es el arreglo de raíz**, que quedó empezado.

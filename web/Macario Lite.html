@@ -46,7 +46,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
   <!-- Data layer (Supabase real) — antes era mock.js -->
-  <script src="components/data.js?v=50"></script>
+  <script src="components/data.js?v=53"></script>
   <script src="components/xlsx.js?v=13"></script>
 
   <!-- Componentes (Babel JSX inline) -->
@@ -58,7 +58,7 @@
   <script type="text/babel" src="components/produccion.jsx?v=17"></script>
   <script type="text/babel" src="components/modals.jsx?v=32"></script>
   <script type="text/babel" src="components/stock.jsx?v=1"></script>
-  <script type="text/babel" src="components/pages.jsx?v=16"></script>
+  <script type="text/babel" src="components/pages.jsx?v=18"></script>
 
   <!-- Admin data layer + modals + tabs -->
   <script src="components/admin/admin-data.js?v=24"></script>
@@ -128,12 +128,26 @@
   <script type="text/babel" src="components/administracion.jsx?v=1"></script>
   <script type="text/babel" src="components/contabilidad.jsx?v=3"></script>
   <script type="text/babel" src="components/rrhh.jsx?v=5"></script>
-  <script type="text/babel" src="components/ventas.jsx?v=9"></script>
+
+  <!-- Tienda mayorista (B2B · migraciones 0151-0156).
+       b2b-data.js va primero: los tabs lo usan. A propósito NO se agrega
+       ningún global de la tienda al boot check de más abajo — si alguno de
+       estos archivos fallara, la app tiene que arrancar igual y el tab caer
+       al placeholder, no dejar sin sistema a toda la planta por un módulo
+       que además viene apagado por flag. -->
+  <script src="components/b2b-data.js?v=4"></script>
+  <script type="text/babel" src="components/admin/b2b-solicitudes-tab.jsx?v=2"></script>
+  <script type="text/babel" src="components/admin/b2b-clientes-tab.jsx?v=2"></script>
+  <script type="text/babel" src="components/admin/b2b-catalogo-tab.jsx?v=3"></script>
+  <script type="text/babel" src="components/admin/b2b-pedidos-tab.jsx?v=2"></script>
+  <script type="text/babel" src="components/admin/b2b-tienda-tab.jsx?v=3"></script>
+
+  <script type="text/babel" src="components/ventas.jsx?v=12"></script>
   <script type="text/babel" src="components/mkt-data.jsx?v=1"></script>
   <script type="text/babel" src="components/marketing.jsx?v=3"></script>
 
   <script type="text/babel" src="components/sidebar.jsx?v=18"></script>
-  <script type="text/babel" src="components/app.jsx?v=21"></script>
+  <script type="text/babel" src="components/app.jsx?v=23"></script>
 
   <!-- Boot: espera a que los componentes y supabase-js estén listos -->
   <script>
