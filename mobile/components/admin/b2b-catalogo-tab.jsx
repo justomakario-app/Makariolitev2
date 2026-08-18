@@ -3,7 +3,10 @@
 
      1. PRECIO DE LISTA POR CANAL (lo que diga el catálogo de ese canal).
      2. Si ese canal no tiene precio propio, precio_base × su coeficiente
-        (distribuidor 0.55 · mayorista 0.70 · minorista 1.00).
+        (distribuidor 0.55 · mayorista 0.70). Desde 0165 el canal minorista
+        esta APAGADO: no es un canal de venta, es lo que representa
+        precio_base — el neto con coeficiente 1,00 sobre el que se calculan
+        los otros dos. La grilla filtra por activo, asi que no aparece.
 
    El segundo nivel solo no alcanza. En los catálogos de julio la razón
    distribuidor/mayorista va de 0,7545 (Set Mesas Boomerang) a 1,0000

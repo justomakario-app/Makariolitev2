@@ -5,7 +5,7 @@ npm install     # una sola vez
 npm test        # corre las 10 suites
 ```
 
-Verde = `10/10 suites en verde · 502 checks ok · 0 fail`. Si algo sale en rojo,
+Verde = `10/10 suites en verde · 508 checks ok · 0 fail`. Si algo sale en rojo,
 el runner imprime la salida completa de esa suite y devuelve código 1.
 
 No hay build ni framework de testing: son scripts de Node que levantan los

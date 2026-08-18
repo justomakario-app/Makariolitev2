@@ -38,7 +38,7 @@ npm install     # una sola vez, en la máquina
 npm test
 ```
 
-Tiene que decir **`10/10 suites en verde · 498 checks ok · 0 fail`**. Si algo sale en rojo, **no se sube**: el runner imprime la salida de la suite que falló.
+Tiene que decir **`10/10 suites en verde · 508 checks ok · 0 fail`**. Si algo sale en rojo, **no se sube**: el runner imprime la salida de la suite que falló.
 
 El que más importa acá es el primero, `checkjsx.js`: los tres frontends cargan sus `.jsx` como `<script type="text/babel">`, y **todos los archivos de una entrada comparten un solo scope**. Un `const` declarado dos veces en archivos distintos tira `SyntaxError` y deja **la pantalla en blanco** — sin error visible, sin nada. Eso no se ve compilando archivo por archivo ni abriendo la app por arriba, y ya pasó. Detalle de las 10 suites en `tests/README.md`.
 

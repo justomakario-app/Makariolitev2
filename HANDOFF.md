@@ -135,6 +135,26 @@ El veredicto GO inicial fue **rechazado por el dueño**: faltaban 4 correcciones
 
 ## Registro de tareas
 
+### [2026-08-18] ✅ La tienda queda en dos canales: mayorista y distribuidor · `0165`
+
+Decisión del dueño, textual: *"eso de minorista sacalo a la mierda, solo pedí mayoristas y distribuidor"*. El canal `minorista` queda **apagado**.
+
+**Se apaga, no se borra.** `b2b_producto.precio_base` **es** el precio minorista — el neto sin IVA con coeficiente 1,00 — y es la referencia sobre la que se calculan los otros dos (mayorista 0,70 · distribuidor 0,55). Borrar la fila del canal no movería un solo precio, pero dejaría al sistema sin la única definición escrita de qué representa ese número. Volver a prenderlo es `update b2b_canal set activo = true where codigo = 'minorista'`.
+
+**Verificado contra el remoto ANTES de aplicar:** el canal tenía **0 clientes con ese canal activo · 0 clientes habilitados · 0 pedidos · 0 precios de lista propios**. No había nadie adentro. Igual la migración lleva un `do $$` que **aborta** si encuentra un cliente colgado, porque el día que alguien apague un canal con gente adentro el error tiene que saltar en la migración y no en la cara del cliente.
+
+**No hizo falta tocar una línea de frontend.** Las cinco pantallas del panel que listan canales (clientes y solicitudes en web y mobile, catálogo en las dos) ya filtraban con `.filter(c => c.activo !== false)`, las RPC que asignan canal ya exigían `and activo`, y el alta abierta de la tienda (`0163`) **ya** estaba restringida a `('mayorista','distribuidor')` por código. Lo único que se editó fue el comentario de cabecera del catálogo, que seguía enumerando los tres.
+
+**Dato que conviene tener claro y que estaba mal contado:** un cliente **sin canal no ve precios minoristas — no ve precios**. `b2b_fn_coeficiente_actual()` devuelve null y `b2b_rpc_catalogo` corta con *"Tu cuenta todavía no está habilitada para comprar"*. Nunca hubo un fallback a la lista 1,00. Es más seguro de lo que parecía.
+
+**Tests: 502 → 508**, los dos paneles pasaron de 99 a 102. Los cuatro checks que fallaron al apagar el canal fallaron **por lo correcto** (esperaban 3 columnas de precio y 3 catálogos en el modal). Se ajustaron a `CANALES_VISIBLES`, que se calcula del fixture en vez de hardcodear un 2, y se sumaron tres que ahora **protegen la decisión**: que el canal apagado no deje una columna de precios atrás, que no aparezca en el catálogo, y que el modal de catálogos del cliente no lo ofrezca.
+
+> El fixture deja a propósito al cliente `c3` y a su pedido histórico con canal `'minorista'`. Apagar un canal no puede borrar de la vista lo que ya se vendió con él.
+
+**Archivos:** `supabase/migrations/0165_b2b_sin_minorista.sql` (aplicada al remoto), `web/components/admin/b2b-catalogo-tab.jsx`, `mobile/components/admin/b2b-catalogo-tab.jsx`, `tests/b2b-render-test.js`, `DEPLOY.md`, `tests/README.md`.
+
+---
+
 ### [2026-08-18] ✅ El número de factura ahora se ve del lado del cliente
 
 Salió de explicarle al dueño cómo funciona el circuito de facturación y encontrarme con que la mitad no estaba conectada. `b2b_rpc_admin_facturar_pedido` guarda `factura_nro` desde `0158`, `b2b_rpc_mis_pedidos` **ya lo devolvía** al browser del cliente, y el comentario de `b2b-pedidos-tab.jsx` dice textualmente *"acá se anota el número para que el cliente lo vea en Mis pedidos"* — pero **`tienda-pedidos.jsx` nunca lo dibujaba**. El dato viajaba y se tiraba. El cliente veía el cartelito "Facturado" y nada más: para atar su pedido con el comprobante que le llegó por mail tenía que llamar por teléfono, que es exactamente lo que la tienda existe para evitar.

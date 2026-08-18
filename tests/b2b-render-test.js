@@ -54,8 +54,17 @@ const RPC_LOG = [];
 const CANALES = [
   { codigo:'distribuidor', nombre:'Distribuidor', coeficiente:0.55, minimo_pedido:0, minimo_unidades:0, orden:1, activo:true },
   { codigo:'mayorista',    nombre:'Mayorista',    coeficiente:0.70, minimo_pedido:0, minimo_unidades:0, orden:2, activo:true },
-  { codigo:'minorista',    nombre:'Minorista',    coeficiente:1.00, minimo_pedido:0, minimo_unidades:0, orden:3, activo:true },
+  /* Apagado desde 0165 (el duenio dejo la tienda en mayorista + distribuidor).
+     Se deja en el fixture, y no vacio, porque el caso que importa es el de un
+     canal apagado que TODAVIA aparece en datos viejos: el cliente c3 y su
+     pedido siguen teniendo canal 'minorista'. */
+  { codigo:'minorista',    nombre:'Minorista',    coeficiente:1.00, minimo_pedido:0, minimo_unidades:0, orden:3, activo:false },
 ];
+
+/* Lo que el panel muestra NO es CANALES: es CANALES.filter(activo). Desde
+   0165 son dos. Se calcula en vez de escribir "2" para que prender o apagar
+   un canal en el fixture arrastre solo a los checks de abajo. */
+const CANALES_VISIBLES = CANALES.filter(c => c.activo !== false);
 
 const CATALOGO = [
   { sku:'MAD100', modelo:'Mesa Nordica', color:'Blanco', categoria:'Mesas', publicado:true,  precio_base:100000, moneda:'ARS' },
@@ -451,8 +460,14 @@ function check(nombre, cond, extra) {
   await clickTab('Catálogo');
   check('lista el catálogo', cuerpo().includes('MAD100') && cuerpo().includes('MAD300'));
   check('calcula el precio de cada canal sobre el mismo precio base',
-        derivados().includes('55.000,00') && derivados().includes('70.000,00')
-        && derivados().includes('100.000,00'), derivados());
+        derivados().includes('55.000,00') && derivados().includes('70.000,00'), derivados());
+  /* 0165: el minorista se apago. Su coeficiente es 1,00, asi que su columna
+     habria mostrado el precio_base tal cual — o sea, el numero que el cliente
+     NO tiene que poder ver. Que no este es la mitad del punto. */
+  check('★ el canal apagado no deja una columna de precios atras',
+        !derivados().includes('100.000,00'), derivados());
+  check('★ y no aparece por ningun lado del catalogo',
+        !/minorista/i.test(cuerpo()), cuerpo().slice(0, 160));
   check('el producto sin precio no inventa ningún canal',
         camposDe(2).slice(1).every(i => /sin precio/i.test(i.getAttribute('placeholder') || '')),
         camposDe(2).map(i => i.getAttribute('placeholder')).join('|'));
@@ -460,9 +475,9 @@ function check(nombre, cond, extra) {
 
   /* Una fila = precio de lista + un campo por canal (0160). */
   const precios = Array.from(container.querySelectorAll('tbody input[type="number"]'));
-  check('cada producto tiene el precio de lista y uno por canal',
-        precios.length === CATALOGO.length * (1 + CANALES.length)
-        && camposDe(0).length === 4, `hay ${precios.length}`);
+  check('cada producto tiene el precio de lista y uno por canal activo',
+        precios.length === CATALOGO.length * (1 + CANALES_VISIBLES.length)
+        && camposDe(0).length === 1 + CANALES_VISIBLES.length, `hay ${precios.length}`);
   await tipear(camposDe(0)[0], '200000');
   check('los precios por canal se recalculan MIENTRAS se tipea (sin guardar)',
         derivados().includes('110.000,00') && derivados().includes('140.000,00'), derivados());
@@ -477,8 +492,7 @@ function check(nombre, cond, extra) {
      distribuidor no sale de multiplicar la lista. */
   await tipear(camposDe(0)[1], '61000');
   check('un precio propio de canal no mueve el precio de lista ni a los otros canales',
-        camposDe(0)[0].value === '100000'
-        && derivados().includes('70.000,00') && derivados().includes('100.000,00'),
+        camposDe(0)[0].value === '100000' && derivados().includes('70.000,00'),
         `base=${camposDe(0)[0].value} · ${derivados()}`);
   check('el campo con precio propio queda marcado como tal',
         /precio propio/i.test(txt(filas()[0])));
@@ -681,7 +695,15 @@ function check(nombre, cond, extra) {
 
   /* Un catálogo → dos. Es el alta del "mismo usuario, dos listas". */
   await click(filaCli('Corralon Sur').querySelector('button'));
-  check('el modal ofrece los 3 catálogos activos', enModal('.b2b-cli-canal').length === 3);
+  check('el modal ofrece solo los catálogos activos',
+        enModal('.b2b-cli-canal').length === CANALES_VISIBLES.length,
+        `ofrece ${enModal('.b2b-cli-canal').length}`);
+  /* 0165 otra vez: si un canal apagado siguiera apareciendo acá, el primer
+     click del dueño metería un cliente en un catálogo que el backend después
+     le rechaza (b2b_rpc_admin_cliente exige "and activo"). */
+  check('★ y NO ofrece el que está apagado',
+        !/minorista/i.test(enModal('.b2b-cli-canal').map(e => txt(e)).join(' ')),
+        enModal('.b2b-cli-canal').map(e => txt(e)).join(' | '));
   check('viene tildado solo el que tiene',
         enModal('.b2b-cli-canal input:checked').length === 1 && !!chkCanal('Mayorista').checked);
   check('★ con un solo catálogo no se pregunta con cuál arranca (no hay nada que elegir)',
