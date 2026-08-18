@@ -135,6 +135,31 @@ El veredicto GO inicial fue **rechazado por el dueño**: faltaban 4 correcciones
 
 ## Registro de tareas
 
+### [2026-08-18] 🔴 El deploy no salía por dos motivos, y ninguno era el código
+
+El dueño hizo `git push`, apretó **Redeploy** en EasyPanel, el build salió en verde y la app quedó igual. No era el código: `git ls-remote origin master` daba exactamente el HEAD local. El push estaba bien hecho.
+
+**Motivo 1 — este servicio no lee GitHub.** Despliega del **ZIP subido a mano** (lo dice el propio DEPLOY.md paso 2: *"Tab Subir → arrastrar el zip"* / *"NO usar las opciones GitHub / Git"*). "Redeploy" reconstruye la imagen del **mismo ZIP viejo**: tarda sus dos minutos, sale verde, y no cambia una línea. `git push` versiona el código; **no lo lleva al servidor**. Son dos pasos, no uno.
+
+**Motivo 2 — el ZIP que generaban las instrucciones estaba roto.** Y esto es lo grave, porque el error es silencioso:
+
+- **`Compress-Archive` escribe los separadores al revés.** El de Windows PowerShell 5.1 guarda `web\index.html` en vez de `web/index.html`, contra la especificación ZIP. Medido sobre el ZIP que había: **399 entradas con `\`, 0 con `/`**. Windows lo abre igual y parece correcto. El builder de EasyPanel corre sobre Linux: ahí no hay carpetas, hay un archivo llamado literalmente `web\index.html`, y el `COPY web /usr/share/nginx/html` del Dockerfile no encuentra nada.
+- **El script definía `$exclude` y nunca se lo pasaba a `Compress-Archive`.** No excluía nada. El primer ZIP que armé con ese comando dio **73,8 MB**.
+
+**Arreglado con `tar.exe`** (viene con Windows 10 desde la 1803), que escribe el ZIP como corresponde. El DEPLOY.md ahora trae la receta entera — copia limpia con `robocopy` + `tar -a -c -f --format zip` — más un bloque de verificación que cuenta las entradas con backslash y exige **0**, y un recuadro rojo explicando que Redeploy sin subir ZIP nuevo no hace nada.
+
+**Verificado, no supuesto:** el ZIP se extrajo con `unzip` (estilo Linux) y aparecieron las **7 carpetas reales** (`web/ mobile/ tienda/ supabase/ tests/ docs/ scripts/`), 0 archivos con backslash en el nombre, y las cinco rutas que el Dockerfile necesita. Antes de comprimir, el staging se comparó **archivo por archivo contra el working tree**: 0 diferencias.
+
+> Quedó pendiente el `docker build` local como prueba final — Docker Desktop no estaba corriendo y arrancarlo es del dueño.
+
+**De 73,8 MB a 1,69 MB.** Además de `node_modules` y `Catologo mayorista` (68 MB de PDFs), se sacaron `web/uploads/`, `web/screenshots/` y `web/INFORME_TECNICO_BACKEND.md`: **el Dockerfile los borra apenas los copia**, así que eran 2 MB viajando para ser tirados del otro lado.
+
+**Lo que conviene hacer una vez y no volver a pensar:** cambiar el origen del service de "Subir" a **GitHub** (`justomakario-app/Makariolitev2`, rama `master`). Ahí cada push despliega solo y el ZIP deja de ser un paso que se puede olvidar. Es configuración del dueño, y el primer build desde GitHub hay que verlo salir en verde antes de confiarle la operación.
+
+**Archivos:** `DEPLOY.md` (sección 1 reescrita + recuadro en sección 2 + sección de re-deploys).
+
+---
+
 ### [2026-08-18] ✅ La tienda queda en dos canales: mayorista y distribuidor · `0165`
 
 Decisión del dueño, textual: *"eso de minorista sacalo a la mierda, solo pedí mayoristas y distribuidor"*. El canal `minorista` queda **apagado**.

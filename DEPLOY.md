@@ -44,13 +44,36 @@ El que más importa acá es el primero, `checkjsx.js`: los tres frontends cargan
 
 ### 1. Preparar el ZIP del repo
 
+> ⚠️ **Dos trampas que ya rompieron un deploy. Leer antes de copiar y pegar.**
+>
+> **1 · `Compress-Archive` genera un ZIP que el build de EasyPanel no puede usar.** El `Compress-Archive` de Windows PowerShell 5.1 escribe los separadores de carpeta al revés (`web\index.html` en vez de `web/index.html`), contra lo que dice la especificación ZIP. Windows lo abre igual y **parece que está bien**, pero el builder de EasyPanel corre sobre Linux: ahí no ve carpetas, ve un archivo llamado literalmente `web\index.html`. El `COPY web /usr/share/nginx/html` del Dockerfile no encuentra nada y el build falla o sube vacío.
+> **Solución: usar `tar.exe`**, que viene con Windows 10 desde la 1803 y escribe el ZIP como corresponde.
+>
+> **2 · El script viejo definía `$exclude` y después nunca se lo pasaba a `Compress-Archive`.** O sea que no excluía nada: se llevaba `node_modules/` entero. Si alguna vez el ZIP te dio 70 MB, era esto.
+
 Desde la raíz del proyecto (`App makario lite nueva-handoff/`):
 
-**En PowerShell** (Windows):
+**En PowerShell** (Windows) — copia a una carpeta limpia y comprime con `tar`:
 ```powershell
-# Excluye node_modules, .git, .env.local, .mcp.json, dist y otros
-$exclude = @('node_modules','.git','dist','build','.env','.env.local','.mcp.json','.vscode','.idea','*.log')
-Compress-Archive -Path * -DestinationPath ..\macario-lite-deploy.zip -Force
+$src   = (Get-Location).Path
+$stage = Join-Path $env:TEMP "macario-stage"
+$zip   = Join-Path (Split-Path $src -Parent) "macario-lite-deploy.zip"
+
+# 1) Copia limpia. Lo de /XD y /XF es lo que NO tiene que viajar.
+if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
+robocopy $src $stage /E /NFL /NDL /NJH /NJS `
+  /XD node_modules .git .vscode .idea .claude .codex dist build `
+      "Catologo mayorista" app-makario-lite-nueva uploads screenshots `
+  /XF .env .env.local .mcp.json *.log *.zip *.xlsx INFORME_TECNICO_BACKEND.md | Out-Null
+# robocopy devuelve 1 cuando copió bien. No es un error.
+
+# 2) Comprimir con tar.exe — NO con Compress-Archive (ver la advertencia de arriba)
+if (Test-Path $zip) { Remove-Item $zip -Force }
+Push-Location $stage
+& C:\Windows\system32\tar.exe -a -c -f $zip --format zip -- (Get-ChildItem -Force | ForEach-Object Name)
+Pop-Location
+
+"{0:N2} MB — $zip" -f ((Get-Item $zip).Length / 1MB)
 ```
 
 **En Bash / Git Bash**:
@@ -60,10 +83,24 @@ zip -r ../macario-lite-deploy.zip . \
     -x "node_modules/*" "**/node_modules/*" \
        ".git/*" "**/dist/*" "**/build/*" \
        ".env" ".env.local" "**/.env" "**/.env.local" \
-       ".mcp.json" ".vscode/*" ".idea/*" "*.log"
+       ".mcp.json" ".vscode/*" ".idea/*" ".claude/*" ".codex/*" \
+       "Catologo mayorista/*" "app-makario-lite-nueva/*" \
+       "web/uploads/*" "web/screenshots/*" "web/INFORME_TECNICO_BACKEND.md" \
+       "*.log" "*.zip" "*.xlsx"
 ```
 
-El ZIP debería pesar entre 2-10 MB. Si pesa más, algo de `node_modules/` se coló.
+`web/uploads/`, `web/screenshots/` y `web/INFORME_TECNICO_BACKEND.md` se excluyen porque **el Dockerfile los borra apenas los copia** (línea `RUN rm -rf …`). Mandarlos es cargar 2 MB para tirarlos del otro lado.
+
+El ZIP tiene que pesar **entre 1,5 y 10 MB**. Si pesa 70 MB se coló `node_modules/` o `Catologo mayorista/`.
+
+**Verificación antes de subir** — que el ZIP no tenga el problema de las barras:
+```powershell
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$n = @([System.IO.Compression.ZipFile]::OpenRead($zip).Entries | ForEach-Object { $_.FullName })
+"entradas: {0} · con backslash: {1}  <- tiene que ser 0" -f $n.Count, @($n | Where-Object { $_ -match '\\' }).Count
+@('Dockerfile','nginx.conf','web/Macario Lite.html','mobile/index.html','tienda/index.html') |
+  ForEach-Object { if ($n -contains $_) { "  OK    $_" } else { "  FALTA $_" } }
+```
 
 ### 2. En EasyPanel — configurar el Service
 
@@ -72,6 +109,14 @@ El ZIP debería pesar entre 2-10 MB. Si pesa más, algo de `node_modules/` se co
 3. **NO usar** las opciones GitHub / Git por ahora (a menos que tengas el repo subido a GitHub).
 
 EasyPanel detecta automáticamente el `Dockerfile` en la raíz del ZIP y lo usa como instrucciones de build.
+
+> 🔴 **Este servicio NO lee GitHub. Despliega del ZIP que subiste a mano.**
+>
+> Es la confusión más cara de este deploy, así que queda escrita: **hacer `git push` no cambia nada en la app**. El código sube al repo, sí, pero EasyPanel no está mirando el repo — está guardando una copia del último ZIP.
+>
+> Y el botón **"Redeploy" tampoco alcanza**: reconstruye la imagen a partir del **mismo ZIP viejo**. El build sale en verde, tarda sus 2 minutos, y la app queda exactamente igual que antes. Parece que falló el código; lo que pasó es que nunca llegó.
+>
+> Para que un cambio se vea en la app hay que hacer **las dos cosas**: `git push` (para que el código quede versionado) **y** subir un ZIP nuevo (para que el código llegue al servidor). Si alguna vez subís algo y "no se ve", empezá por acá antes de tocar el código.
 
 ### 3. Build args — **no hace falta ninguna**
 
@@ -262,12 +307,17 @@ VITE_SUPABASE_ANON_KEY=<eyJhbGc...>
 
 Cada vez que pushees cambios al código:
 
-1. Re-zippear el repo (mismo comando de paso 1).
-2. EasyPanel → Service → "Subir" → reemplazar ZIP.
+0. `npm test` → tiene que dar **0 fail**. Si algo está en rojo, no se sube.
+1. Re-zippear el repo (mismo comando de paso 1 — **con `tar.exe`**, no con `Compress-Archive`).
+2. EasyPanel → Service → "Subir" → reemplazar ZIP. **Este paso no se puede saltear.**
 3. Click "Rebuild" → tarda 1-3 min.
 4. Service worker autodetecta la nueva versión y la actualiza en el browser del operario al refrescar.
 
-Si querés automatizar esto (CI/CD), conectá el repo a GitHub y EasyPanel puede hacer auto-deploy en cada push a main.
+⚠️ **El paso 2 es el que se olvida.** Apretar "Redeploy" sin haber subido el ZIP nuevo reconstruye el ZIP anterior: build verde, cero cambios. Ver el recuadro rojo del paso 2 de arriba.
+
+> **Detalle de la tienda (`/tienda/`):** los `.jsx` y el `.css` se cargan con un `?v=N` en `tienda/index.html`. Si tocás un archivo de `tienda/components/` o `tienda.css` **y no subís el `?v=`**, el browser del mayorista sigue sirviendo la versión cacheada aunque el deploy haya salido bien. La suite `tienda-render-test.js` chequea que el número esté al día.
+
+**Si querés dejar de hacer esto a mano** (recomendado): en el service de EasyPanel, cambiar el origen de "Subir" a **GitHub**, apuntando a `justomakario-app/Makariolitev2`, rama `master`. A partir de ahí cada `git push` dispara el deploy solo y el ZIP deja de existir como paso. Es un cambio de configuración del dueño, y conviene hacerlo en un momento tranquilo: el primer build desde GitHub hay que verlo salir en verde antes de confiarle la operación.
 
 ## Troubleshooting
 
