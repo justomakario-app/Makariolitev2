@@ -135,6 +135,28 @@ El veredicto GO inicial fue **rechazado por el dueño**: faltaban 4 correcciones
 
 ## Registro de tareas
 
+### [2026-08-18] ✅ "Olvidé mi contraseña" en la tienda — el hueco que quedaba abierto del alta por link
+
+Lo dejé escrito la entrada de abajo como pendiente y lo cierro acá mismo, porque no es un detalle: **desde que el alta es abierta, nadie del lado de Makario conoce ni puede setear la contraseña de un cliente.** El cliente la elige él cuando se registra. Si se la olvida y no la puede recuperar solo, el único camino era que alguien tocara `auth.users` a mano — o sea, un cliente que deja de comprar hasta que alguien se acuerde de rescatarlo. Todo del lado del código; **no hay migración**, Supabase ya trae el circuito de recuperación.
+
+**Cómo funciona, de punta a punta.** En la pantalla de entrar, debajo del campo de contraseña, aparece **"Olvidé mi contraseña"** — y se lleva el correo que ya venía escrito, porque volver a tipearlo es exactamente lo que molesta cuando ya estás peleando con la clave. Esa pantalla llama a `resetPasswordForEmail` con el correo en minúsculas y un **`redirectTo` calculado desde la propia página** (`window.location.origin + pathname`), no una URL escrita a mano: la tienda funciona igual en el dominio de producción, en una preview o en `localhost`, sin recompilar nada.
+
+El mail vuelve a `/tienda/` con los tokens **en el hash**. Y acá está el detalle que no era obvio: el cliente de Supabase de la tienda se crea con **`detectSessionInUrl: false`** (está así desde que se separó la sesión de la tienda de la del personal), así que **nadie consume ese hash solo**. Hay que leerlo a mano. Eso hace `leerRecuperacionDeUrl()` en `tienda-acceso.jsx`, que corre **una sola vez al cargar el archivo** — antes de que React monte nada — y devuelve una de tres cosas: los tokens, un `{error}` legible si el link vino vencido (Supabase manda `error_code=otp_expired`), o `null` si el hash no es de recuperación. En los dos primeros casos **borra el hash con `replaceState`**: un `access_token` colgado en la barra de direcciones queda en el historial del browser y en cualquier captura de pantalla que el cliente mande por WhatsApp.
+
+Esa lectura entra a `tienda-app.jsx` como estado inicial y **la compuerta va primero, antes incluso de mirar si hay sesión**. Es a propósito: si alguien abre un link de recuperación en un browser donde ya había una sesión abierta, lo que vino a hacer es cambiar la clave, no seguir comprando. La pantalla nueva canjea el token por sesión (`setSession`) y recién ahí habilita el formulario — pide la contraseña dos veces, mínimo 8, **y no pide la vieja**, porque el link del mail ya es la prueba de que la persona tiene ese correo. Si el token no abre sesión (link usado, vencido, o abierto en otro browser), no muestra un formulario que va a fallar al guardar: muestra *"El link no sirve más"* y un botón para pedir otro. Al guardar bien, entra derecho a la tienda — no lo manda de nuevo al login a repetir la contraseña que acaba de elegir.
+
+**La decisión de seguridad de esta pantalla: la respuesta es siempre la misma, exista o no la cuenta.** *"Si tal correo tiene una cuenta acá, te llegó un link."* Decir *"ese correo no está registrado"* convertiría la pantalla en un **detector de clientes de Makario**: cualquiera prueba correos hasta encontrar cuáles compran acá. Por eso tampoco se muestra el error crudo de Supabase. La **única** excepción es el límite de envíos — ahí sí se dice, porque la solución del cliente es esperar, y si no se lo decís aprieta el botón cinco veces y agota la cuota de correos para todos.
+
+**Tests: 467 → 498, 10/10 suites en verde.** La suite de la tienda pasó de 95 a **126**. Dos cosas del arnés hubo que arreglar para poder probar esto de verdad: el jsdom arrancaba en `about:blank` (sin origin, sin pathname, y `replaceState` tirando error), así que ahora arranca en una URL real; y `signOut` del Supabase falso ahora avisa por `onAuthStateChange`, como el de verdad. Lo que se cubre: que el link no delate si el correo existe **ni siquiera cuando el servidor devuelve error**, que el límite de envíos sí se explique, que el hash se lea bien en los tres casos y **que el token se borre de la URL**, que la compuerta gane con sesión abierta, que una contraseña corta o distinta no llegue a `updateUser`, que un link roto no gaste un intento contra el servidor, y que "Cancelar" cierre la sesión que abrió el link en vez de dejarla viva.
+
+Verificado además con **mutantes**: se rompieron a propósito las tres piezas que importan (no borrar el hash, delatar si la cuenta existe, aceptar contraseñas cortas) y los checks correspondientes **fallaron**. Un test que pasa igual cuando la feature está rota no protege nada.
+
+**⚠️ Lo que tiene que hacer el dueño para que esto ande — es una sola cosa y sin ella no funciona:** agregar `https://tu-dominio.com/tienda/` en **Supabase → Authentication → URL Configuration → Redirect URLs**. Supabase acepta el `redirectTo` **solo si está en esa lista**; si no está, manda el mail a la **Site URL** — que es el login del **personal** — sin avisar y sin error. El cliente termina mirando una pantalla que no es la suya, con el token colgado. Está anotado en `DEPLOY.md` (paso 4c) junto con las otras dos de Auth. Vale también recordar que el SMTP que trae Supabase de fábrica tiene un límite bajo de correos por hora: para volumen real, va un SMTP propio.
+
+**Archivos:** `tienda/components/tienda-acceso.jsx` (`leerRecuperacionDeUrl`, `limpiarHash`, `urlDeVuelta`, `FormOlvide`, `PantallaNuevaPass`), `tienda/components/tienda-app.jsx` (la compuerta), `tienda/components/tienda-ui.jsx` (iconos `mail` y `key`), `tienda/tienda.css`, `tienda/index.html` (`?v` bumpeados), `tests/tienda-render-test.js`, `DEPLOY.md`, `tests/README.md`.
+
+---
+
 ### [2026-08-18] ✅ Alta por link (el cliente se crea su propio acceso) · **un usuario, dos catálogos**: elige en cada ingreso · el panel decide qué catálogos ve cada cliente · `0162`–`0164`
 
 Salió del pedido del dueño: *"ellos crean su propio login… cuando él envíe el link"*, *"la siguiente solapa… es qué catálogo quieren ver, si el mayorista o el distribuidor"*, *"no tienen que ser un usuario para cada uno, puede ser el mismo usuario y que ellos elijan"*, más el mínimo de compra por canal y verificar los precios contra los catálogos de agosto. Las tres migraciones están **aplicadas y verificadas en el remoto**. Sobre lo visual, la instrucción fue explícita — *"que se sienta premium, que sea una experiencia"* — y las dos pantallas nuevas son las que ve el cliente, así que se terminaron a ese nivel, no a "funciona".
@@ -207,11 +229,11 @@ De paso apareció que **la pestaña *Clientes* no tenía ni un check y el test d
 |---|---|
 | **Redeploy en EasyPanel** (`app_gestion_interna / makario_lite_nueva`) | Regla permanente: Claude no toca EasyPanel. **Hasta que no se haga, nada de esto se ve**: la base ya está lista, el frontend no. |
 | Cargar los montos mínimos por canal | Los tiene que definir el dueño. UI y backend listos. |
-| `git push` | La credencial de `justomakario-app` la autentica el dueño (regla de aislamiento: no se prueba otra cuenta). El **commit sí está hecho**. |
+| ~~`git push`~~ | **✅ HECHO** (`a9ee1b9`). La credencial de `justomakario-app` quedó guardada, los push siguientes salen solos. |
 | Smoke con Seba | Necesita el sitio ya desplegado y una persona. |
 | Los 2 toggles de Auth del Dashboard | El MCP de Supabase no tiene herramienta de configuración de Auth. **Nota importante: con el alta por edge function, *"Allow new users to sign up"* puede seguir APAGADO** — la function crea el usuario con `service_role`. Lo que sí conviene prender es la protección de contraseñas filtradas. |
 
-**Un hueco que dejo escrito porque no está hecho: no hay "olvidé mi contraseña".** Si un cliente se olvida la clave, hoy no tiene forma de recuperarla solo. Hace falta una pantalla de recuperación adentro de `/tienda/` **y** configuración de Auth que solo puede tocar el dueño (plantilla de mail + redirect URL). No lo improviso a medias: con el alta abierta, es lo próximo que hay que hacer.
+~~**Un hueco que dejo escrito porque no está hecho: no hay "olvidé mi contraseña".**~~ → **CERRADO el mismo día**, ver la entrada de arriba. Queda pendiente **del dueño** una sola cosa para que ande: la Redirect URL en Supabase Auth.
 
 ### [2026-08-17] ✅ Tienda **cargada y publicada** (14 productos con precio propio por canal) · el rol `ventas` entra al panel · los chequeos pasan a vivir en el repo (`npm test`)
 

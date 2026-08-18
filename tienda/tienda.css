@@ -686,6 +686,29 @@ button { font: inherit; color: inherit; }
 .t-canal-chip-fijo { cursor: default; background: var(--paper-off); color: var(--ink-soft); }
 .t-canal-chip-fijo:hover { background: var(--paper-off); border-color: var(--border-md); }
 
+/* ── Recuperar la contraseña ───────────────────────────────────────────
+   El "Olvidé mi contraseña" va PEGADO al campo de la clave, alineado a la
+   derecha y sin el subrayado de los demás links: es una salida de emergencia,
+   no una acción que compita con el botón de entrar. */
+.t-link-fin {
+  align-self: flex-end; margin-top: -6px; padding-top: 0;
+  font-size: 12.5px; font-weight: 600; color: var(--ink-muted);
+  text-decoration: none;
+}
+.t-link-fin:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+
+/* Confirmación de "te mandamos el mail". No es un cartel de aviso: es el
+   final del camino, y ocupa la pantalla como tal. */
+.t-listo { text-align: center; padding: 6px 0 2px; }
+.t-listo-icono {
+  width: 52px; height: 52px; margin: 0 auto; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--blue-bg); color: var(--blue);
+}
+.t-listo-titulo { font-size: 17px; font-weight: 700; margin-top: 12px; }
+.t-listo-texto { font-size: 13.5px; color: var(--ink-soft); margin-top: 8px; }
+.t-listo .t-help { margin-top: 12px; }
+
 /* ── Responsive de estas pantallas ─────────────────────────────────────── */
 @media (max-width: 860px) {
   /* El panel oscuro se esconde: en el celular el cliente viene a completar
@@ -704,6 +727,10 @@ button { font: inherit; color: inherit; }
 @media (max-width: 620px) {
   .t-fila { grid-template-columns: 1fr; gap: 0; }
   .t-paso-t { display: none; }
+
+  /* En 360px el link no puede quedar tan pegado al campo: el pulgar apunta
+     al ojito de la contraseña y termina abriendo la recuperación. */
+  .t-link-fin { margin-top: 0; padding: 4px 0; }
   .t-pasos { gap: 6px; }
   .t-paso { flex: none; }
 

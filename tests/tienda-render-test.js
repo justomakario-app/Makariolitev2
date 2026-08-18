@@ -28,7 +28,8 @@ const ROOT = process.argv[2];
 const TIENDA = path.join(ROOT, 'tienda', 'components');
 const DATA = path.join(ROOT, 'web', 'components', 'b2b-data.js');
 
-const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
+const dom = new JSDOM('<!doctype html><div id="root"></div>',
+  { url:'http://localhost/tienda/', pretendToBeVisual: true });
 global.window = dom.window;
 global.document = dom.window.document;
 global.navigator = dom.window.navigator;
@@ -107,6 +108,13 @@ let FN_RESPUESTA = FN_OK;
 let SESION = null;
 let AUTH_CB = null;
 let ENVIADOS = 0;
+/* Todo lo que la tienda le pide a auth que no sea entrar/salir. Se mira el
+   log en vez de espiar cada método: lo que importa es QUÉ se le mandó a
+   Supabase (el correo en minúsculas, el redirectTo, la contraseña nueva). */
+const AUTH_LOG = [];
+let RESET_ERROR   = null;   // lo que devuelve resetPasswordForEmail
+let SESSION_ERROR = null;   // lo que devuelve setSession (link vencido)
+let UPDATE_ERROR  = null;   // lo que devuelve updateUser
 
 const SUPA = {
   auth: {
@@ -120,7 +128,22 @@ const SUPA = {
       SESION = { user:{ id:'u1', email } };
       return { data:{ session:SESION }, error:null };
     },
-    signOut: async () => { SESION = null; return { error:null }; },
+    signOut: async () => { AUTH_LOG.push({ m:'signOut' }); SESION = null; if (AUTH_CB) AUTH_CB('SIGNED_OUT', null); return { error:null }; },
+    resetPasswordForEmail: async (email, opts) => {
+      AUTH_LOG.push({ m:'reset', email, redirectTo: opts && opts.redirectTo });
+      return { data:{}, error: RESET_ERROR };
+    },
+    setSession: async ({ access_token, refresh_token }) => {
+      AUTH_LOG.push({ m:'setSession', access_token, refresh_token });
+      if (SESSION_ERROR) return { data:{ session:null }, error: SESSION_ERROR };
+      SESION = { user:{ id:'u1', email:'ana@corralon.com' } };
+      if (AUTH_CB) AUTH_CB('PASSWORD_RECOVERY', SESION);
+      return { data:{ session:SESION }, error:null };
+    },
+    updateUser: async ({ password }) => {
+      AUTH_LOG.push({ m:'updateUser', password });
+      return { data:{}, error: UPDATE_ERROR };
+    },
   },
   storage: {
     from: () => ({ getPublicUrl: (p) => ({ data:{ publicUrl:'https://cdn/' + p } }) }),
@@ -231,8 +254,14 @@ async function montar(cuenta, opts) {
   SESION = o.sinSesion ? null : { user:{ id:'u1', email:'ana@corralon.com' } };
   ITEMS = o.items ? o.items.slice() : [];
   DATOS = { direccion_entrega:null, fecha_entrega_deseada:null, notas:null };
-  RPC_LOG.length = 0; FN_LOG.length = 0; ENVIADOS = 0;
+  RPC_LOG.length = 0; FN_LOG.length = 0; AUTH_LOG.length = 0; ENVIADOS = 0;
   FN_RESPUESTA = o.signup || FN_OK;
+  RESET_ERROR = o.resetError || null;
+  SESSION_ERROR = o.sessionError || null;
+  UPDATE_ERROR = o.updateError || null;
+  /* El hash se lee UNA vez, al cargar el archivo de acceso, así que acá se
+     pisa el resultado en vez de tocar la URL: es lo mismo que ve la app. */
+  dom.window.TiendaAcceso.RECUPERACION = o.recuperar || null;
   if (root) await act(async () => root.unmount());
   root = ReactDOMClient.createRoot(container);
   await act(async () => { root.render(React.createElement(dom.window.TiendaRoot)); });
@@ -682,6 +711,140 @@ const SIN_ELEGIR = Object.assign({}, APROBADO, { canal_elegido:false });
   await montar(APROBADO);
   check('el que ya eligió entra derecho al catálogo',
         !container.querySelector('.t-elegir') && rpcs().includes('b2b_rpc_catalogo'));
+
+
+  /* (9) Olvidé mi contraseña ------------------------------------------
+     Con el alta abierta nadie le manda la clave al cliente: si se la olvida
+     y no puede recuperarla solo, deja de comprar. */
+  console.log('\n— Olvidé mi contraseña —');
+
+  const leerUrl = () => dom.window.TiendaAcceso.leerRecuperacionDeUrl();
+  const authUlt = (m) => [...AUTH_LOG].reverse().find(x => x.m === m);
+  const TOKENS = { access_token:'tok-abc', refresh_token:'ref-xyz' };
+
+  await montar(APROBADO, { sinSesion:true });
+  check('★ el login ofrece recuperar la contraseña', !!boton('Olvidé mi contraseña'));
+
+  /* Se lleva el correo tipeado: volver a escribirlo es justo lo que molesta
+     cuando ya venís peleando con la clave. */
+  await tipear(container.querySelector('#ac-email'), 'Ana@Corralon.com');
+  await click(boton('Olvidé mi contraseña'));
+  check('★ arrastra el correo que ya había escrito',
+        !!container.querySelector('#ol-email')
+        && container.querySelector('#ol-email').value === 'Ana@Corralon.com',
+        container.querySelector('#ol-email') && container.querySelector('#ol-email').value);
+  check('no pide la contraseña vieja ni ningún otro dato',
+        container.querySelectorAll('.t-form input').length === 1);
+
+  await click(boton('Mandame el link'));
+  const reset = authUlt('reset');
+  check('★ pide el link con el correo en minúsculas',
+        !!reset && reset.email === 'ana@corralon.com', JSON.stringify(reset));
+  check('★ el link del mail vuelve a ESTA misma tienda, no a una URL escrita a mano',
+        !!reset && typeof reset.redirectTo === 'string'
+        && reset.redirectTo === dom.window.location.origin + dom.window.location.pathname,
+        reset && reset.redirectTo);
+  check('★ la confirmación NO revela si esa cuenta existe',
+        /Si\s+ana@corralon\.com\s+tiene una cuenta/i.test(cuerpo()), cuerpo().slice(0, 200));
+  check('avisa cuánto dura el link', /una hora/i.test(cuerpo()));
+
+  /* Un error cualquiera del servidor tampoco puede convertir esta pantalla en
+     un detector de clientes. */
+  await montar(APROBADO, { sinSesion:true, resetError:{ message:'User not found' } });
+  await click(boton('Olvidé mi contraseña'));
+  await tipear(container.querySelector('#ol-email'), 'quien@sea.com');
+  await click(boton('Mandame el link'));
+  check('★ un error del servidor tampoco delata si el correo está registrado',
+        /tiene una cuenta/i.test(cuerpo()) && !/not found/i.test(cuerpo()));
+
+  /* El límite de envíos SÍ se muestra: ahí la solución es esperar. */
+  await montar(APROBADO, { sinSesion:true, resetError:{ message:'For security purposes, you can only request this after 47 seconds' } });
+  await click(boton('Olvidé mi contraseña'));
+  await tipear(container.querySelector('#ol-email'), 'ana@corralon.com');
+  await click(boton('Mandame el link'));
+  check('★ el límite de envíos sí se explica, para que no reintente al pedo',
+        /esperá unos minutos/i.test(cuerpo()) && !/tiene una cuenta/i.test(cuerpo()),
+        cuerpo().slice(0, 200));
+
+  /* ── Lo que llega del mail ─────────────────────────────────────────── */
+  dom.window.location.hash = '';
+  check('sin hash no hay recuperación', leerUrl() === null);
+
+  dom.window.location.hash = '#access_token=tok-abc&refresh_token=ref-xyz&type=recovery';
+  const leido = leerUrl();
+  check('★ lee los tokens del link del mail',
+        !!leido && leido.access_token === 'tok-abc' && leido.refresh_token === 'ref-xyz',
+        JSON.stringify(leido));
+  check('★ y BORRA el token de la barra de direcciones (no queda en el historial ni en un screenshot)',
+        (dom.window.location.hash || '') === '', dom.window.location.hash);
+
+  dom.window.location.hash = '#access_token=t&type=signup';
+  check('un link que no es de recuperación no abre esta pantalla', leerUrl() === null);
+
+  dom.window.location.hash = '#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired';
+  const vencido = leerUrl();
+  check('★ el link vencido se reconoce y se explica (no queda en blanco)',
+        !!vencido && !!vencido.error && /venció/i.test(vencido.error), JSON.stringify(vencido));
+  dom.window.location.hash = '';
+
+  /* ── La pantalla de contraseña nueva ───────────────────────────────── */
+  await montar(APROBADO, { recuperar: TOKENS });
+  check('★ el link de recuperación gana incluso si ya había sesión abierta en ese browser',
+        /contraseña nueva/i.test(cuerpo()) && !container.querySelector('.t-app'),
+        cuerpo().slice(0, 120));
+  check('★ canjea el token del mail por una sesión antes de dejar cambiar nada',
+        !!authUlt('setSession') && authUlt('setSession').access_token === 'tok-abc');
+  check('no pide la contraseña vieja: el link ya prueba que tiene el correo',
+        !/actual/i.test(cuerpo()));
+
+  const guardarNueva = () => boton('Guardar y entrar');
+  check('con los campos vacíos no deja guardar', !!guardarNueva() && guardarNueva().disabled);
+
+  await tipear(container.querySelector('#np-p1'), 'corta');
+  await tipear(container.querySelector('#np-p2'), 'corta');
+  check('★ contraseña corta: avisa y no deja guardar',
+        /al menos 8/i.test(cuerpo()) && guardarNueva().disabled);
+
+  await tipear(container.querySelector('#np-p1'), 'clavenueva123');
+  await tipear(container.querySelector('#np-p2'), 'clavenueva124');
+  check('★ si las dos no coinciden, avisa y no deja guardar',
+        /no coinciden/i.test(cuerpo()) && guardarNueva().disabled);
+  check('y no llegó ninguna escritura a auth', !authUlt('updateUser'));
+
+  await tipear(container.querySelector('#np-p2'), 'clavenueva123');
+  check('con las dos iguales y largas, recién ahí habilita', !guardarNueva().disabled);
+  await click(guardarNueva());
+  check('★ guarda la contraseña nueva',
+        !!authUlt('updateUser') && authUlt('updateUser').password === 'clavenueva123');
+  check('★ y lo deja adentro de la tienda, sin volver a pedirle que entre',
+        !!container.querySelector('.t-app') && !/contraseña nueva/i.test(cuerpo()),
+        cuerpo().slice(0, 120));
+
+  /* Link ya usado o vencido: el token no abre sesión. */
+  await montar(APROBADO, { recuperar: TOKENS, sessionError:{ message:'Invalid Refresh Token' } });
+  check('★ link vencido: lo dice y ofrece pedir otro, no una pantalla rota',
+        /no sirve más/i.test(cuerpo()) && !!boton('Pedir uno nuevo'), cuerpo().slice(0, 160));
+  check('y no ofrece escribir una contraseña que no va a poder guardar',
+        !container.querySelector('#np-p1'));
+
+  /* El hash con error ni siquiera intenta abrir sesión. */
+  await montar(APROBADO, { recuperar:{ error:'Ese link ya venció. Pedí uno nuevo, dura una hora.' } });
+  check('★ un link roto no gasta un intento contra el servidor', !authUlt('setSession'));
+
+  /* Arrepentirse tiene que cerrar la sesión de recuperación, no dejarla viva. */
+  await montar(APROBADO, { recuperar: TOKENS });
+  await click(boton('Cancelar'));
+  check('★ cancelar cierra la sesión que abrió el link', !!authUlt('signOut'));
+  check('y vuelve a la pantalla de entrar',
+        !!container.querySelector('#ac-email'), cuerpo().slice(0, 120));
+
+  /* Que la pantalla exista no sirve si el archivo no se sirve. */
+  const HTML_RECU = fs.readFileSync(path.join(ROOT, 'tienda', 'index.html'), 'utf8');
+  check('★ tienda-ui.jsx cambió de versión (los iconos nuevos)',
+        /tienda-ui\.jsx\?v=([2-9]|\d\d)/.test(HTML_RECU));
+  check('★ tienda-acceso.jsx y tienda-app.jsx también',
+        /tienda-acceso\.jsx\?v=([4-9]|\d\d)/.test(HTML_RECU)
+        && /tienda-app\.jsx\?v=([5-9]|\d\d)/.test(HTML_RECU));
 
   console.log(`\n${pass}/${pass + fail} checks · fallos: ${fail}\n`);
   process.exit(fail ? 1 : 0);

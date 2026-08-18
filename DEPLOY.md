@@ -38,7 +38,7 @@ npm install     # una sola vez, en la máquina
 npm test
 ```
 
-Tiene que decir **`10/10 suites en verde · 467 checks ok · 0 fail`**. Si algo sale en rojo, **no se sube**: el runner imprime la salida de la suite que falló.
+Tiene que decir **`10/10 suites en verde · 498 checks ok · 0 fail`**. Si algo sale en rojo, **no se sube**: el runner imprime la salida de la suite que falló.
 
 El que más importa acá es el primero, `checkjsx.js`: los tres frontends cargan sus `.jsx` como `<script type="text/babel">`, y **todos los archivos de una entrada comparten un solo scope**. Un `const` declarado dos veces en archivos distintos tira `SyntaxError` y deja **la pantalla en blanco** — sin error visible, sin nada. Eso no se ve compilando archivo por archivo ni abriendo la app por arriba, y ya pasó. Detalle de las 10 suites en `tests/README.md`.
 
@@ -162,18 +162,27 @@ Está en `supabase/functions/b2b_signup/index.ts`. Desplegada como **v3, `ACTIVE
 
 **`verify_jwt` tiene que quedar en `true`.** Parece contradictorio para un alta sin sesión, pero la anon key **es** un JWT válido: eso es exactamente lo que le permite a la tienda invocarla antes de que el cliente tenga cuenta, sin abrirla a cualquiera sin credencial ninguna. Ponerla en `false` no habilita nada nuevo, solo saca una capa.
 
-### 4. Verificar que el registro público esté APAGADO — ⚠️ **PENDIENTE (es del dueño)**
+### 4. Tres cosas de Authentication — ⚠️ **PENDIENTE (son del dueño, son de Dashboard)**
 
-Dashboard → Authentication → Providers → Email → **"Allow new users to sign up" = OFF**.
-**Verificado el 2026-08-15: sigue en ON.**
+**a) "Allow new users to sign up" = OFF.** Dashboard → Authentication → Providers → Email. **Verificado el 2026-08-15: sigue en ON.**
 
-Es la pieza que sostiene todo lo demás: `handle_new_user` lee el rol desde `raw_user_meta_data`, y en un signup público ese metadata lo elige quien se registra. Con el registro abierto, cualquiera con la anon key pide `role='owner'` y entra al sistema de la planta. Con el registro cerrado, el único camino de alta es `b2b_signup`, que valida el código de invitación contra la base antes de crear nada.
+Es la pieza que sostiene todo lo demás: `handle_new_user` lee el rol desde `raw_user_meta_data`, y en un signup público ese metadata lo elige quien se registra. Con el registro abierto, cualquiera con la anon key pide `role='owner'` y entra al sistema de la planta.
 
-**`0155` ya cierra este agujero desde la base** — `handle_new_user` exige la marca `app_metadata.interno`, que solo puede poner el `service_role`, así que un alta por afuera queda sin `profile` y no ve nada, y se registra en `auth_alta_bloqueada`. Aun así **hay que apagarlo igual**: una defensa que depende de una sola pieza no es una defensa, y con el registro abierto cualquiera puede seguir creando usuarios basura en `auth.users`.
+> ⚠️ **No confundir con el alta abierta de la tienda.** Desde `0163` el mayorista se crea la cuenta solo, sin invitación — pero **el alta no la hace el browser**: la hace la edge function `b2b_signup` con `service_role` (Admin API), que no mira ese toggle. **Apagarlo NO rompe el alta por link.** Lo único que cierra es la creación de usuarios con la anon key, que es exactamente lo que sobra.
 
-**En la misma pantalla, prender leaked-password protection** (Authentication → Policies → *Prevent use of leaked passwords*). El advisor de Supabase lo marca como **WARN, sigue apagado** (verificado el 2026-08-17). Rechaza contraseñas que ya aparecieron en filtraciones conocidas, contra HaveIBeenPwned.
+**`0155` ya cierra este agujero desde la base** — `handle_new_user` exige la marca `app_metadata.interno`, que solo puede poner el `service_role`, así que un alta por afuera queda sin `profile` y no ve nada, y se registra en `auth_alta_bloqueada`. Aun así **hay que apagarlo igual**: una defensa que depende de una sola pieza no es una defensa.
 
-**Los dos son del dueño y son de Dashboard.** No se pueden hacer desde acá: el MCP de Supabase tiene SQL, migraciones, edge functions y advisors, pero **ninguna herramienta de configuración de Auth**. La otra vía sería la Management API con un PAT, que en este proyecto está prohibido usar.
+**b) Leaked-password protection = ON** (Authentication → Policies → *Prevent use of leaked passwords*). El advisor de Supabase lo marca como **WARN, sigue apagado** (verificado el 2026-08-17). Rechaza contraseñas que ya aparecieron en filtraciones conocidas, contra HaveIBeenPwned. Con el alta abierta y el cliente eligiendo su propia clave, esto pasó de "estaría bueno" a necesario.
+
+**c) La URL de la tienda tiene que estar en "Redirect URLs"** (Authentication → URL Configuration). Agregar:
+
+```
+https://tu-dominio.com/tienda/
+```
+
+Sin eso, el link de "olvidé mi contraseña" **no vuelve a la tienda**: Supabase lo manda a la Site URL, que es el login del **personal**, y el cliente se queda mirando una pantalla que no es la suya con el token colgado en la URL. La tienda pide el link con `redirectTo` apuntando a su propia página, pero Supabase solo respeta un `redirectTo` que esté en esa lista.
+
+**Los tres son del dueño y son de Dashboard.** No se pueden hacer desde acá: el MCP de Supabase tiene SQL, migraciones, edge functions y advisors, pero **ninguna herramienta de configuración de Auth**. La otra vía sería la Management API con un PAT, que en este proyecto está prohibido usar.
 
 ### 5. Cargar los precios de los SKU vendibles — ✅ **YA HECHO el 2026-08-17 (14 productos publicados)**
 
@@ -212,6 +221,8 @@ Prenderlo **no expuso nada**: no hay ningún producto publicado, no existe ning�
 - ✅ **La pantalla de acceso ofrece "Crear mi cuenta"** (alta abierta) y, abajo, "Tengo un código de invitación". Si solo aparece el código, el browser está sirviendo la versión vieja de `tienda-acceso.jsx`: revisar el `?v=` en `tienda/index.html`.
 - ✅ Con un cliente que tenga **dos catálogos habilitados**: al entrar aparece la pantalla **"¿Con qué catálogo querés comprar?"** antes del catálogo, y el header queda con el chip del canal elegido. Con **uno solo** no debe aparecer: entra derecho y el chip queda fijo.
 - ✅ `https://tu-dominio.com/tienda/?codigo=XXXX` → abre directo el canje de invitación con el código puesto. Ése es el link que se le pasa a un **segundo** comprador de una empresa que ya compra.
+- ✅ **"Olvidé mi contraseña"** aparece debajo del campo de contraseña. Pedir el link con un correo de prueba y abrir el mail: **el link tiene que caer en `/tienda/`**, no en el login del personal. Si cae en el login interno, falta la Redirect URL del paso 4c.
+- ✅ Al abrir ese link, la barra de direcciones **no debe quedar con `#access_token=…`**: la tienda lo consume y lo borra con `replaceState`. Si el token queda a la vista, queda en el historial del browser y en cualquier captura de pantalla.
 
 ### Smoke del circuito completo (hacerlo con Seba, una sola vez)
 
@@ -224,6 +235,7 @@ Es el que confirma lo que pidió el dueño de punta a punta. El circuito ya se p
 5. **Comprar**: al entrar tiene que aparecer la **elección de catálogo** con el mínimo de cada uno; el cliente ve **solo el precio del canal que eligió**, se respetan múltiplos y mínimos, y envía.
    - **Cambiar de canal desde el chip del header** y confirmar las dos cosas: cambian **todos** los precios, y el carrito es **otro** (el del canal anterior queda esperando intacto — hay un borrador por canal desde `0162`).
    - **Sacarle un catálogo desde el panel** mientras tiene un pedido armado ahí: el pedido **no se borra**, y **vuelve a aparecer** si se lo habilitan de nuevo.
+6. **Perder la contraseña a propósito** — cerrar sesión, "Olvidé mi contraseña", abrir el mail, poner una clave nueva y **entrar con ella**. Con el alta abierta nadie del lado de Makario puede darle la clave a un cliente: si esto no funciona, el cliente que se la olvida deja de comprar y no hay forma de rescatarlo sin tocar la base.
 6. **Verificar el aviso**: la campanita del owner/admin/ventas tiene que sumar un "Pedido B2B nuevo: <cliente>" con el número `MAY-XXXX`, y el pedido tiene que estar ya cargado en `Ventas → Mayoristas` como **cotización**, con sus ítems.
 7. **Mover el estado** desde Mayoristas (confirmado → en producción → entregado) y ver que en la tienda del cliente cambie solo (`entregado` se le muestra como **despachado**).
 8. **Repetir el pedido** desde *Mis pedidos* del cliente: tiene que cargarse en el carrito a precio de hoy, avisando si algo dejó de estar disponible.
@@ -278,6 +290,12 @@ Si querés automatizar esto (CI/CD), conectá el repo a GitHub y EasyPanel puede
 ### La tienda queda en blanco, sin ningún error visible
 
 → Casi siempre es una **redeclaración entre archivos**. Los `<script type="text/babel">` comparten el scope global: si dos archivos declaran el mismo `const` de primer nivel, el browser corta con *"Identifier 'X' has already been declared"* al evaluar el segundo y no renderiza nada. Mirar la consola. Se previene corriendo `scope-check.js` antes de zippear.
+
+### El link de "olvidé mi contraseña" no lleva a la tienda
+
+→ Falta la Redirect URL (paso 4c). Supabase acepta el `redirectTo` **solo si está en la lista**; si no está, usa la Site URL en silencio, sin error. Agregar `https://tu-dominio.com/tienda/` en Authentication → URL Configuration → Redirect URLs.
+
+Si el link llega pero dice **"El link no sirve más"**: o ya se usó, o pasó una hora, o se abrió en un browser distinto del que lo pidió. Se pide otro y listo. Y si el cliente dice que **nunca le llegó**, mirar Authentication → Logs: el SMTP que trae Supabase de fábrica tiene un límite bajo de correos por hora y es lo primero que se agota cuando alguien aprieta el botón cinco veces.
 
 ### El cliente entra y ve el catálogo entero sin precios
 

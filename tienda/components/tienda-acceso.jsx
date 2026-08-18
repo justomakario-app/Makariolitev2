@@ -96,6 +96,58 @@ const PROVINCIAS = [
   'Santa Cruz', 'Santa Fe', 'Santiago del Estero', 'Tierra del Fuego', 'Tucumán',
 ];
 
+/* ── Recuperar la contraseña ───────────────────────────────────────────
+   El mail de Supabase manda a esta misma pagina con los tokens en el HASH
+   (#access_token=...&type=recovery). El cliente de la tienda tiene
+   detectSessionInUrl:false a proposito — no usa magic links ni OAuth — asi
+   que el hash no se consume solo: se lee aca, se limpia de la barra de
+   direcciones (que no quede un token en el historial ni en un screenshot que
+   el cliente mande por WhatsApp) y se cambia por una sesion con setSession.
+
+   Se lee UNA sola vez, al cargar el archivo, y no adentro de un componente:
+   React puede montar dos veces en desarrollo, y el segundo montaje ya no
+   encontraria el hash. */
+const leerRecuperacionDeUrl = () => {
+  try {
+    const h = (window.location.hash || '').replace(/^#/, '');
+    if (!h) return null;
+    const p = new URLSearchParams(h);
+
+    /* El link vencido tampoco trae tokens: viene con error_code. Hay que
+       distinguirlo de "no hay nada", porque el mensaje es otro. */
+    if (p.get('error') || p.get('error_code')) {
+      const venc = /expired|invalid/i.test(p.get('error_code') || p.get('error') || '');
+      limpiarHash();
+      return { error: venc
+        ? 'Ese link ya venció. Pedí uno nuevo, dura una hora.'
+        : (p.get('error_description') || 'Ese link no sirve. Pedí uno nuevo.') };
+    }
+
+    if (p.get('type') !== 'recovery' || !p.get('access_token')) return null;
+    const r = { access_token: p.get('access_token'), refresh_token: p.get('refresh_token') || '' };
+    limpiarHash();
+    return r;
+  } catch (e) { return null; }
+};
+
+const RECUPERACION = leerRecuperacionDeUrl();
+
+function limpiarHash() {
+  try {
+    window.history.replaceState(null, '',
+      window.location.pathname + window.location.search);
+  } catch (e) { /* sin history API el token queda a la vista, pero funciona */ }
+}
+
+/* A donde vuelve el mail. Se calcula del browser y no se escribe a mano: la
+   URL publica no vive en el repo, y si algun dia cambia el dominio esto
+   sigue andando sin tocar codigo. Ojo: tiene que estar en la lista de
+   "Redirect URLs" de Supabase Auth, si no el link cae en la Site URL. */
+const urlDeVuelta = () => {
+  try { return window.location.origin + window.location.pathname; }
+  catch (e) { return undefined; }
+};
+
 /* Con que pantalla abre segun el link que le mandaron. */
 const modoDesdeUrl = () => {
   try {
@@ -179,6 +231,7 @@ const PantallaAcceso = ({ onEntro }) => {
     entrar:   ['Entrá a tu cuenta', 'Tu lista, tus pedidos y tu historial.'],
     registro: ['Creá tu cuenta', 'Dos pasos y ya estás comprando.'],
     codigo:   ['Tengo un código', 'Sumate a una empresa que ya compra acá.'],
+    olvide:   ['Recuperá tu contraseña', 'Te mandamos un link al correo.'],
   };
   const cabeza = CABEZAS[modo] || CABEZAS.entrar;
 
@@ -217,7 +270,10 @@ const PantallaAcceso = ({ onEntro }) => {
           {modo === 'entrar' ? (
             <FormEntrar onEntro={onEntro} emailPrevio={emailPrevio}
                         irARegistro={() => setModo('registro')}
-                        irACodigo={() => setModo('codigo')}/>
+                        irACodigo={() => setModo('codigo')}
+                        irAOlvide={(email) => { setEmailPrevio(email || ''); setModo('olvide'); }}/>
+          ) : modo === 'olvide' ? (
+            <FormOlvide emailPrevio={emailPrevio} volver={irAEntrar}/>
           ) : modo === 'registro' ? (
             <FormRegistro onEntro={onEntro} irAEntrar={irAEntrar}
                           irACodigo={() => setModo('codigo')}/>
@@ -231,7 +287,7 @@ const PantallaAcceso = ({ onEntro }) => {
 };
 
 /* ── Entrar con cuenta existente ───────────────────────────────────────── */
-const FormEntrar = ({ onEntro, irARegistro, irACodigo, emailPrevio }) => {
+const FormEntrar = ({ onEntro, irARegistro, irACodigo, irAOlvide, emailPrevio }) => {
   const [email, setEmail] = useState(emailPrevio || '');
   const [pass, setPass]   = useState('');
   const [busy, setBusy]   = useState(false);
@@ -268,6 +324,12 @@ const FormEntrar = ({ onEntro, irARegistro, irACodigo, emailPrevio }) => {
       <AccCampo id="ac-pass" label="Contraseña">
         <CampoPass id="ac-pass" value={pass} onChange={setPass}/>
       </AccCampo>
+
+      {/* Se lleva el correo ya tipeado: volver a escribirlo es justo lo que
+          molesta cuando ya venís peleando con la contraseña. */}
+      <button className="t-link t-link-fin" type="button" onClick={() => irAOlvide(email)}>
+        Olvidé mi contraseña
+      </button>
 
       {err && <Aviso tipo="error">{err}</Aviso>}
 
@@ -681,6 +743,185 @@ const FormCodigo = ({ onEntro, volver }) => {
   );
 };
 
+/* ── Pedir el link de recuperación ─────────────────────────────────────
+   La respuesta es SIEMPRE la misma, exista o no la cuenta. Decir "ese correo
+   no está registrado" convierte esta pantalla en un detector de clientes:
+   cualquiera prueba correos hasta encontrar cuáles compran acá. Por eso el
+   texto habla en condicional, y por eso tampoco se muestra el error de
+   Supabase tal cual.                                                      */
+const FormOlvide = ({ emailPrevio, volver }) => {
+  const [email, setEmail] = useState(emailPrevio || '');
+  const [busy, setBusy]   = useState(false);
+  const [listo, setListo] = useState(false);
+  const [err, setErr]     = useState(null);
+
+  const pedir = async (e) => {
+    e.preventDefault();
+    if (busy) return;
+    setErr(null); setBusy(true);
+    try {
+      const { error } = await window.SUPA.auth.resetPasswordForEmail(
+        email.trim().toLowerCase(), { redirectTo: urlDeVuelta() });
+      /* El único error que sí se muestra es el del límite de envíos: ahí el
+         cliente tiene que saber que la solución es esperar, no reintentar. */
+      if (error && /rate|limit|seconds|too many/i.test(error.message || '')) {
+        throw new Error('Ya pedimos varios links seguidos. Esperá unos minutos y probá de nuevo.');
+      }
+      setListo(true);
+    } catch (e2) {
+      setErr(e2.message || 'No pudimos mandar el correo. Probá de nuevo en un rato.');
+    } finally { setBusy(false); }
+  };
+
+  if (listo) {
+    return (
+      <div className="t-form">
+        <div className="t-listo">
+          <div className="t-listo-icono"><Icon n="mail" s={24}/></div>
+          <h3 className="t-listo-titulo">Mirá tu correo</h3>
+          <p className="t-listo-texto">
+            Si <b>{email.trim().toLowerCase()}</b> tiene una cuenta acá, te llegó un link
+            para poner una contraseña nueva. Dura <b>una hora</b>.
+          </p>
+          <p className="t-help">
+            ¿No lo ves? Fijate en correo no deseado. El remitente puede figurar como Supabase.
+          </p>
+        </div>
+        <button className="t-btn t-btn-primary t-btn-block" type="button" onClick={() => volver(email)}>
+          Volver a entrar
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form className="t-form" onSubmit={pedir}>
+      <AccCampo id="ol-email" label="Tu correo"
+                ayuda="El mismo con el que entrás a la tienda.">
+        <input id="ol-email" className="t-input" type="email" value={email} autoComplete="username"
+               onChange={e => setEmail(e.target.value)} placeholder="tucorreo@empresa.com"/>
+      </AccCampo>
+
+      {err && <Aviso tipo="error">{err}</Aviso>}
+
+      <button className="t-btn t-btn-primary t-btn-block t-btn-alto" type="submit"
+              disabled={busy || !email.trim()}>
+        {busy ? 'Mandando…' : 'Mandame el link'}
+      </button>
+
+      <button className="t-link" type="button" onClick={() => volver(email)}>
+        <Icon n="arrow-left" s={14}/> Volver
+      </button>
+    </form>
+  );
+};
+
+/* ── Poner la contraseña nueva ─────────────────────────────────────────
+   Es lo que se ve al abrir el link del mail. No pide la contraseña vieja: el
+   token del link ES la prueba de que la persona tiene el correo. Se monta
+   ANTES que cualquier otra pantalla, aunque ya hubiera una sesión abierta en
+   ese browser — si alguien está entrando por un link de recuperación, lo que
+   quiere es cambiar la clave, no seguir comprando.                        */
+const PantallaNuevaPass = ({ datos, onListo, onCancelar }) => {
+  const [p1, setP1]     = useState('');
+  const [p2, setP2]     = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr]   = useState(datos && datos.error ? datos.error : null);
+  const [fase, setFase] = useState(datos && datos.error ? 'roto' : 'abriendo');
+
+  /* Canjear el token por una sesión. Sin esto, updateUser no tiene con qué
+     autenticar el cambio. */
+  useEffect(() => {
+    if (fase !== 'abriendo') return;
+    let vivo = true;
+    (async () => {
+      try {
+        const { error } = await window.SUPA.auth.setSession({
+          access_token: datos.access_token, refresh_token: datos.refresh_token,
+        });
+        if (error) throw new Error(error.message);
+        if (vivo) setFase('lista');
+      } catch (e) {
+        if (!vivo) return;
+        setErr('Ese link ya venció o se usó. Pedí uno nuevo, dura una hora.');
+        setFase('roto');
+      }
+    })();
+    return () => { vivo = false; };
+  }, [fase, datos]);
+
+  const corta   = p1.length > 0 && p1.length < 8;
+  const difiere = p2.length > 0 && p1 !== p2;
+  const puede   = fase === 'lista' && p1.length >= 8 && p1 === p2 && !busy;
+
+  const guardar = async (e) => {
+    e.preventDefault();
+    if (!puede) return;
+    setErr(null); setBusy(true);
+    try {
+      const { error } = await window.SUPA.auth.updateUser({ password: p1 });
+      if (error) throw new Error(
+        /should be different|same as/i.test(error.message)
+          ? 'Esa ya es tu contraseña actual. Poné una distinta.'
+          : /weak|pwned|leaked|compromis/i.test(error.message)
+            ? 'Esa contraseña aparece en filtraciones conocidas. Elegí otra.'
+            : error.message);
+      await onListo();
+    } catch (e2) {
+      setErr(e2.message || 'No se pudo cambiar la contraseña.');
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="t-acceso">
+      <div className="t-acceso-caja">
+        <Marca chico/>
+
+        {fase === 'roto' ? (
+          <>
+            <div className="t-espera t-espera-warn"><Icon n="key" s={26}/></div>
+            <h2 className="t-espera-titulo">El link no sirve más</h2>
+            <p className="t-espera-texto">{err}</p>
+            <div className="t-espera-acciones">
+              <button className="t-btn t-btn-primary" onClick={onCancelar}>
+                Pedir uno nuevo
+              </button>
+            </div>
+          </>
+        ) : (
+          <form className="t-form" onSubmit={guardar}>
+            <div className="t-espera t-espera-info"><Icon n="key" s={26}/></div>
+            <h2 className="t-espera-titulo">Poné tu contraseña nueva</h2>
+            <p className="t-espera-texto">
+              Con esta vas a entrar de acá en adelante. Mínimo 8 caracteres.
+            </p>
+
+            <AccCampo id="np-p1" label="Contraseña nueva">
+              <CampoPass id="np-p1" value={p1} onChange={setP1} autoComplete="new-password"/>
+            </AccCampo>
+            <AccCampo id="np-p2" label="Repetila">
+              <CampoPass id="np-p2" value={p2} onChange={setP2} autoComplete="new-password"/>
+            </AccCampo>
+
+            {corta   && <Aviso tipo="warn">Tiene que tener al menos 8 caracteres.</Aviso>}
+            {difiere && <Aviso tipo="warn">Las dos contraseñas no coinciden.</Aviso>}
+            {err     && <Aviso tipo="error">{err}</Aviso>}
+
+            <button className="t-btn t-btn-primary t-btn-block t-btn-alto" type="submit"
+                    disabled={!puede}>
+              {busy ? 'Guardando…' : fase === 'abriendo' ? 'Abriendo el link…' : 'Guardar y entrar'}
+            </button>
+
+            <button className="t-link" type="button" onClick={onCancelar}>
+              Cancelar
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+};
+
 /* ══ Pantalla de espera ═════════════════════════════════════════════════
    El usuario ya tiene cuenta pero todavia no puede comprar. Son cinco
    situaciones distintas y cada una necesita que le digan algo distinto:
@@ -754,6 +995,6 @@ const PantallaEspera = ({ cuenta, motivo, onSalir, onReintentar }) => {
 };
 
 window.TiendaAcceso = {
-  PantallaAcceso, PantallaEspera, Marca, MOTIVO_TEXTO,
-  formatearCuit, cuitValida, PROVINCIAS,
+  PantallaAcceso, PantallaEspera, PantallaNuevaPass, Marca, MOTIVO_TEXTO,
+  formatearCuit, cuitValida, PROVINCIAS, RECUPERACION, leerRecuperacionDeUrl,
 };

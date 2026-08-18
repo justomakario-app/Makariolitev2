@@ -157,6 +157,11 @@ const TiendaApp = () => {
   const [senalPedidos, setSenalPedidos] = useState(0);
   const [fatal, setFatal]     = useState(null);
 
+  /* Alguien que llega por el link del mail. Se decide UNA vez, con lo que el
+     archivo de acceso leyó del hash al cargar; 'null' es el caso normal.
+     Cancelar lo apaga y cae en la pantalla de acceso de siempre. */
+  const [recuperar, setRecuperar] = useState(() => window.TiendaAcceso.RECUPERACION);
+
   /* ── Sesión ──────────────────────────────────────────────────────────── */
   useEffect(() => {
     let vivo = true;
@@ -252,6 +257,24 @@ const TiendaApp = () => {
   };
 
   /* ── Render ──────────────────────────────────────────────────────────── */
+
+  /* Va PRIMERO, incluso antes de mirar la sesión: el que abre un link de
+     recuperación viene a cambiar la clave. Si en ese browser había una sesión
+     vieja abierta, mandarlo directo al catálogo le haría creer que el link no
+     funcionó. */
+  if (recuperar) {
+    return (
+      <PantallaNuevaPass
+        datos={recuperar}
+        onListo={async () => { setRecuperar(null); await cargarCuenta(); }}
+        onCancelar={async () => {
+          /* La sesión que abrió el link de recuperación no sirve para nada más
+             que cambiar la clave: si se arrepiente, se cierra. */
+          try { await window.SUPA.auth.signOut(); } catch (e) { /* ya estaba afuera */ }
+          setRecuperar(null);
+        }}/>
+    );
+  }
 
   if (sesion === undefined) return <Spinner texto="Entrando…"/>;
 
