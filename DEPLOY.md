@@ -73,16 +73,20 @@ El ZIP debería pesar entre 2-10 MB. Si pesa más, algo de `node_modules/` se co
 
 EasyPanel detecta automáticamente el `Dockerfile` en la raíz del ZIP y lo usa como instrucciones de build.
 
-### 3. Configurar Build args (variables que Vite necesita en build time)
+### 3. Build args — **no hace falta ninguna**
 
-EasyPanel suele tener una sección "Build args" o "Environment > Build" en el service. Agregá:
+Esto quedó escrito cuando el proyecto iba a usar Vite. **No lo usa.** No hay build: el Dockerfile arranca de `nginx:alpine` y copia los archivos tal cual (`npm run build` literalmente imprime *"No requiere build — todo es estático"*). El JSX lo compila el browser con Babel standalone.
 
-| Variable | Valor |
+La URL y la anon key de Supabase están **escritas adentro del código**, en dos lugares:
+
+| Archivo | Para qué |
 |---|---|
-| `VITE_SUPABASE_URL` | `https://ditmbqkvzreekqnkimqv.supabase.co` |
-| `VITE_SUPABASE_ANON_KEY` | (la anon key — copiala de `web/.env.local`) |
+| `web/components/data.js` | el sistema interno (`/` y `/m/`) |
+| `tienda/components/tienda-supa.js` | la tienda mayorista (`/tienda/`) |
 
-⚠️ **Estas son `ARG`, no `ENV` runtime.** Vite las inlinea en el bundle al hacer `npm run build`. Si EasyPanel solo te ofrece "Environment Variables" runtime, fijate si hay un toggle "build-time" o "Docker ARG". Si no, configuralas igual como env y debería funcionar (Docker las pasa como ARG si están seteadas como ENV durante build).
+**No es un descuido.** La anon key es pública por diseño — cualquiera que abra la tienda la ve en el código fuente del browser, con Vite o sin Vite. Lo que protege los datos no es esconderla, es **RLS** más el hecho de que todos los precios se calculan del lado del servidor. La que **nunca** se escribe en el código ni se sube a ningún lado es la `service_role`, que vive únicamente en las edge functions.
+
+> Si algún día se cambia de proyecto de Supabase, se tocan **esos dos archivos**, no una variable de EasyPanel.
 
 ### 4. Configurar el dominio + HTTPS
 
