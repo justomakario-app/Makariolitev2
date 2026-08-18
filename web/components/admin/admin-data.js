@@ -11,7 +11,12 @@
     return;
   }
 
-  const COLS_CUSTOMER = 'id, nombre, cuit, email, telefono, notas, activo, created_at, created_by, es_mayorista, localidad, provincia';
+  /* b2b_canal / b2b_habilitado: sin estas dos, la pestaña "Alta y mod.
+     clientes" no tiene forma de saber en que catalogo compra cada cliente y
+     termina contando el tilde viejo es_mayorista como si fuera el canal.
+     Son SELECT-ables por authenticated (grant a nivel columna verificado),
+     y la pestaña solo la abre owner/admin. */
+  const COLS_CUSTOMER = 'id, nombre, cuit, email, telefono, notas, activo, created_at, created_by, es_mayorista, localidad, provincia, b2b_canal, b2b_habilitado';
   /* S2.2: suppliers usa '*' para traer los 11 campos nuevos de ficha
      ampliada sin tener que enumerarlos uno a uno. */
   const COLS_SUPPLIER = '*';

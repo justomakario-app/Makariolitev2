@@ -729,6 +729,87 @@ function venEmptyBox() {
   return { background:MAY_UI.cardBg, border:`1px solid ${MAY_UI.border}`, borderRadius:MAY_UI.radius, padding:'48px 24px', textAlign:'center', display:'flex', flexDirection:'column', alignItems:'center' };
 }
 
+/* ── El canal (catalogo) en el que compra cada cliente ───────────────────
+   Dos cosas que se llaman parecido y que NO son lo mismo:
+
+     · es_mayorista  — tilde del registro viejo, anterior a la tienda. Dice
+                       "este es cliente B2B", no en que lista compra.
+     · b2b_canal     — el catalogo: mayorista (0,70) o distribuidor (0,55).
+                       Es el que define el precio que ve el cliente.
+
+   Pueden no coincidir, y ahi esta el caso que importa: un cliente con el
+   tilde puesto y SIN canal asignado no ve precios — b2b_fn_coeficiente_actual
+   devuelve null y el catalogo le corta con "Tu cuenta todavia no esta
+   habilitada para comprar". Eso tiene que verse de un vistazo aca y no
+   descubrirse cuando el cliente entra a la tienda y no ve nada.
+
+   Los canales NO se escriben a mano: salen de b2b_canal filtrados por activo.
+   Apagar uno (minorista, 0165) o agregar otro se refleja solo, igual que en
+   las otras cinco pantallas del panel.                                      */
+const CANAL_TINTES = [
+  { bg:'#e6f7ec', fg:'#15803d' },   // 1o por orden — hoy mayorista
+  { bg:'#F5F3FF', fg:'#6D28D9' },   // 2o          — hoy distribuidor
+  { bg:'#FEF3C7', fg:'#B45309' },
+  { bg:'#ECFEFF', fg:'#0E7490' },
+];
+
+/* "Mayorista" -> "Mayoristas" · "Distribuidor" -> "Distribuidores". Con dos
+   canales alcanzaba con escribirlo a mano; se hace por regla porque los
+   canales son datos y el dia que se agregue uno la tarjeta tiene que salir
+   bien sin que nadie se acuerde de venir a tocar esto. */
+function pluralCanal(n) {
+  if (!n) return n;
+  return /[aeiouáéíóú]$/i.test(n) ? n + 's' : n + 'es';
+}
+
+/* El badge de la columna "Tipo". Tres estados, no dos. */
+function TipoClienteBadge({ cliente, canal, indice, canalesOk }) {
+  const base = { fontSize:9, fontWeight:700, padding:'2px 7px', borderRadius:6, textTransform:'uppercase', whiteSpace:'nowrap' };
+
+  if (canal) {
+    const t = CANAL_TINTES[indice % CANAL_TINTES.length];
+    const habilitado = cliente.b2b_habilitado !== false;
+    const pct = Math.round(Number(canal.coeficiente || 0) * 100);
+    /* Tiene catalogo pero la canilla esta cerrada: se muestra igual, en
+       punteado, porque "MAYORISTA" a secas haria pensar que ya esta
+       comprando. Habilitarlo se hace en la pestaña Clientes mayoristas. */
+    return (
+      <span title={habilitado
+              ? `Compra en el catálogo ${canal.nombre} — paga el ${pct}% de la lista`
+              : `Tiene catálogo ${canal.nombre} asignado, pero todavía NO está habilitado para comprar`}
+            style={habilitado
+              ? { ...base, background:t.bg, color:t.fg, border:'1px solid transparent' }
+              : { ...base, background:'transparent', color:t.fg, border:`1px dashed ${t.fg}`, opacity:.85 }}>
+        {canal.nombre}{habilitado ? '' : ' · sin habilitar'}
+      </span>
+    );
+  }
+
+  /* No hay canal para mostrar y tampoco se pudieron leer los canales: el
+     cliente puede tener uno perfectamente. Se muestra el codigo crudo y no
+     se afirma nada — decirle "sin catalogo" a un mayorista porque falló una
+     RPC seria inventar un problema que no existe. */
+  if (!canalesOk && cliente.b2b_canal) {
+    return (
+      <span title="No se pudo leer la lista de catálogos; este es el que tiene guardado."
+            style={{ ...base, background:'#F3F4F6', color:'#374151' }}>
+        {cliente.b2b_canal}
+      </span>
+    );
+  }
+
+  if (cliente.es_mayorista) {
+    return (
+      <span title="Está marcado como cliente de la tienda pero no tiene catálogo asignado: entra y no ve precios. Asignáselo en «Clientes mayoristas»."
+            style={{ ...base, background:'#FEF3C7', color:'#B45309' }}>
+        Tienda · sin catálogo
+      </span>
+    );
+  }
+
+  return <span style={{ ...base, background:'#F3F4F6', color:'#6B7280' }}>Cliente</span>;
+}
+
 /* ══ TAB 1 — Alta y mod. clientes (Clientes B2B) ══ */
 function ClientesB2BTab({ onVerCtaCte }) {
   const toast = useToast();
@@ -736,6 +817,7 @@ function ClientesB2BTab({ onVerCtaCte }) {
   const canEdit = ['owner', 'admin'].includes(role);
 
   const [items, setItems]     = useState([]);
+  const [canales, setCanales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
   const [search, setSearch]   = useState('');
@@ -750,7 +832,19 @@ function ClientesB2BTab({ onVerCtaCte }) {
 
   const reload = async () => {
     setLoading(true); setError(null);
-    try { setItems(await window.ADMIN_DATA.loadCustomersB2B({ includeInactive: showInact })); }
+    try {
+      /* Los canales se piden en paralelo y con catch propio A PROPOSITO: si
+         b2b_rpc_admin_canales fallara (permisos, flag b2b apagado), la lista
+         de clientes —que es para lo que se entra a esta pantalla— tiene que
+         seguir cargando igual. Sin canales se cae al comportamiento viejo:
+         se ven los clientes, sin las tarjetas por catalogo. */
+      const [cls, cs] = await Promise.all([
+        window.ADMIN_DATA.loadCustomersB2B({ includeInactive: showInact }),
+        (window.B2B_DATA ? window.B2B_DATA.canales() : Promise.resolve([])).catch(() => []),
+      ]);
+      setItems(cls);
+      setCanales((cs || []).filter(c => c.activo !== false));
+    }
     catch (err) { const m = err?.message || 'Error'; setError(m); toast.error(m); }
     finally { setLoading(false); }
   };
@@ -768,8 +862,23 @@ function ClientesB2BTab({ onVerCtaCte }) {
   }, [items, search, prov, soloMay]);
 
   const now = new Date();
-  const kActivos = items.filter(c => c.activo !== false).length;
-  const kMay = items.filter(c => c.es_mayorista && c.activo !== false).length;
+  const activos  = items.filter(c => c.activo !== false);
+  const kActivos = activos.length;
+  /* Antes esto contaba es_mayorista y la tarjeta decia "Mayoristas", que es
+     justo lo que hace pensar que falta una de "Distribuidores". No faltaba
+     ninguna: no habia canales en esta pantalla. Ahora hay una por canal
+     activo, y cuenta b2b_canal, que es lo que realmente fija el precio. */
+  const porCanal = (codigo) => activos.filter(c => c.b2b_canal === codigo).length;
+  /* Los que entran a la tienda y NO ven precios. Son dos casos y el backend
+     los trata igual — b2b_fn_coeficiente_actual pide `ca.activo = true`, asi
+     que devuelve null en los dos: el que no tiene canal, y el que quedo
+     parado en un canal apagado (minorista, desde 0165). Si los canales no
+     cargaron no hay con que distinguir el segundo caso y se cuenta solo el
+     primero, que es el que se sabe seguro. Si no hay ninguno la tarjeta no
+     ocupa lugar: es una alerta, no una metrica. */
+  const canalesOk  = canales.length > 0;
+  const sinCatalogo = (c) => !c.b2b_canal || (canalesOk && !canales.some(k => k.codigo === c.b2b_canal));
+  const kSinCanal = activos.filter(c => c.es_mayorista && sinCatalogo(c)).length;
   const kNuevos = items.filter(c => {
     const d = c.created_at ? new Date(c.created_at) : null;
     return d && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
@@ -811,7 +920,17 @@ function ClientesB2BTab({ onVerCtaCte }) {
       {/* KPIs */}
       <div style={{ display:'flex', gap:12, marginBottom:14, flexWrap:'wrap' }}>
         <VenKpi label="Clientes activos" value={kActivos}/>
-        <VenKpi label="Mayoristas" value={kMay} accent="#15803d"/>
+        {canales.map((c, i) => (
+          <VenKpi key={c.codigo}
+                  label={pluralCanal(c.nombre)}
+                  value={porCanal(c.codigo)}
+                  accent={CANAL_TINTES[i % CANAL_TINTES.length].fg}
+                  hint={`paga el ${Math.round(Number(c.coeficiente || 0) * 100)}% de la lista`}/>
+        ))}
+        {kSinCanal > 0 && (
+          <VenKpi label="Sin catálogo" value={kSinCanal} accent="#B45309"
+                  hint="entran a la tienda y no ven precios"/>
+        )}
         <VenKpi label="Nuevos este mes" value={kNuevos} accent="#4F46E5"/>
       </div>
 
@@ -827,7 +946,10 @@ function ClientesB2BTab({ onVerCtaCte }) {
           {provincias.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
         <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:MAY_UI.inkSoft, fontWeight:600 }}>
-          <input type="checkbox" checked={soloMay} onChange={e => setSoloMay(e.target.checked)}/> Solo mayoristas
+          {/* Filtra es_mayorista, que agrupa a TODOS los de la tienda —
+              mayoristas y distribuidores. Decirle "Solo mayoristas" con una
+              columna que ahora muestra "Distribuidor" era mentir. */}
+          <input type="checkbox" checked={soloMay} onChange={e => setSoloMay(e.target.checked)}/> Solo clientes de la tienda
         </label>
         <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:MAY_UI.inkSoft, fontWeight:600 }}>
           <input type="checkbox" checked={showInact} onChange={e => setShowInact(e.target.checked)}/> Mostrar inactivos
@@ -868,9 +990,11 @@ function ClientesB2BTab({ onVerCtaCte }) {
                     <td style={{ fontSize:12 }}>{c.telefono || '—'}</td>
                     <td style={{ fontSize:12 }}>{c.email || '—'}</td>
                     <td>
-                      {c.es_mayorista
-                        ? <span style={{ fontSize:9, fontWeight:700, padding:'2px 7px', borderRadius:6, background:'#e6f7ec', color:'#15803d', textTransform:'uppercase' }}>Mayorista</span>
-                        : <span style={{ fontSize:9, fontWeight:700, padding:'2px 7px', borderRadius:6, background:'#F3F4F6', color:'#6B7280', textTransform:'uppercase' }}>Cliente</span>}
+                      <TipoClienteBadge
+                        cliente={c}
+                        canal={canales.find(x => x.codigo === c.b2b_canal) || null}
+                        indice={Math.max(0, canales.findIndex(x => x.codigo === c.b2b_canal))}
+                        canalesOk={canalesOk}/>
                     </td>
                     <td>
                       {inactivo

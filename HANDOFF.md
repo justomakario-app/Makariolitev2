@@ -135,6 +135,54 @@ El veredicto GO inicial fue **rechazado por el dueño**: faltaban 4 correcciones
 
 ## Registro de tareas
 
+### [2026-08-18] "¿Por qué no me aparece distribuidor acá?" — porque el canal nunca llegaba a esa pantalla
+
+El dueño abrió **Ventas → Alta y mod. clientes** y vio tres tarjetas: CLIENTES ACTIVOS · **MAYORISTAS** · NUEVOS ESTE MES. Faltaba distribuidores. No era que estuviera vacía: **no existía**, y no podía existir.
+
+**La causa, de abajo hacia arriba.** En `customers_b2b` conviven dos cosas que se llaman parecido y no son lo mismo:
+
+| | qué es | qué decide |
+|---|---|---|
+| `es_mayorista` | tilde del registro viejo, anterior a la tienda | nada de precios: solo "este es cliente B2B" |
+| `b2b_canal` | el catálogo: mayorista (0,70) o distribuidor (0,55) | **el precio que ve el cliente** |
+
+La pantalla contaba `es_mayorista` y a esa cuenta le puso el rótulo "Mayoristas". Un distribuidor caía adentro de ese número sin dejar rastro. Y no había forma de arreglarlo desde la vista, porque `COLS_CUSTOMER` en `admin/admin-data.js` **ni siquiera pedía `b2b_canal`**: el concepto de canal no llegaba a esa pantalla.
+
+**Lo que quedó.** Las tarjetas ahora salen de `b2b_canal` (vía `b2b_rpc_admin_canales`, filtrado por `activo`), no de una lista escrita a mano: apagar minorista (0165) o agregar un canal mañana se refleja solo, igual que en las otras cinco pantallas del panel. La cuenta es por `b2b_canal`.
+
+**Y apareció algo que no se veía en ningún lado:** el cliente que entra a la tienda y **no ve precios**. Son dos casos y para la base son el mismo — `b2b_fn_coeficiente_actual` pide `ca.activo = true` y devuelve `null` en los dos:
+
+- el que tiene el tilde de la tienda y **ningún canal** asignado;
+- el que quedó parado en un **canal apagado** (minorista, desde 0165).
+
+Los dos entran, y el catálogo les corta con *"Tu cuenta todavía no está habilitada para comprar"*. Ahora hay una tarjeta ámbar **"Sin catálogo"** que los junta y una columna **Tipo** que lo dice por fila. La tarjeta aparece **solo si hay alguno**: es una alerta, no una métrica.
+
+La columna Tipo pasó de dos estados a cuatro, con el color del canal:
+
+| estado | se ve |
+|---|---|
+| canal asignado y habilitado | badge sólido con el nombre del catálogo |
+| canal asignado, **sin habilitar** | el mismo color, **punteado**, "· sin habilitar" |
+| de la tienda, sin catálogo usable | ámbar, "Tienda · sin catálogo" |
+| cliente común | gris, "Cliente" |
+
+El punteado importa: decir "MAYORISTA" a secas de alguien que todavía no puede comprar hace pensar que ya está comprando.
+
+**Dos detalles de comportamiento que se cuidaron a propósito:**
+
+- Los canales se piden **en paralelo con los clientes y con `catch` propio**. Si `b2b_rpc_admin_canales` falla, la lista de clientes —que es para lo que se entra a esta pantalla— carga igual, sin tarjetas de catálogo.
+- En ese caso degradado la pantalla **no acusa a nadie de "sin catálogo"**: muestra el canal que el cliente tiene guardado. Inventar un problema porque falló una RPC es peor que no mostrar nada.
+
+También se corrigió el filtro: decía **"Solo mayoristas"** y filtra `es_mayorista`, o sea a todos los de la tienda, mayoristas *y* distribuidores. Ahora dice **"Solo clientes de la tienda"**.
+
+**Chequeos:** suite nueva `tests/clientes-canal-test.js` (web + mobile, **32 checks cada una**), registrada en `run-all.js`. Monta el `ClientesB2BTab` real con siete clientes —uno por situación— y los tres canales que existen de verdad. Se validó **rompiendo el código a propósito**, mutación por mutación: volver a contar `es_mayorista` (3 rojos), no filtrar canales por `activo` (4), ignorar el canal apagado en "Sin catálogo" (1), sacar `b2b_canal` de `COLS_CUSTOMER` (2), quitar la rama degradada del badge (1), volver al badge viejo (9), pluralizar con "+s" (6), sacar el `catch` de canales (5), ignorar `b2b_habilitado` (2). Ninguna mutación pasó desapercibida. Total del repo: **12 suites · 572 checks · 0 fail**.
+
+**Archivos:** `web/components/ventas.jsx` + `mobile/components/ventas.jsx` (idénticos), `web/components/admin/admin-data.js` + `mobile/…`, las dos entradas HTML (`?v=`), `tests/clientes-canal-test.js` (nuevo), `tests/run-all.js`.
+
+> **Sobre los datos de hoy:** los dos clientes cargados tienen `b2b_habilitado = false` — **todavía no puede comprar nadie**. Uno de ellos, *Matias dingianna*, tiene `b2b_canal = 'mayorista'` pero `b2b_canales = ['mayorista','distribuidor']` (el default de la columna; el backfill de 0162 lo salteó porque en ese momento su canal era `null`). El día que se lo habilite va a poder **elegir distribuidor y pagar 0,55 en vez de 0,70**. Si no es lo que se quiere, hay que dejarle `b2b_canales = ['mayorista']` antes de habilitarlo.
+
+---
+
 ### [2026-08-18] 🔴 El deploy no salía por dos motivos, y ninguno era el código
 
 El dueño hizo `git push`, apretó **Redeploy** en EasyPanel, el build salió en verde y la app quedó igual. No era el código: `git ls-remote origin master` daba exactamente el HEAD local. El push estaba bien hecho.
