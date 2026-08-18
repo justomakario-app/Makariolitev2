@@ -135,6 +135,84 @@ El veredicto GO inicial fue **rechazado por el dueño**: faltaban 4 correcciones
 
 ## Registro de tareas
 
+### [2026-08-18] ✅ Alta por link (el cliente se crea su propio acceso) · **un usuario, dos catálogos**: elige en cada ingreso · el panel decide qué catálogos ve cada cliente · `0162`–`0164`
+
+Salió del pedido del dueño: *"ellos crean su propio login… cuando él envíe el link"*, *"la siguiente solapa… es qué catálogo quieren ver, si el mayorista o el distribuidor"*, *"no tienen que ser un usuario para cada uno, puede ser el mismo usuario y que ellos elijan"*, más el mínimo de compra por canal y verificar los precios contra los catálogos de agosto. Las tres migraciones están **aplicadas y verificadas en el remoto**. Sobre lo visual, la instrucción fue explícita — *"que se sienta premium, que sea una experiencia"* — y las dos pantallas nuevas son las que ve el cliente, así que se terminaron a ese nivel, no a "funciona".
+
+**1 · Alta por link. No hay más código de invitación para el que llega primero.** El dueño manda un link, el cliente carga su empresa y sus datos, y **queda comprando en el momento**. El alta la hace la edge function `b2b_signup` (v4, service_role) en dos mitades: crea la credencial de auth y llama a `b2b_rpc_alta_publica` (0163), que crea la empresa y el comprador **ya aprobados**. La RPC es `service_role` y está revocada de `public`, `anon` y `authenticated`: si algún día se le diera execute a `authenticated`, cualquier usuario logueado se fabricaría una empresa aprobada y compraría a precio mayorista. La edge function es la única puerta.
+
+El alta tiene **dos pasos y en ese orden**: primero la empresa (nombre + CUIT), después la persona. El CUIT se formatea solo (`30-71234567-1`) y se valida el dígito verificador **sin bloquear**: si no valida avisa *"lo revisamos antes de facturarte"* y deja seguir — un CUIT mal tipeado no puede ser el motivo de que un cliente no compre.
+
+**La decisión de fondo la tomó el dueño, con el costo sobre la mesa: "entra y compra directo", sin aprobación previa.** Lo dije antes de escribirlo y lo repito acá para que quede en el registro: **cualquiera que reciba o reenvíe el link puede abrir una cuenta y ver la lista mayorista y la de distribuidor**. Lo que sí hay:
+
+| Freno | Qué cubre |
+|---|---|
+| CUIT único (índice) | Nadie duplica una empresa existente |
+| **CUIT ya conocido → `pendiente`** | El que se registra con el CUIT de un cliente **no entra** a esa cuenta. El CUIT está en cualquier factura; sin esto, quien lo tenga ve el historial de pedidos y los precios de otra empresa. |
+| Email único de auth | Si el correo ya existe, no crea nada: manda a iniciar sesión con ese correo, ya prellenado |
+| Aviso interno en cada alta | La campanita del equipo suma el alta apenas pasa |
+
+**No hay límite por IP.** Si el link se filtra, el freno real es apagar el flag (`update app_flags set enabled = false where name = 'b2b'`) o despublicar; eso corta la tienda entera al instante y sin redeploy.
+
+**La invitación sigue viva, y ahora tiene un rol claro:** es el camino para **sumar un segundo comprador a una empresa que ya compra**. Justamente el caso que el alta abierta deja en `pendiente`: la pantalla se lo explica y le dice que le pida el código a quien ya compra ahí.
+
+**2 · Un solo usuario, los dos catálogos, elige al entrar (`0162`).** Antes cada cliente tenía **un** canal fijo y veía esa lista y nada más. Ahora:
+
+- `customers_b2b.b2b_canales` → los catálogos **habilitados** para ese cliente;
+- `customers_b2b.b2b_canal` → el catálogo **de arranque** (el que se abre si todavía no eligió);
+- `b2b_usuario.canal_activo` → el que **eligió**, pegajoso entre sesiones hasta que lo cambie.
+
+Casi no hubo que tocar el resto: **todas** las RPC de la tienda ya resolvían el precio con `b2b_fn_canal_actual()`. Alcanzó con que esa función devuelva el canal elegido y el precio se acomodó solo en catálogo, carrito y envío.
+
+**Lo único que sí cambió de forma es el carrito: ahora hay un borrador POR CANAL** (`b2b_pedido_borrador_uq`). Sin eso, armar un pedido como mayorista y pasarse a distribuidor te dejaba el carrito repreciado y posiblemente por debajo del mínimo del otro canal. Así, el pedido que armó como mayorista lo sigue esperando intacto cuando vuelva. Por eso cambiar de canal **recarga el carrito**, no solo los precios.
+
+La pantalla de elección (`tienda/components/tienda-canal.jsx`) es una pantalla y no un desplegable escondido, porque es la primera decisión de la compra: muestra qué es cada canal en criollo y **el mínimo de cada uno**. Después se cambia cuando quiera desde el chip del header. **Si el cliente tiene un solo catálogo habilitado, no se le pregunta nada**: se elige solo y el chip queda fijo, sin ofrecerle una decisión que no existe. El texto de cada canal sale de una tabla local pero **el nombre sale siempre de la base**: un canal que el dueño invente mañana cae en el texto genérico y la pantalla sigue funcionando.
+
+**3 · En el panel, el dueño decide qué catálogos ve cada cliente.** La pestaña *Clientes* tenía un solo campo "Canal". Ahora tiene dos cosas distintas, que son distintas de verdad:
+
+- **Catálogos habilitados** — una fila por canal, se prende entera. La lista de la tabla muestra todos (`Distribuidor + Mayorista`), no solo el de arranque.
+- **Con cuál arranca** — un `select` que **solo aparece si tiene dos o más**. Con uno solo no hay nada que elegir, así que no se pregunta.
+
+Cuatro avisos, excluyentes entre sí, para que ninguna de esas dos acciones sorprenda:
+
+| Situación | Qué dice |
+|---|---|
+| Le sacás un catálogo | *"No se borra nada"* — el pedido en curso de ese catálogo queda guardado y **vuelve a aparecer** si se lo habilitás de nuevo |
+| Le sumás un catálogo | Es **el mismo usuario**; a partir de ahí se le pregunta con cuál compra al entrar |
+| Le sacás todos | **No deja guardar.** Para cortarle la compra se usa el acceso, no las listas — el backend lo rechaza con `22023` y acá ni se ofrece |
+| Le sacás el que era el de arranque | El arranque **se corre solo** al que queda, igual que hace el backend (0162) |
+
+Escrito **por separado en web y en mobile** (no es copia: en mobile la fila es más alta, el checkbox 18px, `:active` en vez de `:hover` y el porcentaje baja de renglón cuando el nombre no le deja lugar).
+
+**4 · Un bug real encontrado en el camino: `0164`.** Revisando el estado de la base apareció un cliente con `b2b_canales` cargado y **`b2b_canal` en NULL**. `b2b_fn_canal_actual()` miraba solo dos escalones — el canal elegido (que un comprador nuevo no tiene) y el de arranque (NULL) — así que devolvía **NULL**. Y sin canal no hay precio: `b2b_fn_precio` se llama con el canal, o sea **el catálogo entero le quedaba sin valuar**. Hoy no se veía porque la pantalla de elección se mete antes, pero eso es depender de que el front tape un agujero del backend. `0164` le agrega un tercer escalón: **el primero de los habilitados**, que es exactamente la regla que ya aplica `b2b_rpc_admin_set_cliente`. Ahora nunca devuelve NULL para un cliente habilitado con al menos un canal activo.
+
+**Un error mío al aplicarla, y cómo quedó.** La segunda parte de `0164` rellena los `b2b_canal` en NULL que ya existen. La **primera pasada contra la base fue sin filtro**, y como `b2b_canales` tiene default, le puso canal de arranque a **"ALAN ALEXIS TREPPO"** — un cliente cargado ese mismo día que no es mayorista, sin compradores ni pedidos. Eso lo habría hecho aparecer en la pestaña *Clientes* de la tienda (su filtro es `es_mayorista or b2b_canal is not null`), que es justo lo que no queremos. **Se revirtió a NULL en el acto** (el `update` devolvió esa única fila) y el archivo del repo quedó con el filtro `es_mayorista = true or tiene comprador o tiene pedido`, más una `NOTA DE APLICACIÓN` que lo deja escrito. Correr el archivo de cero reproduce el estado que hay hoy.
+
+**5 · Precios verificados contra los catálogos de agosto.** Se leyeron los cuatro PDF de `Catologo mayorista/` (mayorista y distribuidor, julio y agosto) y se compararon contra lo que devuelve **`b2b_fn_precio`**, no contra la tabla. **Ningún precio cambió de julio a agosto.** Lo único distinto es que el catálogo de agosto **ya no lista el set Símil Mármol**. Se le preguntó al dueño y decidió **dejarlo publicado** (MAD190 / MAD191, $40.022 mayorista / $34.753 distribuidor). O sea: los 14 productos publicados siguen exactos.
+
+**6 · Mínimo de compra por canal: la mecánica está entera, faltan los números.** El mínimo ya es **por canal** (`minimo_pedido` y `minimo_unidades` en `b2b_canal`), se edita desde *Catálogo → Canales* — solo el dueño —, se muestra en la pantalla de elección de catálogo, y el carrito no deja enviar por debajo. **Hoy los dos están en $0, que es lo mismo que desactivado.** El dueño dijo *"eso ya después se lo pasamos"*: el día que pase los montos se cargan desde el panel, **no hace falta tocar código ni redesplegar**.
+
+**7 · Chequeos: 398 → 467.** `npm test` sigue en **10/10 suites en verde · 0 fail**. Lo nuevo:
+
+| Suite | Antes | Ahora | Qué se sumó |
+|---|---|---|---|
+| tienda mayorista | 64 | **95** | 15 checks del alta abierta (orden de los pasos, CUIT que valida y que no, contraseña corta, correo repetido, CUIT conocido → pendiente, y que el payload **no** lleve `role`, `token` ni `canal`) + 16 de la elección de catálogo (no pide el catálogo antes de elegir, el `set_canal` manda el código correcto, después recarga cuenta **y carrito**, el chip abre el modal, y con un solo canal se auto-elige) |
+| panel B2B web / mobile | 81 | **99** c/u | 18 checks de catálogos habilitados por cliente, con las dos reglas que importan: el payload lleva `canales`, y el de arranque se corre solo cuando apuntaría a uno que se sacó |
+
+De paso apareció que **la pestaña *Clientes* no tenía ni un check y el test del panel ni siquiera cargaba el componente**. Ahora lo carga y lo prueba.
+
+**Lo que queda en manos del dueño, con el motivo:**
+
+| Pendiente | Por qué no se puede desde acá |
+|---|---|
+| **Redeploy en EasyPanel** (`app_gestion_interna / makario_lite_nueva`) | Regla permanente: Claude no toca EasyPanel. **Hasta que no se haga, nada de esto se ve**: la base ya está lista, el frontend no. |
+| Cargar los montos mínimos por canal | Los tiene que definir el dueño. UI y backend listos. |
+| `git push` | La credencial de `justomakario-app` la autentica el dueño (regla de aislamiento: no se prueba otra cuenta). El **commit sí está hecho**. |
+| Smoke con Seba | Necesita el sitio ya desplegado y una persona. |
+| Los 2 toggles de Auth del Dashboard | El MCP de Supabase no tiene herramienta de configuración de Auth. **Nota importante: con el alta por edge function, *"Allow new users to sign up"* puede seguir APAGADO** — la function crea el usuario con `service_role`. Lo que sí conviene prender es la protección de contraseñas filtradas. |
+
+**Un hueco que dejo escrito porque no está hecho: no hay "olvidé mi contraseña".** Si un cliente se olvida la clave, hoy no tiene forma de recuperarla solo. Hace falta una pantalla de recuperación adentro de `/tienda/` **y** configuración de Auth que solo puede tocar el dueño (plantilla de mail + redirect URL). No lo improviso a medias: con el alta abierta, es lo próximo que hay que hacer.
+
 ### [2026-08-17] ✅ Tienda **cargada y publicada** (14 productos con precio propio por canal) · el rol `ventas` entra al panel · los chequeos pasan a vivir en el repo (`npm test`)
 
 Salió de la instrucción del dueño — *"Todo esto puedes hacerlo vos"* — sobre la lista que la entrada del 16 había dejado como "del dueño". Se hizo todo lo que estaba al alcance. Lo que **no** está, está abajo con el motivo concreto, no como pendiente genérico.

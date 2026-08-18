@@ -2773,3 +2773,20 @@ tr.row-inactive:hover { opacity: 0.85; }
 .proximamente-icon { font-size: 2.5rem; display: block; margin-bottom: 12px; }
 .proximamente-placeholder h3 { font-size: 1.2rem; font-weight: 700; margin: 0 0 4px; color: var(--ink-soft); }
 .proximamente-placeholder p { font-size: 0.9rem; color: var(--ink-muted); }
+
+/* ══ TIENDA MAYORISTA · CATÁLOGOS HABILITADOS POR CLIENTE ══════════════
+   Un checkbox suelto no muestra el tamaño de la decisión. Acá cada catálogo
+   es una fila que se prende entera: prender el segundo cambia cómo entra el
+   cliente (pasa a elegir con cuál compra) y qué precios ve. ══ */
+.b2b-cli-canales { display: grid; gap: 6px; margin-top: 2px; }
+
+.b2b-cli-canal {
+  display: flex; align-items: center; gap: 9px;
+  padding: 9px 11px;
+  border: 1px solid var(--border-md); border-radius: 8px;
+  background: var(--paper); font-size: 13px; cursor: pointer;
+  transition: border-color .12s ease, background .12s ease;
+}
+.b2b-cli-canal:hover { border-color: var(--border-str); }
+.b2b-cli-canal input { cursor: pointer; }
+.b2b-cli-canal-on { border-color: var(--ink); background: var(--paper-off); }

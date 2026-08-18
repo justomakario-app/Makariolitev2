@@ -5,15 +5,22 @@
 
    Lo que se puede cambiar desde acá y no se podía desde ningún otro lado:
 
-   1. CANAL. Es la palanca de precio. Cambiarlo re-tarifa todo lo que ese
-      cliente vea de ahora en más. Los pedidos ya enviados NO se tocan: su
-      precio quedó congelado en b2b_pedido_item.precio_unitario al enviarse,
-      justamente para que un cambio de canal no reescriba historia.
-   2. HABILITADO. El corte limpio. Apagarlo deja al cliente y a sus pedidos
+   1. CATÁLOGOS HABILITADOS. Cuáles de las listas ve ese cliente. Con dos
+      habilitados es UN SOLO usuario que elige con cuál compra cada vez que
+      entra (0162) — no son dos cuentas. Cada catálogo tiene su lista de
+      precios, su mínimo y su propio pedido en curso, así que sacarle uno no
+      le borra nada: el borrador de ese catálogo queda guardado y vuelve a
+      aparecer el día que se lo rehabiliten.
+   2. CATÁLOGO POR DEFECTO. Con cuál arranca el que todavía no eligió. Si
+      tiene uno solo habilitado, es directamente el precio que ve y punto.
+      Los pedidos ya enviados NO se tocan: su precio quedó congelado en
+      b2b_pedido_item.precio_unitario al enviarse, justamente para que un
+      cambio de canal no reescriba historia.
+   3. HABILITADO. El corte limpio. Apagarlo deja al cliente y a sus pedidos
       donde están, pero la tienda le muestra la pantalla de espera en vez de
       dejarlo pedir. Es lo que hay que usar cuando alguien queda con deuda:
       no borrar nada, cerrar la canilla.
-   3. CONDICIÓN DE PAGO y NOTAS INTERNAS. Texto libre, para el que atiende.
+   4. CONDICIÓN DE PAGO y NOTAS INTERNAS. Texto libre, para el que atiende.
       Las notas no las ve el cliente en ningún lado.
 
    Guarda solo lo que cambiaste: b2b_rpc_admin_set_cliente escribe únicamente
@@ -83,6 +90,10 @@ function B2BClientesTab({ isOwner } = {}) {
     return c ? c.nombre : (codigo || '—');
   };
 
+  /* Los catálogos habilitados que NO son el de arranque. */
+  const otrosCanales = (c) =>
+    (Array.isArray(c.canales) ? c.canales : []).filter(x => x && x !== c.canal);
+
   if (loading) {
     return <div className="admin-empty-state"><span className="loader" style={{width:24, height:24}}/></div>;
   }
@@ -115,7 +126,7 @@ function B2BClientesTab({ isOwner } = {}) {
           <thead>
             <tr>
               <th>Cliente</th>
-              <th>Canal</th>
+              <th>Catálogos</th>
               <th>Tienda</th>
               <th>Compradores</th>
               <th>Condición de pago</th>
@@ -139,6 +150,14 @@ function B2BClientesTab({ isOwner } = {}) {
                 </td>
                 <td>
                   <div style={{fontWeight:600}}>{nombreCanal(c.canal)}</div>
+                  {/* Los otros catálogos que tiene habilitados. Sin esto, la
+                      lista miente: muestra uno solo cuando el cliente en
+                      realidad compra con los dos. */}
+                  {otrosCanales(c).length > 0 && (
+                    <div style={{fontSize:11, color:'var(--ink-muted)'}}>
+                      + {otrosCanales(c).map(nombreCanal).join(', ')}
+                    </div>
+                  )}
                   {c.coeficiente != null && (
                     <div style={{fontSize:11, color:'var(--ink-muted)'}}>
                       paga el {Math.round(Number(c.coeficiente) * 100)}% de la lista
@@ -204,8 +223,15 @@ function B2BClientesTab({ isOwner } = {}) {
    cambio de canal aparece únicamente cuando el canal cambió de verdad: un
    cartel rojo permanente se vuelve invisible a los tres días. ── */
 function B2BClienteModal({ cliente, canales, isOwner, onClose, onGuardar }) {
+  /* Un cliente viejo puede no tener la lista cargada: en ese caso el único
+     catálogo habilitado es el que ya tenía asignado. */
+  const canalesOrig = Array.isArray(cliente.canales) && cliente.canales.length
+    ? cliente.canales.slice()
+    : (cliente.canal ? [cliente.canal] : []);
+
   const orig = {
     canal:          cliente.canal || '',
+    canales:        canalesOrig,
     habilitado:     !!cliente.habilitado,
     condicion_pago: cliente.condicion_pago || '',
     notas_internas: cliente.notas_internas || '',
@@ -214,11 +240,32 @@ function B2BClienteModal({ cliente, canales, isOwner, onClose, onGuardar }) {
   const [guardando, setGuardando] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const cambioCanal = form.canal !== orig.canal;
-  const cambioHab   = form.habilitado !== orig.habilitado;
+  /* Tildar/destildar un catálogo. El de arranque tiene que quedar adentro de
+     los habilitados — si se destilda justo ese, se corre solo al primero que
+     queda, que es exactamente lo que hace el backend (0162). Hacerlo también
+     acá es lo que evita que el modal muestre una cosa y se guarde otra. */
+  const toggleCanal = (codigo) => setForm(f => {
+    const tiene = f.canales.includes(codigo);
+    const lista = canales
+      .map(c => c.codigo)
+      .filter(x => tiene ? (f.canales.includes(x) && x !== codigo)
+                        : (f.canales.includes(x) || x === codigo));
+    return { ...f, canales: lista, canal: lista.includes(f.canal) ? f.canal : (lista[0] || '') };
+  });
+
+  const mismoSet = (a, b) => a.length === b.length && a.every(x => b.includes(x));
+  const cambioCanales = !mismoSet(form.canales, orig.canales);
+  const cambioCanal   = form.canal !== orig.canal;
+  const cambioHab     = form.habilitado !== orig.habilitado;
+
+  const quitados  = orig.canales.filter(x => !form.canales.includes(x));
+  const agregados = form.canales.filter(x => !orig.canales.includes(x));
+  const sinCanales  = form.canales.length === 0;
+  const unSoloCanal = form.canales.length === 1;
 
   const diff = () => {
     const d = {};
+    if (cambioCanales) d.canales = form.canales;
     if (cambioCanal && form.canal) d.canal = form.canal;
     if (cambioHab) d.habilitado = form.habilitado;
     if (form.condicion_pago.trim() !== orig.condicion_pago) d.condicion_pago = form.condicion_pago.trim();
@@ -226,7 +273,9 @@ function B2BClienteModal({ cliente, canales, isOwner, onClose, onGuardar }) {
     return d;
   };
 
-  const hayCambios = Object.keys(diff()).length > 0;
+  /* Sin ningún catálogo no hay nada que guardar: el backend lo rechaza
+     (b2b_canales tiene un CHECK de al menos uno) y acá se ve antes. */
+  const hayCambios = Object.keys(diff()).length > 0 && !sinCanales;
 
   const confirmar = async () => {
     if (guardando) return;
@@ -252,31 +301,114 @@ function B2BClienteModal({ cliente, canales, isOwner, onClose, onGuardar }) {
         </button>
       </>
     }>
+      {/* Qué listas ve. Va primero porque manda sobre todo lo de abajo: el
+          catálogo de arranque sale de acá, y con dos habilitados el precio
+          deja de ser una sola cosa fija — lo elige el comprador al entrar. */}
       <div className="field-group">
-        <label className="field-label">Canal</label>
-        <select className="field-input" value={form.canal}
-                onChange={e => set('canal', e.target.value)}>
-          {!orig.canal && <option value="">Sin canal asignado…</option>}
-          {canales.map(c => (
-            <option key={c.codigo} value={c.codigo}>
-              {c.nombre} — paga el {Math.round(Number(c.coeficiente) * 100)}% de la lista
-            </option>
-          ))}
-        </select>
+        <label className="field-label">Catálogos habilitados</label>
+        <div className="b2b-cli-canales">
+          {canales.map(c => {
+            const on = form.canales.includes(c.codigo);
+            return (
+              <label key={c.codigo} className={'b2b-cli-canal' + (on ? ' b2b-cli-canal-on' : '')}>
+                <input type="checkbox" checked={on} onChange={() => toggleCanal(c.codigo)}/>
+                <span style={{fontWeight:600}}>{c.nombre}</span>
+                <span style={{marginLeft:'auto', fontSize:11, color:'var(--ink-muted)'}}>
+                  paga el {Math.round(Number(c.coeficiente) * 100)}% de la lista
+                </span>
+              </label>
+            );
+          })}
+        </div>
+
+        {sinCanales ? (
+          <div style={{display:'flex', gap:8, alignItems:'flex-start', marginTop:8, padding:'10px 12px',
+                       borderRadius:8, background:'#fee2e2', color:'#b91c1c', fontSize:12, lineHeight:1.5}}>
+            <Icon n="alert" s={16} c="#b91c1c"/>
+            <div>
+              Tiene que quedarle <b>al menos un catálogo</b>. Para cerrarle la compra
+              sin sacarle listas, destildá “Puede entrar y hacer pedidos” acá abajo.
+            </div>
+          </div>
+        ) : quitados.length > 0 ? (
+          <div style={{display:'flex', gap:8, alignItems:'flex-start', marginTop:8, padding:'10px 12px',
+                       borderRadius:8, background:'#fef3c7', color:'#92400e', fontSize:12, lineHeight:1.5}}>
+            <Icon n="alert" s={16} c="#92400e"/>
+            <div>
+              Le sacás <b>{quitados.map(x => (canales.find(c => c.codigo === x) || {}).nombre || x).join(', ')}</b>.
+              El que estuviera comprando ahí va a tener que elegir de nuevo entre los que le
+              queden. <b>No se borra nada</b>: el pedido en curso que tenga en ese catálogo
+              queda guardado y vuelve a aparecer intacto si se lo rehabilitás.
+            </div>
+          </div>
+        ) : agregados.length > 0 ? (
+          <div style={{display:'flex', gap:8, alignItems:'flex-start', marginTop:8, padding:'10px 12px',
+                       borderRadius:8, background:'#eff6ff', color:'#1d4ed8', fontSize:12, lineHeight:1.5}}>
+            <Icon n="info" s={16} c="#1d4ed8"/>
+            <div>
+              Le sumás <b>{agregados.map(x => (canales.find(c => c.codigo === x) || {}).nombre || x).join(', ')}</b>.
+              Sigue siendo <b>el mismo usuario</b>: la próxima vez que entre le vamos a
+              preguntar con qué catálogo quiere comprar, y lo puede cambiar cuando quiera.
+            </div>
+          </div>
+        ) : (
+          <div className="field-help">
+            {unSoloCanal
+              ? 'Con uno solo habilitado, entra derecho a ese: no se le pregunta nada.'
+              : 'Con más de uno, el comprador elige con cuál compra cada vez que entra. Cada catálogo tiene su lista de precios, su mínimo y su propio pedido en curso.'}
+          </div>
+        )}
+      </div>
+
+      <div className="field-group">
+        <label className="field-label">{unSoloCanal ? 'Precio que ve' : 'Catálogo con el que arranca'}</label>
+        {unSoloCanal ? (
+          <div style={{fontSize:13, fontWeight:600}}>
+            {canalNuevo ? canalNuevo.nombre : '—'}
+            {canalNuevo && (
+              <span style={{marginLeft:8, fontWeight:400, fontSize:12, color:'var(--ink-muted)'}}>
+                paga el {Math.round(Number(canalNuevo.coeficiente) * 100)}% de la lista
+              </span>
+            )}
+          </div>
+        ) : (
+          <select className="field-input" value={form.canal}
+                  onChange={e => set('canal', e.target.value)}>
+            {!orig.canal && <option value="">Sin canal asignado…</option>}
+            {canales.filter(c => form.canales.includes(c.codigo)).map(c => (
+              <option key={c.codigo} value={c.codigo}>
+                {c.nombre} — paga el {Math.round(Number(c.coeficiente) * 100)}% de la lista
+              </option>
+            ))}
+          </select>
+        )}
         {cambioCanal ? (
           <div style={{display:'flex', gap:8, alignItems:'flex-start', marginTop:8, padding:'10px 12px',
                        borderRadius:8, background:'#fef3c7', color:'#92400e', fontSize:12, lineHeight:1.5}}>
             <Icon n="alert" s={16} c="#92400e"/>
             <div>
-              Le cambiás el precio a <b>todo</b> el catálogo: de{' '}
-              <b>{canalOrig ? `${Math.round(Number(canalOrig.coeficiente) * 100)}%` : '—'}</b> a{' '}
-              <b>{canalNuevo ? `${Math.round(Number(canalNuevo.coeficiente) * 100)}%` : '—'}</b> de la lista.
-              Los pedidos que ya mandó quedan como están — su precio se congeló al enviarlos.
-              Si tiene un carrito abierto, se re-tarifa solo.
+              {unSoloCanal ? (
+                <>
+                  Le cambiás el precio a <b>todo</b> el catálogo: de{' '}
+                  <b>{canalOrig ? `${Math.round(Number(canalOrig.coeficiente) * 100)}%` : '—'}</b> a{' '}
+                  <b>{canalNuevo ? `${Math.round(Number(canalNuevo.coeficiente) * 100)}%` : '—'}</b> de la lista.
+                  Los pedidos que ya mandó quedan como están — su precio se congeló al enviarlos.
+                </>
+              ) : (
+                <>
+                  Pasa a arrancar en <b>{canalNuevo ? canalNuevo.nombre : '—'}</b>. Al que ya venía
+                  comprando con otro de sus catálogos no le cambia nada: sigue en el que eligió
+                  hasta que lo cambie él. Los pedidos ya enviados no se tocan.
+                </>
+              )}
             </div>
           </div>
         ) : (
-          <div className="field-help">Es lo que define el precio que ve. Nadie ve el de otro canal.</div>
+          <div className="field-help">
+            {unSoloCanal
+              ? 'Es lo que define el precio que ve. Nadie ve el de otro catálogo.'
+              : 'Es el que ve el que todavía no eligió, y el que le queda si le sacás el suyo.'}
+          </div>
         )}
       </div>
 

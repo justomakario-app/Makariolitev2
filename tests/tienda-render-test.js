@@ -99,6 +99,11 @@ function carritoJson() {
 /* ── Supabase falso ────────────────────────────────────────────────────── */
 const RPC_LOG = [];
 const FN_LOG = [];
+/* Qué contesta b2b_signup. Se cambia por escenario: el alta abierta tiene tres
+   finales distintos (entra, queda pendiente por CUIT ajeno, o el correo ya
+   tiene cuenta) y los tres se deciden del lado del servidor. */
+const FN_OK = () => ({ data:{ ok:true, estado:'aprobado', cliente:'Corralon Sur', empresa_nueva:true }, error:null });
+let FN_RESPUESTA = FN_OK;
 let SESION = null;
 let AUTH_CB = null;
 let ENVIADOS = 0;
@@ -123,7 +128,7 @@ const SUPA = {
   functions: {
     invoke: async (nombre, opts) => {
       FN_LOG.push({ nombre, body: opts && opts.body });
-      return { data:{ ok:true }, error:null };
+      return FN_RESPUESTA();
     },
   },
   from() {  /* la tienda no lee tablas directo; si lo hiciera, se ve acá */
@@ -163,6 +168,23 @@ const SUPA = {
                                         numero_mayorista:'MAY-0009',
                                         total_neto:c.total_neto, unidades:c.unidades }, error:null });
       }
+      /* Cambiar de catálogo cambia la cuenta (canal vigente y mínimo) y el
+         carrito: desde 0162 hay un borrador por canal, así que el que estaba
+         en pantalla es el del catálogo anterior. Acá se imita eso vaciando
+         ITEMS, que es lo que hace que el test note si la tienda se olvida de
+         recargar el carrito. */
+      case 'b2b_rpc_set_canal': {
+        const cans = (CUENTA && CUENTA.cliente && CUENTA.cliente.canales) || [];
+        const ca = cans.find(x => x.codigo === p.canal);
+        if (!ca) return Promise.resolve({ data:null,
+          error:{ message:'Ese catalogo no esta habilitado para tu cuenta.', code:'42501' } });
+        CUENTA = Object.assign({}, CUENTA, { canal:ca.codigo, canal_elegido:true,
+          cliente: Object.assign({}, CUENTA.cliente,
+            { canal:ca.codigo, minimo_pedido:ca.minimo_pedido, minimo_unidades:ca.minimo_unidades }) });
+        ITEMS = [];
+        return Promise.resolve({ data:{ ok:true, canal:ca.codigo, nombre:ca.nombre,
+          minimo_pedido:ca.minimo_pedido, minimo_unidades:ca.minimo_unidades }, error:null });
+      }
       case 'b2b_rpc_mis_pedidos':   return Promise.resolve({ data:MIS_PEDIDOS, error:null });
       case 'b2b_rpc_anular_pedido': return Promise.resolve({ data:{ ok:true, pedido_id:p.pedido_id, estado:'anulado' }, error:null });
       case 'b2b_rpc_ver_invitacion':return Promise.resolve({ data:{ ok:true, email:'nuevo@cliente.com', cliente:'Corralon Sur' }, error:null });
@@ -176,8 +198,22 @@ dom.window.SUPA = SUPA;
 /* ── Cargar capa de datos + componentes reales ─────────────────────────── */
 new Function('window', 'navigator', fs.readFileSync(DATA, 'utf8'))(dom.window, dom.window.navigator);
 
-const ORDEN = ['tienda-ui.jsx', 'tienda-acceso.jsx', 'tienda-catalogo.jsx',
+const ORDEN = ['tienda-ui.jsx', 'tienda-acceso.jsx', 'tienda-canal.jsx', 'tienda-catalogo.jsx',
                'tienda-carrito.jsx', 'tienda-pedidos.jsx', 'tienda-app.jsx'];
+
+/* El orden de arriba tiene que ser EL MISMO que sirve nginx. Si no, el test
+   monta una tienda que no existe: un archivo nuevo puede compilar y renderizar
+   perfecto acá y no estar en el <script> del HTML, o sea no llegar nunca al
+   browser del cliente. Ya pasó al agregar tienda-canal.jsx. */
+const HTML_TIENDA = fs.readFileSync(path.join(ROOT, 'tienda', 'index.html'), 'utf8');
+const RE_SCRIPT = new RegExp(String.raw`src="components/(tienda-[a-z-]+.jsx)`, "g");
+const EN_HTML = [...HTML_TIENDA.matchAll(RE_SCRIPT)].map(m => m[1]);
+if (EN_HTML.join('|') !== ORDEN.join('|')) {
+  console.error('El orden de los componentes NO coincide con tienda/index.html');
+  console.error('  test: ' + ORDEN.join(', '));
+  console.error('  html: ' + EN_HTML.join(', '));
+  process.exit(1);
+}
 const fuente = ORDEN.map(f => fs.readFileSync(path.join(TIENDA, f), 'utf8')).join('\n;\n');
 const codigo = Babel.transform(fuente, { presets:['react'], filename:'tienda.jsx' }).code;
 new Function('React', 'window', 'document', 'setTimeout', codigo)
@@ -196,6 +232,7 @@ async function montar(cuenta, opts) {
   ITEMS = o.items ? o.items.slice() : [];
   DATOS = { direccion_entrega:null, fecha_entrega_deseada:null, notas:null };
   RPC_LOG.length = 0; FN_LOG.length = 0; ENVIADOS = 0;
+  FN_RESPUESTA = o.signup || FN_OK;
   if (root) await act(async () => root.unmount());
   root = ReactDOMClient.createRoot(container);
   await act(async () => { root.render(React.createElement(dom.window.TiendaRoot)); });
@@ -247,12 +284,24 @@ function check(nombre, cond, extra) {
   else { fail++; console.log('  FAIL ' + nombre + (extra ? '  → ' + extra : '')); }
 }
 
+/* Los dos catálogos que puede elegir un mismo comprador. El de distribuidor
+   con OTRO mínimo a propósito: el mínimo es del canal, no del cliente. */
+const CANALES = [
+  { codigo:'mayorista',    nombre:'Mayorista',    minimo_pedido:MINIMO_PEDIDO, minimo_unidades:0 },
+  { codigo:'distribuidor', nombre:'Distribuidor', minimo_pedido:900000,        minimo_unidades:0 },
+];
+
 const APROBADO = {
   ok:true, usuario_id:'u1', nombre:'Ana Perez', email:'ana@corralon.com',
-  estado:'aprobado', es_titular:true,
+  estado:'aprobado', es_titular:true, canal:'mayorista', canal_elegido:true,
   cliente:{ id:'c1', nombre:'Corralon Sur', cuit:'30-11111111-1', habilitado:true,
-            condicion_pago:'30 dias', minimo_pedido:MINIMO_PEDIDO, minimo_unidades:0 },
+            condicion_pago:'30 dias', minimo_pedido:MINIMO_PEDIDO, minimo_unidades:0,
+            canal:'mayorista', canales:CANALES },
 };
+
+/* La misma cuenta, pero todavía sin elegir catálogo: es lo que devuelve
+   mi_cuenta después de un alta nueva (0163 deja canal_activo en NULL). */
+const SIN_ELEGIR = Object.assign({}, APROBADO, { canal_elegido:false });
 
 /* ── Corrida ───────────────────────────────────────────────────────────── */
 (async () => {
@@ -262,10 +311,18 @@ const APROBADO = {
   console.log('— Quién puede comprar —');
 
   await montar(null, { sinSesion:true });
-  check('sin sesión: aparece la pantalla de acceso', /Tienda mayorista/i.test(cuerpo()) && !!container.querySelector('.t-acceso'));
+  check('sin sesión: aparece la pantalla de acceso',
+        !!container.querySelector('.t-acceso') && /MAKARIO/.test(cuerpo())
+        && /mayorista/i.test(cuerpo()));
   check('sin sesión: no se llamó NINGUNA RPC', RPC_LOG.length === 0, rpcs().join(','));
-  check('sin sesión: no hay registro abierto, solo código de invitación',
-        !/regist[rá]ate/i.test(cuerpo()) && /código de invitación/i.test(cuerpo()));
+  /* Desde 0163 el alta es abierta: el dueño manda un link y del otro lado se
+     registran solos. La invitación NO desapareció — es el único camino para
+     sumar un segundo comprador a un cliente que ya existe — así que los dos
+     tienen que estar a la vista en la primera pantalla. */
+  check('sin sesión: ofrece crear la cuenta Y canjear un código',
+        /Crear mi cuenta/i.test(cuerpo()) && /código de invitación/i.test(cuerpo()));
+  check('sin sesión: no se ve ningún precio antes de entrar',
+        !/70\.000|100\.000/.test(cuerpo()));
 
   await montar({ ok:false, motivo:'b2b_deshabilitado' });
   /* La tienda apagada NO es un problema de la cuenta del mayorista: si el
@@ -465,6 +522,166 @@ const APROBADO = {
         JSON.stringify(FN_LOG[0] && Object.keys(FN_LOG[0].body)));
   check('después del alta canjea la invitación con la sesión propia',
         rpcs().includes('b2b_rpc_canjear_invitacion'));
+
+
+  /* (7) Alta abierta por link ------------------------------------------- */
+  console.log('\n— Alta abierta por link —');
+
+  /* 30-71234567-1 valida el dígito verificador; el mismo terminado en 9, no.
+     Los dos tienen que poder registrarse: el CUIT mal tipeado se avisa y se
+     arregla desde el panel, rebotar a un comprador real lo pierde. */
+  const CUIT_OK  = '30712345671';
+  const CUIT_MAL = '30712345679';
+
+  async function completarAlta(o) {
+    const d = o || {};
+    await clickTexto('button', 'Crear mi cuenta');
+    await tipear(container.querySelector('#rg-empresa'), d.empresa || 'Corralon Norte');
+    await tipear(container.querySelector('#rg-cuit'), d.cuit || CUIT_OK);
+    await clickTexto('button', 'Continuar');
+    await tipear(container.querySelector('#rg-nombre'), d.nombre || 'Pedro Lopez');
+    await tipear(container.querySelector('#rg-email'), d.email || 'pedro@corralonnorte.com');
+    await tipear(container.querySelector('#rg-p1'), d.pass || 'contraseñalarga');
+    await tipear(container.querySelector('#rg-p2'), d.pass2 || d.pass || 'contraseñalarga');
+    await clickTexto('button', 'Crear mi cuenta y entrar');
+  }
+
+  await montar(null, { sinSesion:true });
+  await clickTexto('button', 'Crear mi cuenta');
+  await tipear(container.querySelector('#rg-empresa'), 'Corralon Norte');
+  check('el alta arranca por la empresa, no por la persona',
+        !!container.querySelector('#rg-empresa') && !container.querySelector('#rg-email'));
+
+  await tipear(container.querySelector('#rg-cuit'), CUIT_OK);
+  check('el CUIT se escribe solo con guiones, como lo guarda la base',
+        container.querySelector('#rg-cuit').value === '30-71234567-1',
+        container.querySelector('#rg-cuit').value);
+  check('CUIT que valida: palomita verde', !!container.querySelector('.t-vfy-ok'));
+
+  await tipear(container.querySelector('#rg-cuit'), CUIT_MAL);
+  check('★ CUIT que no valida: avisa pero NO traba el alta',
+        !!container.querySelector('.t-vfy-warn') && /no valida/i.test(cuerpo())
+        && !boton('Continuar').disabled);
+
+  await tipear(container.querySelector('#rg-cuit'), '3071234');
+  check('CUIT incompleto: no deja avanzar', boton('Continuar').disabled);
+
+  /* Paso 2: las validaciones son de este lado ANTES de gastar una llamada. */
+  await montar(null, { sinSesion:true });
+  await completarAlta({ pass:'corta' });
+  check('★ contraseña corta: ni siquiera llama a la edge function',
+        FN_LOG.length === 0 && /al menos 8/.test(cuerpo()), JSON.stringify(FN_LOG));
+
+  await tipear(container.querySelector('#rg-p1'), 'contraseñalarga');
+  await tipear(container.querySelector('#rg-p2'), 'otradistinta');
+  await clickTexto('button', 'Crear mi cuenta y entrar');
+  check('contraseñas distintas: tampoco llama a la edge function',
+        FN_LOG.length === 0 && /no coinciden/.test(cuerpo()));
+
+  await tipear(container.querySelector('#rg-email'), 'esto-no-es-un-mail');
+  await tipear(container.querySelector('#rg-p2'), 'contraseñalarga');
+  await clickTexto('button', 'Crear mi cuenta y entrar');
+  check('correo inválido: tampoco llama a la edge function',
+        FN_LOG.length === 0 && /correo/i.test(cuerpo()));
+
+  /* El alta que sale bien. */
+  await montar(APROBADO, { sinSesion:true });
+  await completarAlta({});
+  const alta = FN_LOG[0];
+  check('★ el alta va por la edge function b2b_signup, NO por auth.signUp',
+        FN_LOG.length === 1 && alta && alta.nombre === 'b2b_signup', JSON.stringify(FN_LOG));
+  check('manda la empresa y el CUIT sin guiones (los pone la base)',
+        alta && alta.body.empresa === 'Corralon Norte' && alta.body.cuit === CUIT_OK,
+        JSON.stringify(alta && alta.body));
+  check('★ NO manda rol ni token: el alta abierta no es una invitación',
+        alta && !('role' in alta.body) && !('token' in alta.body),
+        JSON.stringify(alta && Object.keys(alta.body)));
+  check('★ NO manda canal: el catálogo se elige adentro, no en el formulario',
+        alta && !('canal' in alta.body), JSON.stringify(alta && Object.keys(alta.body)));
+  check('entra con la cuenta recién creada, sin pedirle que vuelva a loguearse',
+        rpcs().includes('b2b_rpc_mi_cuenta'));
+
+  /* CUIT de una empresa que ya es cliente: 0163 lo deja pendiente. Que no se
+     lo expliquen es lo que hace que el comprador reintente con otro mail. */
+  await montar(null, { sinSesion:true, signup: () => ({
+    data:{ ok:true, estado:'pendiente', cliente:'Corralon Sur', empresa_nueva:false }, error:null }) });
+  await completarAlta({});
+  check('★ CUIT ajeno: explica que queda a confirmar y de qué empresa se trata',
+        /confirmar|revis/i.test(cuerpo()) && /Corralon Sur/.test(cuerpo()));
+  check('CUIT ajeno: le ofrece el código de invitación como atajo',
+        /código de invitación/i.test(cuerpo()));
+
+  /* Correo que ya tiene cuenta: no es un error del alta, es alguien que ya
+     está. Se lo manda a entrar, con el mail puesto. */
+  await montar(null, { sinSesion:true, signup: () => ({
+    data:null, error:{ message:'Ese correo ya tiene una cuenta.' } }) });
+  await completarAlta({ email:'ana@corralon.com' });
+  check('★ correo repetido: lo lleva a entrar con el correo ya cargado',
+        !!container.querySelector('#ac-email')
+        && container.querySelector('#ac-email').value === 'ana@corralon.com',
+        container.querySelector('#ac-email') && container.querySelector('#ac-email').value);
+
+  /* (8) Elegir catálogo -------------------------------------------------- */
+  console.log('\n— Elegir catálogo —');
+
+  await montar(SIN_ELEGIR);
+  check('alta nueva: primero pregunta con qué catálogo va a comprar',
+        !!container.querySelector('.t-elegir'));
+  check('muestra los dos catálogos habilitados',
+        container.querySelectorAll('.t-canal').length === 2);
+  check('★ no pide el catálogo antes de saber qué precios corresponden',
+        !rpcs().includes('b2b_rpc_catalogo'), rpcs().join(','));
+  check('cada catálogo muestra su propio mínimo de compra',
+        /250\.000/.test(cuerpo()) && /900\.000/.test(cuerpo()));
+
+  const tarjDistri = Array.from(container.querySelectorAll('.t-canal'))
+    .find(c => txt(c).includes('Distribuidor'));
+  await click(tarjDistri);
+  const canal1 = ultimo('b2b_rpc_set_canal');
+  check('elegir manda el canal elegido', !!canal1 && canal1.payload.canal === 'distribuidor',
+        JSON.stringify(canal1 && canal1.payload));
+  check('después de elegir entra a la tienda', !!container.querySelector('.t-app'));
+
+  const iSet = rpcs().lastIndexOf('b2b_rpc_set_canal');
+  check('★ al cambiar recarga la cuenta Y el carrito (hay un borrador por canal)',
+        rpcs().indexOf('b2b_rpc_mi_cuenta', iSet) > iSet
+        && rpcs().indexOf('b2b_rpc_carrito', iSet) > iSet, rpcs().join(','));
+  check('el header dice en qué catálogo está parado',
+        /Distribuidor/.test(txt(container.querySelector('.t-header'))));
+
+  /* Cambiar de catálogo desde el header. */
+  await click(container.querySelector('.t-canal-chip'));
+  check('el chip abre las mismas tarjetas para cambiar',
+        !!container.querySelector('.t-modal') && container.querySelectorAll('.t-canal').length === 2);
+  check('marca cuál es el que está usando ahora',
+        !!container.querySelector('.t-canal-on')
+        && txt(container.querySelector('.t-canal-on')).includes('Distribuidor'));
+  const tarjMayo = Array.from(container.querySelectorAll('.t-canal'))
+    .find(c => txt(c).includes('Mayorista'));
+  await click(tarjMayo);
+  const canal2 = ultimo('b2b_rpc_set_canal');
+  check('cambiar desde el header manda el otro canal',
+        !!canal2 && canal2.payload.canal === 'mayorista');
+  check('vuelve al catálogo con el canal nuevo',
+        !container.querySelector('.t-modal') && !!container.querySelector('.t-app')
+        && /Mayorista/.test(txt(container.querySelector('.t-header'))));
+
+  /* Un solo catálogo habilitado: no hay nada que elegir. */
+  await montar(Object.assign({}, SIN_ELEGIR, {
+    cliente: Object.assign({}, APROBADO.cliente, { canales:[CANALES[0]] }) }));
+  await flush();
+  check('★ con un solo catálogo no pregunta: lo abre solo',
+        !container.querySelector('.t-elegir') && !!container.querySelector('.t-app'));
+  const setSolo = ultimo('b2b_rpc_set_canal');
+  check('y lo deja fijado igual, para no volver a preguntar mañana',
+        !!setSolo && setSolo.payload.canal === 'mayorista');
+  check('el chip queda como cartel, no como botón',
+        !!container.querySelector('.t-canal-chip-fijo'));
+
+  /* El que ya eligió no vuelve a pasar por la pantalla. */
+  await montar(APROBADO);
+  check('el que ya eligió entra derecho al catálogo',
+        !container.querySelector('.t-elegir') && rpcs().includes('b2b_rpc_catalogo'));
 
   console.log(`\n${pass}/${pass + fail} checks · fallos: ${fail}\n`);
   process.exit(fail ? 1 : 0);

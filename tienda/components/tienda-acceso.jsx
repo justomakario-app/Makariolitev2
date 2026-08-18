@@ -1,21 +1,35 @@
 /* ══ TIENDA · ACCESO ══════════════════════════════════════════════════════
-   Todo lo que pasa ANTES de poder comprar: entrar, canjear la invitacion y
-   esperar la aprobacion.
+   Todo lo que pasa ANTES de poder comprar: entrar, crear la cuenta, canjear
+   una invitacion y esperar cuando todavia falta algo.
 
-   La tienda es cerrada. No hay "registrate": para tener cuenta hace falta un
-   codigo que emite el equipo desde Ventas > Tienda mayorista > Accesos. Y
-   tener cuenta tampoco alcanza — despues de canjear, el usuario queda en
-   'pendiente' hasta que alguien lo aprueba a mano. Son dos puertas distintas
-   y las dos las controla el equipo.
+   ─── Como se entra (0163) ──────────────────────────────────────────────
+   El dueño manda UN link. Del otro lado el comprador se registra solo — sus
+   datos y los de su empresa — y queda comprando en el momento. No hay codigo
+   de invitacion de por medio ni aprobacion manual: fue decision del dueño, y
+   significa que cualquiera que reciba (o reenvie) el link puede ver la lista
+   mayorista. La contrapartida esta del lado del backend: un CUIT por empresa,
+   y si el CUIT ya es de un cliente, el que se registra NO entra a esa cuenta
+   — queda pendiente hasta que alguien confirme que trabaja ahi. El CUIT de
+   una empresa esta en cualquier factura suya: si alcanzara para entrar, se
+   verian los pedidos y los precios de otro.
 
-   Por que el alta pasa por una edge function y no por supabase.auth.signUp:
-   handle_new_user() lee el rol de raw_user_meta_data, que en un signup
-   publico lo controla quien se registra — o sea que con el registro abierto
-   cualquiera podria pedir role='owner'. Por eso el registro publico va
-   APAGADO y el alta la hace 'b2b_signup' con service_role, que primero
-   valida el token contra la base y recien despues crea el usuario, marcado
-   b2b:'true' para que handle_new_user NO le cree profile (sin profile,
-   is_active_user() da false y todo el sistema interno le queda cerrado).
+   La invitacion (modo 'codigo') sigue viva y es justo para ese caso: sumar
+   un SEGUNDO comprador a un cliente que ya existe.
+
+   El link se puede mandar apuntado:
+     /tienda/            → pantalla de entrar
+     /tienda/?alta=1     → directo al registro
+     /tienda/?codigo=XYZ → directo a canjear, con el codigo puesto
+
+   ─── Por que el alta pasa por una edge function ────────────────────────
+   handle_new_user() decide con el metadata si el usuario nuevo es interno y
+   le crea un profile. En un signup publico ese metadata lo controla quien se
+   registra: cualquiera con la anon key podria pedir role='owner' y quedar
+   adentro del sistema de la planta. Por eso el registro publico de Supabase
+   va APAGADO y el alta la hace 'b2b_signup' con service_role, que valida y
+   despues crea el usuario marcado b2b:'true' en app_metadata (que solo el
+   service_role puede escribir). Sin profile, is_active_user() da false y
+   todo el sistema interno le queda cerrado.
    ═══════════════════════════════════════════════════════════════════════ */
 
 /* Traduce el motivo que devuelve b2b_rpc_mi_cuenta a algo que el cliente
@@ -44,9 +58,66 @@ const mensajeDeFuncion = async (error, data) => {
   return error.message || 'No se pudo crear la cuenta.';
 };
 
-/* ── Marca ─────────────────────────────────────────────────────────────── */
-const Marca = ({ chico }) => (
-  <div className={'t-marca' + (chico ? ' t-marca-chico' : '')}>
+/* ── CUIT ──────────────────────────────────────────────────────────────
+   Se muestra siempre NN-NNNNNNNN-N, que es como lo guarda la base
+   (customers_b2b_cuit_check) y como funciona el indice unico: el mismo CUIT
+   con guiones y sin guiones serian dos empresas distintas.
+
+   El digito verificador se chequea aca igual que en 0163, y aca tampoco
+   bloquea. Se avisa y listo: un CUIT mal tipeado lo arregla el dueño en dos
+   segundos desde el panel, y rebotarle el alta a un comprador real un
+   domingo a la noche lo pierde para siempre. */
+const soloDigitos = (s) => String(s || '').replace(/[^0-9]/g, '').slice(0, 11);
+
+const formatearCuit = (s) => {
+  const d = soloDigitos(s);
+  if (d.length <= 2) return d;
+  if (d.length <= 10) return d.slice(0, 2) + '-' + d.slice(2);
+  return d.slice(0, 2) + '-' + d.slice(2, 10) + '-' + d.slice(10);
+};
+
+const cuitValida = (s) => {
+  const d = soloDigitos(s);
+  if (d.length !== 11) return false;
+  const mult = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
+  let suma = 0;
+  for (let i = 0; i < 10; i++) suma += Number(d[i]) * mult[i];
+  let dv = 11 - (suma % 11);
+  if (dv === 11) dv = 0; else if (dv === 10) dv = 9;
+  return dv === Number(d[10]);
+};
+
+/* Las 24 jurisdicciones. Es un <select> y no texto libre para que el dueño
+   no termine con "Bs As", "BSAS" y "Buenos Aires" como tres provincias. */
+const PROVINCIAS = [
+  'Buenos Aires', 'Ciudad Autónoma de Buenos Aires', 'Catamarca', 'Chaco', 'Chubut',
+  'Córdoba', 'Corrientes', 'Entre Ríos', 'Formosa', 'Jujuy', 'La Pampa', 'La Rioja',
+  'Mendoza', 'Misiones', 'Neuquén', 'Río Negro', 'Salta', 'San Juan', 'San Luis',
+  'Santa Cruz', 'Santa Fe', 'Santiago del Estero', 'Tierra del Fuego', 'Tucumán',
+];
+
+/* Con que pantalla abre segun el link que le mandaron. */
+const modoDesdeUrl = () => {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get('codigo') || p.get('token')) return 'codigo';
+    if (p.get('alta') === '1' || p.get('alta') === 'true') return 'registro';
+    if (/^#?(alta|registro)$/i.test(window.location.hash || '')) return 'registro';
+  } catch (e) { /* URL rara: abre en 'entrar', que nunca esta mal */ }
+  return 'entrar';
+};
+
+const codigoDesdeUrl = () => {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    return (p.get('codigo') || p.get('token') || '').trim();
+  } catch (e) { return ''; }
+};
+
+/* ── Marca ─────────────────────────────────────────────────────────────
+   `claro` la invierte para el panel oscuro. */
+const Marca = ({ chico, claro }) => (
+  <div className={'t-marca' + (chico ? ' t-marca-chico' : '') + (claro ? ' t-marca-claro' : '')}>
     <span className="t-marca-1">JUSTO</span>
     <span className="t-marca-2">MAKARIO</span>
     <span className="t-marca-3">Home</span>
@@ -69,30 +140,99 @@ const CampoPass = ({ value, onChange, placeholder, autoComplete, id }) => {
   );
 };
 
+/* Un campo con su etiqueta. Existe para que el formulario largo del registro
+   se lea como una lista de preguntas y no como un muro de inputs. */
+const AccCampo = ({ id, label, opcional, ayuda, children }) => (
+  <div className="t-campo">
+    <label className="t-label" htmlFor={id}>
+      {label}{opcional && <span className="t-opt"> (opcional)</span>}
+    </label>
+    {children}
+    {ayuda && <div className="t-help">{ayuda}</div>}
+  </div>
+);
+
+/* Paso 1 de 2 / paso 2 de 2. Un formulario de nueve campos de una sola vez
+   se abandona; partido al medio, con el final a la vista, no. */
+const AccPasos = ({ paso, titulos }) => (
+  <div className="t-pasos">
+    {titulos.map((t, i) => (
+      <div key={t} className={'t-paso' + (i < paso ? ' t-paso-hecho' : '') + (i === paso ? ' t-paso-on' : '')}>
+        <span className="t-paso-n">{i < paso ? <Icon n="check" s={12}/> : i + 1}</span>
+        <span className="t-paso-t">{t}</span>
+      </div>
+    ))}
+  </div>
+);
+
 /* ══ Pantalla de acceso ═════════════════════════════════════════════════
-   modo 'entrar'  → email + contraseña
-   modo 'codigo'  → canjear invitación (crea la cuenta si hace falta)      */
+   modo 'entrar'   → email + contraseña
+   modo 'registro' → alta abierta, dos pasos
+   modo 'codigo'   → canjear invitación (segundo comprador de un cliente)  */
 const PantallaAcceso = ({ onEntro }) => {
-  const [modo, setModo] = useState('entrar');
+  const [modo, setModo] = useState(modoDesdeUrl);
+  const [emailPrevio, setEmailPrevio] = useState('');   // lo pasa el registro al login
+
+  const irAEntrar = (email) => { setEmailPrevio(email || ''); setModo('entrar'); };
+
+  const CABEZAS = {
+    entrar:   ['Entrá a tu cuenta', 'Tu lista, tus pedidos y tu historial.'],
+    registro: ['Creá tu cuenta', 'Dos pasos y ya estás comprando.'],
+    codigo:   ['Tengo un código', 'Sumate a una empresa que ya compra acá.'],
+  };
+  const cabeza = CABEZAS[modo] || CABEZAS.entrar;
+
   return (
     <div className="t-acceso">
-      <div className="t-acceso-caja">
-        <Marca/>
-        <p className="t-acceso-bajada">Tienda mayorista</p>
-        {modo === 'entrar'
-          ? <FormEntrar onEntro={onEntro} irACodigo={() => setModo('codigo')}/>
-          : <FormCodigo onEntro={onEntro} volver={() => setModo('entrar')}/>}
+      <div className="t-acceso-split">
+
+        {/* Panel de marca. En el celular se colapsa a una franja: el cliente
+            que entra desde el teléfono quiere el formulario, no el discurso. */}
+        <aside className="t-acceso-brand">
+          <Marca claro/>
+          <div className="t-acceso-brand-cuerpo">
+            <h1 className="t-acceso-h1">Tu lista mayorista,<br/>abierta las 24 horas.</h1>
+            <p className="t-acceso-p">
+              Entrá cuando quieras, elegí con qué catálogo comprar y armá el pedido a tu
+              ritmo. Lo recibimos en el momento.
+            </p>
+            <ul className="t-acceso-puntos">
+              <li><Icon n="check" s={15}/><span>Los precios de tu canal, siempre al día</span></li>
+              <li><Icon n="check" s={15}/><span>Un carrito para mayorista y otro para distribuidor</span></li>
+              <li><Icon n="check" s={15}/><span>Repetí un pedido anterior en un toque</span></li>
+            </ul>
+          </div>
+          <p className="t-acceso-sello">Acceso para clientes mayoristas y distribuidores</p>
+        </aside>
+
+        {/* Panel del formulario */}
+        <main className="t-acceso-panel">
+          <div className="t-acceso-panel-marca"><Marca chico/></div>
+
+          <header className="t-acceso-head">
+            <h2 className="t-acceso-titulo">{cabeza[0]}</h2>
+            <p className="t-acceso-bajada">{cabeza[1]}</p>
+          </header>
+
+          {modo === 'entrar' ? (
+            <FormEntrar onEntro={onEntro} emailPrevio={emailPrevio}
+                        irARegistro={() => setModo('registro')}
+                        irACodigo={() => setModo('codigo')}/>
+          ) : modo === 'registro' ? (
+            <FormRegistro onEntro={onEntro} irAEntrar={irAEntrar}
+                          irACodigo={() => setModo('codigo')}/>
+          ) : (
+            <FormCodigo onEntro={onEntro} volver={() => setModo('entrar')}/>
+          )}
+        </main>
       </div>
-      <p className="t-acceso-pie">
-        ¿Todavía no sos cliente? Escribinos y te mandamos una invitación.
-      </p>
     </div>
   );
 };
 
 /* ── Entrar con cuenta existente ───────────────────────────────────────── */
-const FormEntrar = ({ onEntro, irACodigo }) => {
-  const [email, setEmail] = useState('');
+const FormEntrar = ({ onEntro, irARegistro, irACodigo, emailPrevio }) => {
+  const [email, setEmail] = useState(emailPrevio || '');
   const [pass, setPass]   = useState('');
   const [busy, setBusy]   = useState(false);
   const [err, setErr]     = useState(null);
@@ -120,21 +260,268 @@ const FormEntrar = ({ onEntro, irACodigo }) => {
 
   return (
     <form className="t-form" onSubmit={entrar}>
-      <label className="t-label" htmlFor="ac-email">Correo</label>
-      <input id="ac-email" className="t-input" type="email" value={email} autoComplete="username"
-             onChange={e => setEmail(e.target.value)} placeholder="tucorreo@empresa.com"/>
+      <AccCampo id="ac-email" label="Correo">
+        <input id="ac-email" className="t-input" type="email" value={email} autoComplete="username"
+               onChange={e => setEmail(e.target.value)} placeholder="tucorreo@empresa.com"/>
+      </AccCampo>
 
-      <label className="t-label" htmlFor="ac-pass">Contraseña</label>
-      <CampoPass id="ac-pass" value={pass} onChange={setPass}/>
+      <AccCampo id="ac-pass" label="Contraseña">
+        <CampoPass id="ac-pass" value={pass} onChange={setPass}/>
+      </AccCampo>
 
       {err && <Aviso tipo="error">{err}</Aviso>}
 
-      <button className="t-btn t-btn-primary t-btn-block" type="submit" disabled={busy || !email || !pass}>
+      <button className="t-btn t-btn-primary t-btn-block t-btn-alto" type="submit"
+              disabled={busy || !email || !pass}>
         {busy ? 'Entrando…' : 'Entrar'}
+      </button>
+
+      <div className="t-sep"><span>o</span></div>
+
+      <button className="t-btn t-btn-ghost t-btn-block" type="button" onClick={irARegistro}>
+        <Icon n="user" s={15}/> Crear mi cuenta
       </button>
 
       <button className="t-link" type="button" onClick={irACodigo}>
         <Icon n="ticket" s={14}/> Tengo un código de invitación
+      </button>
+    </form>
+  );
+};
+
+/* ── Alta abierta ──────────────────────────────────────────────────────
+   Dos pasos: primero la empresa, después la persona. Ese orden y no el
+   inverso porque la empresa es lo que decide todo lo demás — es lo que
+   define si esto es un alta nueva o alguien sumándose a un cliente que ya
+   existe — y porque el CUIT es el dato que hay que ir a buscar: mejor
+   pedirlo con la pantalla recién abierta que sobre el final.
+
+   Las validaciones de acá están duplicadas de la edge function a propósito:
+   las de allá son las que mandan (el navegador no valida nada de verdad),
+   las de acá son para que el cliente no se entere de que le falta algo
+   después de completar nueve campos.
+
+   Lo que NO se pregunta acá: con qué catálogo va a comprar. Eso se elige en
+   la pantalla siguiente, ya adentro, y se puede cambiar cuando quiera. Es la
+   primera decisión de la compra, no un campo más del formulario de alta.  */
+const FormRegistro = ({ onEntro, irAEntrar, irACodigo }) => {
+  const [paso, setPaso] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr]   = useState(null);
+  const [pendiente, setPendiente] = useState(null);   // alta que quedó a confirmar
+
+  const [empresa, setEmpresa]     = useState('');
+  const [cuit, setCuit]           = useState('');
+  const [localidad, setLocalidad] = useState('');
+  const [provincia, setProvincia] = useState('');
+
+  const [nombre, setNombre]     = useState('');
+  const [email, setEmail]       = useState('');
+  const [telefono, setTelefono] = useState('');
+  const [pass, setPass]   = useState('');
+  const [pass2, setPass2] = useState('');
+
+  const cuitD   = soloDigitos(cuit);
+  const cuitOk  = cuitValida(cuitD);
+  const paso1Ok = empresa.trim().length >= 2 && cuitD.length === 11;
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
+
+  const seguir = (e) => {
+    e.preventDefault();
+    setErr(null);
+    if (empresa.trim().length < 2) { setErr('Poné el nombre de tu empresa o comercio.'); return; }
+    if (cuitD.length !== 11)       { setErr('El CUIT tiene que tener 11 números.'); return; }
+    setPaso(1);
+  };
+
+  const crear = async (e) => {
+    e.preventDefault();
+    if (busy) return;
+    setErr(null);
+
+    if (nombre.trim().length < 2) { setErr('Poné tu nombre y apellido.'); return; }
+    if (!emailOk)        { setErr('Revisá el correo: no parece una dirección válida.'); return; }
+    if (pass.length < 8) { setErr('La contraseña tiene que tener al menos 8 caracteres.'); return; }
+    if (pass !== pass2)  { setErr('Las dos contraseñas no coinciden.'); return; }
+
+    setBusy(true);
+    try {
+      /* Alta con service_role: crea la credencial y, en la misma llamada, la
+         empresa y el comprador. Si lo segundo falla, allá se borra la
+         credencial — si no, el comprador queda con un usuario que no abre
+         nada y que además le bloquea reintentar con su propio mail.
+         Ver supabase/functions/b2b_signup y la migración 0163. */
+      const { data, error } = await window.SUPA.functions.invoke('b2b_signup', {
+        body: {
+          email: email.trim().toLowerCase(),
+          password: pass,
+          nombre: nombre.trim(),
+          telefono: telefono.trim(),
+          empresa: empresa.trim(),
+          cuit: cuitD,
+          localidad: localidad.trim(),
+          provincia: provincia.trim(),
+        },
+      });
+
+      if (error || (data && data.error)) {
+        const msg = await mensajeDeFuncion(error, data);
+        /* Ese correo ya existe: no es un error del alta, es alguien que ya
+           tiene cuenta. Se lo manda al login con el mail puesto en vez de
+           dejarlo peleando con un formulario que nunca va a pasar. */
+        if (/ya (existe|tiene)/i.test(msg || '')) throw new Error('__YA_EXISTE__');
+        throw new Error(msg || 'No se pudo crear la cuenta.');
+      }
+
+      /* Se entra con la credencial recién creada. Es lo que hace que "entrá
+         y comprá directo" sea directo de verdad. */
+      const { error: eIn } = await window.SUPA.auth.signInWithPassword({
+        email: email.trim().toLowerCase(), password: pass,
+      });
+      if (eIn) throw new Error('Tu cuenta quedó creada. Entrá con tu correo y contraseña.');
+
+      /* El backend deja 'pendiente' al que se registra con el CUIT de una
+         empresa que ya es cliente. No es un rechazo y no se puede tapar: si
+         no se le explica, el comprador cree que el alta falló y vuelve a
+         intentar con otro mail. */
+      if (data && data.estado === 'pendiente') {
+        setPendiente(data);
+        return;                      // el botón de esa pantalla llama a onEntro
+      }
+      await onEntro();
+    } catch (e2) {
+      if (e2.message === '__YA_EXISTE__') {
+        setErr(null);
+        irAEntrar(email.trim().toLowerCase());
+        return;
+      }
+      setErr(e2.message || 'No se pudo crear la cuenta.');
+    } finally { setBusy(false); }
+  };
+
+  /* Alta que quedó a confirmar (CUIT de una empresa que ya es cliente). */
+  if (pendiente) {
+    return (
+      <div className="t-form t-form-centro">
+        <div className="t-espera t-espera-info"><Icon n="clock" s={26}/></div>
+        <h3 className="t-espera-titulo">Tu cuenta quedó creada</h3>
+        <p className="t-espera-texto">
+          Ese CUIT ya es de un cliente nuestro{pendiente.cliente ? <> (<b>{pendiente.cliente}</b>)</> : null}.
+          Para que veas sus pedidos y sus precios, alguien del equipo tiene que confirmar
+          que trabajás ahí — ya les avisamos.
+        </p>
+        <Aviso tipo="info" titulo="¿Lo necesitás ahora?">
+          Pedile a quien ya compra en tu empresa que te mande un código de invitación:
+          con eso entrás sin esperar.
+        </Aviso>
+        <button className="t-btn t-btn-primary t-btn-block t-btn-alto" type="button" onClick={onEntro}>
+          Entendido
+        </button>
+      </div>
+    );
+  }
+
+  if (paso === 0) {
+    return (
+      <form className="t-form" onSubmit={seguir}>
+        <AccPasos paso={0} titulos={['Tu empresa', 'Tu acceso']}/>
+
+        <AccCampo id="rg-empresa" label="Empresa o comercio">
+          <input id="rg-empresa" className="t-input" value={empresa} maxLength={120}
+                 onChange={e => setEmpresa(e.target.value)}
+                 placeholder="Como te facturamos" autoComplete="organization"/>
+        </AccCampo>
+
+        <AccCampo id="rg-cuit" label="CUIT"
+                  ayuda={cuitD.length === 11 && !cuitOk
+                    ? 'Ese CUIT no valida. Igual podés seguir: lo revisamos antes de facturarte.'
+                    : 'Sin puntos ni espacios. Se completa solo.'}>
+          <div className="t-input-icono">
+            <input id="rg-cuit" className="t-input t-mono" value={formatearCuit(cuit)}
+                   onChange={e => setCuit(e.target.value)} inputMode="numeric"
+                   placeholder="30-12345678-9" autoComplete="off" spellCheck="false"/>
+            {cuitD.length === 11 && (
+              <span className={'t-vfy ' + (cuitOk ? 't-vfy-ok' : 't-vfy-warn')}>
+                <Icon n={cuitOk ? 'check' : 'alert'} s={15}/>
+              </span>
+            )}
+          </div>
+        </AccCampo>
+
+        <div className="t-fila">
+          <AccCampo id="rg-loc" label="Localidad" opcional>
+            <input id="rg-loc" className="t-input" value={localidad} maxLength={80}
+                   onChange={e => setLocalidad(e.target.value)} placeholder="Dónde estás"/>
+          </AccCampo>
+          <AccCampo id="rg-prov" label="Provincia" opcional>
+            <select id="rg-prov" className="t-input" value={provincia}
+                    onChange={e => setProvincia(e.target.value)}>
+              <option value="">Elegí…</option>
+              {PROVINCIAS.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </AccCampo>
+        </div>
+
+        {err && <Aviso tipo="error">{err}</Aviso>}
+
+        <button className="t-btn t-btn-primary t-btn-block t-btn-alto" type="submit" disabled={!paso1Ok}>
+          Continuar <Icon n="chev-right" s={15}/>
+        </button>
+
+        <button className="t-link" type="button" onClick={() => irAEntrar('')}>
+          <Icon n="arrow-left" s={14}/> Ya tengo cuenta
+        </button>
+      </form>
+    );
+  }
+
+  return (
+    <form className="t-form" onSubmit={crear}>
+      <AccPasos paso={1} titulos={['Tu empresa', 'Tu acceso']}/>
+
+      <div className="t-repaso">
+        <div className="t-repaso-txt">
+          <b>{empresa.trim()}</b>
+          <span className="t-mono">{formatearCuit(cuit)}</span>
+        </div>
+        <button className="t-link t-link-inline" type="button" disabled={busy}
+                onClick={() => { setPaso(0); setErr(null); }}>Cambiar</button>
+      </div>
+
+      <AccCampo id="rg-nombre" label="Tu nombre">
+        <input id="rg-nombre" className="t-input" value={nombre} maxLength={120}
+               onChange={e => setNombre(e.target.value)}
+               placeholder="Nombre y apellido" autoComplete="name"/>
+      </AccCampo>
+
+      <AccCampo id="rg-email" label="Correo" ayuda="Con este correo vas a entrar.">
+        <input id="rg-email" className="t-input" type="email" value={email} maxLength={200}
+               onChange={e => setEmail(e.target.value)}
+               placeholder="tucorreo@empresa.com" autoComplete="username"/>
+      </AccCampo>
+
+      <AccCampo id="rg-tel" label="Teléfono" opcional ayuda="Para avisarte por el pedido.">
+        <input id="rg-tel" className="t-input" value={telefono} maxLength={40}
+               onChange={e => setTelefono(e.target.value)}
+               placeholder="11 5555-5555" autoComplete="tel" inputMode="tel"/>
+      </AccCampo>
+
+      <AccCampo id="rg-p1" label="Contraseña" ayuda="Mínimo 8 caracteres.">
+        <CampoPass id="rg-p1" value={pass} onChange={setPass} autoComplete="new-password"/>
+      </AccCampo>
+
+      <AccCampo id="rg-p2" label="Repetir contraseña">
+        <CampoPass id="rg-p2" value={pass2} onChange={setPass2} autoComplete="new-password"/>
+      </AccCampo>
+
+      {err && <Aviso tipo="error">{err}</Aviso>}
+
+      <button className="t-btn t-btn-primary t-btn-block t-btn-alto" type="submit" disabled={busy}>
+        {busy ? 'Creando tu cuenta…' : 'Crear mi cuenta y entrar'}
+      </button>
+
+      <button className="t-link" type="button" disabled={busy} onClick={irACodigo}>
+        <Icon n="ticket" s={14}/> Me pasaron un código de invitación
       </button>
     </form>
   );
@@ -146,9 +533,9 @@ const FormEntrar = ({ onEntro, irACodigo }) => {
    comprador de un mismo cliente puede ya tener usuario.                  */
 const FormCodigo = ({ onEntro, volver }) => {
   const [paso, setPaso]   = useState('token');   // token | datos
-  const [token, setToken] = useState('');
+  const [token, setToken] = useState(codigoDesdeUrl);
   const [inv, setInv]     = useState(null);      // { email, cliente }
-  const [nombre, setNombre]   = useState('');
+  const [nombre, setNombre]     = useState('');
   const [telefono, setTelefono] = useState('');
   const [pass, setPass]   = useState('');
   const [pass2, setPass2] = useState('');
@@ -229,15 +616,16 @@ const FormCodigo = ({ onEntro, volver }) => {
   if (paso === 'token') {
     return (
       <form className="t-form" onSubmit={validar}>
-        <label className="t-label" htmlFor="ac-token">Código de invitación</label>
-        <input id="ac-token" className="t-input t-mono" value={token}
-               onChange={e => setToken(e.target.value)} placeholder="Pegá acá el código que te pasaron"
-               autoComplete="off" spellCheck="false"/>
-        <div className="t-help">Te lo manda el equipo de Justo Makario. Vence a los pocos días.</div>
+        <AccCampo id="ac-token" label="Código de invitación"
+                  ayuda="Te lo manda el equipo de Justo Makario, o quien ya compra en tu empresa. Vence a los pocos días.">
+          <input id="ac-token" className="t-input t-mono" value={token}
+                 onChange={e => setToken(e.target.value)} placeholder="Pegá acá el código que te pasaron"
+                 autoComplete="off" spellCheck="false"/>
+        </AccCampo>
 
         {err && <Aviso tipo="error">{err}</Aviso>}
 
-        <button className="t-btn t-btn-primary t-btn-block" type="submit" disabled={busy || !token.trim()}>
+        <button className="t-btn t-btn-primary t-btn-block t-btn-alto" type="submit" disabled={busy || !token.trim()}>
           {busy ? 'Validando…' : 'Continuar'}
         </button>
         <button className="t-link" type="button" onClick={volver}>
@@ -255,33 +643,35 @@ const FormCodigo = ({ onEntro, volver }) => {
 
       {!yaTengo && (
         <>
-          <label className="t-label" htmlFor="ac-nombre">Tu nombre</label>
-          <input id="ac-nombre" className="t-input" value={nombre}
-                 onChange={e => setNombre(e.target.value)} placeholder="Nombre y apellido"/>
+          <AccCampo id="ac-nombre" label="Tu nombre">
+            <input id="ac-nombre" className="t-input" value={nombre}
+                   onChange={e => setNombre(e.target.value)} placeholder="Nombre y apellido"/>
+          </AccCampo>
 
-          <label className="t-label" htmlFor="ac-tel">Teléfono <span className="t-opt">(opcional)</span></label>
-          <input id="ac-tel" className="t-input" value={telefono}
-                 onChange={e => setTelefono(e.target.value)} placeholder="Para avisarte por el pedido"/>
+          <AccCampo id="ac-tel" label="Teléfono" opcional>
+            <input id="ac-tel" className="t-input" value={telefono}
+                   onChange={e => setTelefono(e.target.value)} placeholder="Para avisarte por el pedido"/>
+          </AccCampo>
 
-          <label className="t-label" htmlFor="ac-p1">Contraseña</label>
-          <CampoPass id="ac-p1" value={pass} onChange={setPass} autoComplete="new-password"/>
-          <div className="t-help">Mínimo 8 caracteres.</div>
+          <AccCampo id="ac-p1" label="Contraseña" ayuda="Mínimo 8 caracteres.">
+            <CampoPass id="ac-p1" value={pass} onChange={setPass} autoComplete="new-password"/>
+          </AccCampo>
 
-          <label className="t-label" htmlFor="ac-p2">Repetir contraseña</label>
-          <CampoPass id="ac-p2" value={pass2} onChange={setPass2} autoComplete="new-password"/>
+          <AccCampo id="ac-p2" label="Repetir contraseña">
+            <CampoPass id="ac-p2" value={pass2} onChange={setPass2} autoComplete="new-password"/>
+          </AccCampo>
         </>
       )}
 
       {yaTengo && (
-        <>
-          <label className="t-label" htmlFor="ac-pex">Contraseña de tu cuenta</label>
+        <AccCampo id="ac-pex" label="Contraseña de tu cuenta">
           <CampoPass id="ac-pex" value={pass} onChange={setPass}/>
-        </>
+        </AccCampo>
       )}
 
       {err && <Aviso tipo="error">{err}</Aviso>}
 
-      <button className="t-btn t-btn-primary t-btn-block" type="submit" disabled={busy}>
+      <button className="t-btn t-btn-primary t-btn-block t-btn-alto" type="submit" disabled={busy}>
         {busy ? 'Creando…' : 'Crear mi acceso'}
       </button>
       <button className="t-link" type="button" onClick={() => { setPaso('token'); setErr(null); }}>
@@ -292,9 +682,9 @@ const FormCodigo = ({ onEntro, volver }) => {
 };
 
 /* ══ Pantalla de espera ═════════════════════════════════════════════════
-   El usuario ya tiene cuenta pero todavia no puede comprar. Son cuatro
+   El usuario ya tiene cuenta pero todavia no puede comprar. Son cinco
    situaciones distintas y cada una necesita que le digan algo distinto:
-   inventarse un "no tenes permiso" generico para las cuatro obliga al
+   inventarse un "no tenes permiso" generico para las cinco obliga al
    cliente a llamar por telefono para entender que le pasa.               */
 const ESPERA = {
   /* La tienda apagada NO es un problema de la cuenta del mayorista, y por eso
@@ -363,4 +753,7 @@ const PantallaEspera = ({ cuenta, motivo, onSalir, onReintentar }) => {
   );
 };
 
-window.TiendaAcceso = { PantallaAcceso, PantallaEspera, Marca, MOTIVO_TEXTO };
+window.TiendaAcceso = {
+  PantallaAcceso, PantallaEspera, Marca, MOTIVO_TEXTO,
+  formatearCuit, cuitValida, PROVINCIAS,
+};

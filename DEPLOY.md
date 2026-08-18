@@ -38,7 +38,7 @@ npm install     # una sola vez, en la máquina
 npm test
 ```
 
-Tiene que decir **`10/10 suites en verde · 398 checks ok · 0 fail`**. Si algo sale en rojo, **no se sube**: el runner imprime la salida de la suite que falló.
+Tiene que decir **`10/10 suites en verde · 467 checks ok · 0 fail`**. Si algo sale en rojo, **no se sube**: el runner imprime la salida de la suite que falló.
 
 El que más importa acá es el primero, `checkjsx.js`: los tres frontends cargan sus `.jsx` como `<script type="text/babel">`, y **todos los archivos de una entrada comparten un solo scope**. Un `const` declarado dos veces en archivos distintos tira `SyntaxError` y deja **la pantalla en blanco** — sin error visible, sin nada. Eso no se ve compilando archivo por archivo ni abriendo la app por arriba, y ya pasó. Detalle de las 10 suites en `tests/README.md`.
 
@@ -209,16 +209,21 @@ Prenderlo **no expuso nada**: no hay ningún producto publicado, no existe ning�
 - ✅ `https://tu-dominio.com/tienda/cualquier-cosa` → misma pantalla de la tienda (no el login interno).
 - ✅ Entrar a la tienda con un cliente y al sistema interno con un empleado, **en el mismo browser**: las dos sesiones conviven. Si una pisa a la otra, el `storageKey` de `tienda/components/tienda-supa.js` se rompió.
 - ✅ DevTools → Network, ya logueado como cliente: en ninguna respuesta debe aparecer `precio_base` ni `coeficiente`.
+- ✅ **La pantalla de acceso ofrece "Crear mi cuenta"** (alta abierta) y, abajo, "Tengo un código de invitación". Si solo aparece el código, el browser está sirviendo la versión vieja de `tienda-acceso.jsx`: revisar el `?v=` en `tienda/index.html`.
+- ✅ Con un cliente que tenga **dos catálogos habilitados**: al entrar aparece la pantalla **"¿Con qué catálogo querés comprar?"** antes del catálogo, y el header queda con el chip del canal elegido. Con **uno solo** no debe aparecer: entra derecho y el chip queda fijo.
+- ✅ `https://tu-dominio.com/tienda/?codigo=XXXX` → abre directo el canje de invitación con el código puesto. Ése es el link que se le pasa a un **segundo** comprador de una empresa que ya compra.
 
 ### Smoke del circuito completo (hacerlo con Seba, una sola vez)
 
 Es el que confirma lo que pidió el dueño de punta a punta. El circuito ya se probó contra la base real con rollback (36 asserts en verde, ver `HANDOFF.md`), pero eso valida la **base**, no la operación con gente de verdad.
 
-1. **Invitar** — `Ventas → Tienda mayorista → Accesos → Nueva invitación`. Copiar el código **en ese momento**: en la tabla queda solo el hash, no se puede recuperar después.
-2. **Registrarse** con ese código en `/tienda/`, desde otro browser o ventana privada.
-3. **Aprobar** — el alta cae en *Accesos* con badge, y en la campanita del equipo como "Alta B2B pendiente de aprobación".
-4. **Habilitar el cliente** en la solapa *Clientes* (canal y condición de pago).
-5. **Comprar**: el cliente ve **solo el precio de su canal**, se respetan múltiplos y mínimos, y envía.
+1. **Darse de alta solo** — abrir `/tienda/` en otro browser o ventana privada, "Crear mi cuenta", cargar empresa + CUIT y después los datos personales. **Tiene que quedar comprando en el momento**, sin aprobación de nadie: ésa fue la decisión del dueño. En la campanita del equipo tiene que caer el aviso del alta nueva.
+2. **Probar el freno del CUIT** — repetir el alta con el **mismo CUIT** y otro correo: esa segunda cuenta tiene que quedar **"en revisión"**, NO entrar. Si entra, el circuito está abierto: cualquiera con el CUIT de un cliente (está en cualquier factura) ve el historial y los precios de esa empresa. Es el chequeo más importante de todos.
+3. **Sumar un segundo comprador de esa misma empresa por invitación** — `Ventas → Tienda mayorista → Accesos → Nueva invitación`. Copiar el código **en ese momento**: en la tabla queda solo el hash, no se puede recuperar después. Canjearlo desde `/tienda/?codigo=XXXX`.
+4. **Elegir qué catálogos ve** en la solapa *Clientes*: marcar **los dos** (mayorista y distribuidor), el de arranque y la condición de pago.
+5. **Comprar**: al entrar tiene que aparecer la **elección de catálogo** con el mínimo de cada uno; el cliente ve **solo el precio del canal que eligió**, se respetan múltiplos y mínimos, y envía.
+   - **Cambiar de canal desde el chip del header** y confirmar las dos cosas: cambian **todos** los precios, y el carrito es **otro** (el del canal anterior queda esperando intacto — hay un borrador por canal desde `0162`).
+   - **Sacarle un catálogo desde el panel** mientras tiene un pedido armado ahí: el pedido **no se borra**, y **vuelve a aparecer** si se lo habilitan de nuevo.
 6. **Verificar el aviso**: la campanita del owner/admin/ventas tiene que sumar un "Pedido B2B nuevo: <cliente>" con el número `MAY-XXXX`, y el pedido tiene que estar ya cargado en `Ventas → Mayoristas` como **cotización**, con sus ítems.
 7. **Mover el estado** desde Mayoristas (confirmado → en producción → entregado) y ver que en la tienda del cliente cambie solo (`entregado` se le muestra como **despachado**).
 8. **Repetir el pedido** desde *Mis pedidos* del cliente: tiene que cargarse en el carrito a precio de hoy, avisando si algo dejó de estar disponible.
@@ -273,6 +278,14 @@ Si querés automatizar esto (CI/CD), conectá el repo a GitHub y EasyPanel puede
 ### La tienda queda en blanco, sin ningún error visible
 
 → Casi siempre es una **redeclaración entre archivos**. Los `<script type="text/babel">` comparten el scope global: si dos archivos declaran el mismo `const` de primer nivel, el browser corta con *"Identifier 'X' has already been declared"* al evaluar el segundo y no renderiza nada. Mirar la consola. Se previene corriendo `scope-check.js` antes de zippear.
+
+### El cliente entra y ve el catálogo entero sin precios
+
+→ Se quedó **sin canal**. `b2b_fn_precio` se llama con el canal, así que sin canal no hay precio y el catálogo queda sin valuar. Desde `0164` no debería pasar: `b2b_fn_canal_actual()` cae al **primero de los catálogos habilitados** cuando el comprador todavía no eligió y el cliente no tiene canal de arranque. Si pasa igual, mirar `select b2b_canal, b2b_canales, b2b_habilitado, activo from customers_b2b where id = '<cliente>';` — lo más probable es que **no tenga ningún catálogo habilitado**, o que los que tiene estén `activo = false` en `b2b_canal`. Se arregla desde *Clientes* en el panel, sin redeploy.
+
+### El alta nueva queda "en revisión" y el dueño no quería aprobación
+
+→ **No es un bug: es el freno del CUIT.** Si el CUIT que cargó ya es de un cliente existente, el alta queda `pendiente` a propósito (ver `0163`). El camino correcto para esa persona es una **invitación** emitida por alguien que ya compra en esa empresa. Si el CUIT era distinto y aun así quedó pendiente, ahí sí revisar la edge function.
 
 ### La tienda dice "cerrada en este momento" pero el flag está en true
 

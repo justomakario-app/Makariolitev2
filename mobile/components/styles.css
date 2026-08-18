@@ -1219,3 +1219,21 @@ tr.row-inactive td { font-style: italic; }
   .main-content { margin-left: 0 !important; }
   .page { padding: 10px !important; }
 }
+
+/* ══ TIENDA MAYORISTA · CATÁLOGOS HABILITADOS POR CLIENTE ══════════════
+   Cada catálogo es una fila que se prende entera: prender el segundo cambia
+   cómo entra el cliente (pasa a elegir con cuál compra) y qué precios ve.
+   Acá la fila es más alta que en escritorio — se toca con el pulgar — y el
+   porcentaje baja a un renglón propio cuando el nombre no le deja lugar. ══ */
+.b2b-cli-canales { display: grid; gap: 8px; margin-top: 2px; }
+
+.b2b-cli-canal {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px;
+  padding: 12px 12px;
+  border: 1px solid var(--border-md); border-radius: 10px;
+  background: var(--paper); font-size: 14px; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.b2b-cli-canal:active { background: var(--paper-dim); }
+.b2b-cli-canal input { cursor: pointer; width: 18px; height: 18px; flex: none; }
+.b2b-cli-canal-on { border-color: var(--ink); background: var(--paper-off); }

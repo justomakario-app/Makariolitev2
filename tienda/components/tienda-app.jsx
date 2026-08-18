@@ -108,7 +108,7 @@ const CanjearLogueado = ({ onListo, onSalir }) => {
 };
 
 /* ── Cabecera ──────────────────────────────────────────────────────────── */
-const Header = ({ cuenta, tab, setTab, unidades, onSalir }) => (
+const Header = ({ cuenta, tab, setTab, unidades, onSalir, onCambiarCanal }) => (
   <header className="t-header">
     <div className="t-header-in">
       <Marca chico/>
@@ -130,6 +130,10 @@ const Header = ({ cuenta, tab, setTab, unidades, onSalir }) => (
       </nav>
 
       <div className="t-header-user">
+        {/* En qué catálogo está parado. Es lo primero que hay que poder
+            contestar mirando un precio: la misma pieza vale distinto en
+            mayorista que en distribuidor. */}
+        <SelectorCanal cuenta={cuenta} onElegido={onCambiarCanal}/>
         <div className="t-header-cli">
           <b>{(cuenta.cliente && cuenta.cliente.nombre) || cuenta.nombre}</b>
           <span>{cuenta.email}</span>
@@ -227,6 +231,21 @@ const TiendaApp = () => {
     } finally { setOcupado(false); }
   }, [recargarCarrito]);
 
+  /* ── Cambiar de catálogo ─────────────────────────────────────────────
+     Hay que releer las DOS cosas. La cuenta, porque cambia el canal vigente
+     y con él el mínimo de compra; y el carrito, porque desde 0162 hay un
+     borrador por canal: el que está en pantalla es el del catálogo anterior.
+     El catálogo se recarga solo, por el key={cuenta.canal} de más abajo. */
+  const cambiarCanal = useCallback(async () => {
+    setEnviado(null);
+    setTab('catalogo');
+    const c = await cargarCuenta();
+    if (c && c.ok && c.estado === 'aprobado' && c.cliente && c.cliente.habilitado) {
+      await recargarCarrito();
+    }
+    return c;
+  }, [cargarCuenta, recargarCarrito]);
+
   const salir = async () => {
     await window.SUPA.auth.signOut();
     setCuenta(null); setCarrito(null); setEnviado(null);
@@ -274,12 +293,22 @@ const TiendaApp = () => {
     return <PantallaEspera cuenta={cuenta} motivo="sin_habilitar" onSalir={salir} onReintentar={cargarCuenta}/>;
   }
 
+  /* Todavía no eligió catálogo (alta nueva, o le dieron de baja el que tenía
+     elegido). Va DESPUÉS de aprobado y habilitado a propósito: cliente.canales
+     sólo viene cuando la cuenta está aprobada, y sin eso no hay nada que
+     mostrar. Si el cliente se quedó sin ningún canal activo no se lo traba
+     acá — b2b_fn_canal_actual() ya cae sola al canal por defecto. */
+  const canalesHab = (cuenta.cliente && cuenta.cliente.canales) || [];
+  if (cuenta.canal_elegido === false && canalesHab.length > 0) {
+    return <PantallaCanal cuenta={cuenta} onElegido={cambiarCanal} onSalir={salir}/>;
+  }
+
   const unidades = ((carrito && carrito.items) || []).reduce((a, i) => a + (Number(i.cantidad) || 0), 0);
 
   return (
     <div className="t-app">
       <Header cuenta={cuenta} tab={tab} setTab={t => { setTab(t); setEnviado(null); }}
-              unidades={unidades} onSalir={salir}/>
+              unidades={unidades} onSalir={salir} onCambiarCanal={cambiarCanal}/>
 
       <main className="t-main">
         {enviado ? (
@@ -287,7 +316,8 @@ const TiendaApp = () => {
                          onVerPedidos={() => { setEnviado(null); setTab('pedidos'); }}
                          onSeguirComprando={() => { setEnviado(null); setTab('catalogo'); }}/>
         ) : tab === 'catalogo' ? (
-          <PantallaCatalogo carrito={carrito} onSetCantidad={setCantidad} ocupado={ocupado}/>
+          <PantallaCatalogo key={cuenta.canal} carrito={carrito}
+                            onSetCantidad={setCantidad} ocupado={ocupado}/>
         ) : tab === 'carrito' ? (
           <PantallaCarrito carrito={carrito} onSetCantidad={setCantidad}
                            onGuardarDatos={guardarDatos} onEnviar={enviar}

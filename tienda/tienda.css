@@ -485,3 +485,244 @@ button { font: inherit; color: inherit; }
   .t-pedido-pie .t-help { flex: 1 1 100%; margin-top: 0; }
   .t-pedido-pie .t-btn { flex: 1 1 auto; }
 }
+
+/* ══ ACCESO PREMIUM · alta abierta y elección de catálogo ═════════════════
+   Esta parte se escribió después que el resto y por eso vive acá abajo: son
+   las pantallas que ve un cliente NUEVO, antes de saber si vale la pena
+   registrarse. El catálogo puede darse el lujo de ser sobrio; la puerta de
+   entrada no.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── La caja doble ─────────────────────────────────────────────────────
+   Izquierda: qué es esto y por qué conviene. Derecha: el formulario. Un
+   formulario solo, en el medio de una pantalla en blanco, no dice nada de
+   la casa a la que se está por entrar. */
+.t-acceso-split {
+  width: 100%; max-width: 940px; display: grid; grid-template-columns: 1.02fr 1fr;
+  background: var(--paper); border: 1px solid var(--border); border-radius: 18px;
+  box-shadow: var(--shadow-lg); overflow: hidden;
+}
+
+.t-acceso-brand {
+  position: relative; padding: 38px 34px; color: var(--paper);
+  display: flex; flex-direction: column; gap: 26px;
+  background:
+    radial-gradient(120% 90% at 12% 0%, rgba(255,255,255,.13) 0%, rgba(255,255,255,0) 58%),
+    radial-gradient(80% 60% at 100% 100%, rgba(255,255,255,.07) 0%, rgba(255,255,255,0) 60%),
+    #0A0A0A;
+}
+/* El hilo de luz del borde: separa el panel del papel sin meter una línea
+   dura en el medio de la caja. */
+.t-acceso-brand::after {
+  content: ""; position: absolute; inset: 0 0 0 auto; width: 1px;
+  background: linear-gradient(180deg, rgba(255,255,255,0), rgba(255,255,255,.16), rgba(255,255,255,0));
+}
+.t-acceso-brand-cuerpo { margin-top: auto; }
+
+.t-marca-claro .t-marca-1,
+.t-marca-claro .t-marca-3 { color: rgba(255,255,255,.52); }
+.t-marca-claro .t-marca-2 { color: #FFFFFF; }
+
+.t-acceso-h1 {
+  font-size: 27px; font-weight: 800; line-height: 1.22; letter-spacing: -.02em;
+}
+.t-acceso-p {
+  margin-top: 13px; font-size: 13.5px; line-height: 1.6;
+  color: rgba(255,255,255,.66); max-width: 33ch;
+}
+.t-acceso-puntos { list-style: none; margin-top: 24px; display: flex; flex-direction: column; gap: 11px; }
+.t-acceso-puntos li { display: flex; align-items: flex-start; gap: 9px; font-size: 13px; color: rgba(255,255,255,.86); }
+.t-acceso-puntos svg { flex: none; margin-top: 2px; color: rgba(255,255,255,.5); }
+.t-acceso-sello {
+  margin-top: auto; padding-top: 22px; border-top: 1px solid rgba(255,255,255,.11);
+  font-size: 10.5px; letter-spacing: .13em; text-transform: uppercase; font-weight: 600;
+  color: rgba(255,255,255,.4);
+}
+
+.t-acceso-panel {
+  padding: 38px 34px; display: flex; flex-direction: column; justify-content: center;
+}
+/* La marca dentro del formulario sólo aparece cuando el panel oscuro se
+   colapsa (celular): si no, quedaría dos veces en la misma pantalla. */
+.t-acceso-panel-marca { display: none; margin-bottom: 20px; }
+.t-acceso-head { margin-bottom: 2px; }
+.t-acceso-titulo { font-size: 21px; font-weight: 800; letter-spacing: -.015em; }
+
+/* Ya no es un ojal en versalitas sino la frase que explica la pantalla. */
+.t-acceso-bajada {
+  font-size: 13.5px; color: var(--ink-muted); margin-top: 6px;
+  letter-spacing: normal; text-transform: none; font-weight: 400;
+}
+
+/* ── Piezas del formulario ─────────────────────────────────────────────── */
+.t-campo { display: flex; flex-direction: column; margin-top: 14px; }
+.t-campo .t-label { margin: 0 0 5px; }
+.t-campo .t-help { margin-top: 5px; }
+.t-fila { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.t-fila .t-campo { margin-top: 14px; }
+
+.t-form-centro { align-items: center; }
+
+/* El botón que cierra el paso pesa más que los otros: es el que hay que
+   encontrar sin leer. */
+.t-btn-alto { padding: 12px 18px; font-size: 14px; }
+
+/* Separador "o". La línea corre por atrás y el papel tapa el centro. */
+.t-sep {
+  position: relative; text-align: center; margin-top: 18px;
+  border-top: 1px solid var(--border-md);
+}
+.t-sep span {
+  position: relative; top: -10px; background: var(--paper); padding: 0 10px;
+  font-size: 11.5px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: .1em;
+}
+
+/* Indicador de paso. Dos pasos con el final a la vista: un formulario de
+   nueve campos de una sola vez se abandona. */
+.t-pasos { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.t-paso { display: flex; align-items: center; gap: 7px; flex: 1; }
+.t-paso-n {
+  flex: none; width: 21px; height: 21px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; background: var(--paper-dim); color: var(--ink-muted);
+  border: 1px solid var(--border-md);
+}
+.t-paso-t { font-size: 12px; font-weight: 600; color: var(--ink-muted); white-space: nowrap; }
+.t-paso-on .t-paso-n { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.t-paso-on .t-paso-t { color: var(--ink); }
+.t-paso-hecho .t-paso-n { background: var(--green-bg); color: var(--green); border-color: #BBF7D0; }
+.t-paso-hecho .t-paso-t { color: var(--ink-soft); }
+
+/* Campo con la palomita del CUIT adentro. */
+.t-input-icono { position: relative; display: flex; align-items: center; }
+.t-input-icono .t-input { padding-right: 38px; }
+.t-vfy { position: absolute; right: 11px; display: inline-flex; pointer-events: none; }
+.t-vfy-ok   { color: var(--green); }
+.t-vfy-warn { color: var(--amber); }
+
+/* Repaso de lo cargado en el paso anterior, con la salida para corregirlo:
+   sin esto, el que se equivocó en el CUIT no sabe si puede volver. */
+.t-repaso {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-top: 14px; padding: 11px 13px; border-radius: var(--radius);
+  background: var(--paper-off); border: 1px solid var(--border);
+}
+.t-repaso-txt { display: flex; flex-direction: column; line-height: 1.35; min-width: 0; }
+.t-repaso-txt b { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.t-repaso-txt span { font-size: 12px; color: var(--ink-muted); }
+
+/* ── Elegir catálogo ───────────────────────────────────────────────────
+   Pantalla entera la primera vez, y modal cuando se cambia desde el header.
+   Las tarjetas son las mismas en los dos lados a propósito: es la misma
+   decisión, y la segunda vez ya se sabe dónde mirar. */
+.t-elegir {
+  min-height: 100dvh; display: flex; align-items: center; justify-content: center;
+  padding: 32px 20px;
+}
+.t-elegir-caja {
+  width: 100%; max-width: 720px; background: var(--paper); padding: 34px;
+  border-radius: 18px; border: 1px solid var(--border); box-shadow: var(--shadow-lg);
+  display: flex; flex-direction: column;
+}
+.t-elegir-head { margin: 22px 0 4px; }
+.t-elegir-hola { font-size: 13px; color: var(--ink-muted); font-weight: 600; }
+.t-elegir-titulo { font-size: 24px; font-weight: 800; letter-spacing: -.02em; margin-top: 4px; }
+.t-elegir-bajada { font-size: 13.5px; color: var(--ink-soft); margin-top: 9px; max-width: 56ch; line-height: 1.6; }
+.t-elegir-bajada-modal { margin: 0 0 4px; }
+.t-elegir-pie { font-size: 12.5px; color: var(--ink-muted); margin-top: 16px; }
+.t-elegir-caja > .t-link { margin: 8px auto 0; }
+
+.t-canales { display: flex; flex-direction: column; gap: 12px; margin-top: 18px; }
+
+.t-canal {
+  position: relative; display: flex; align-items: center; gap: 16px; width: 100%;
+  padding: 18px; text-align: left; cursor: pointer;
+  background: var(--paper); border: 1px solid var(--border-md); border-radius: 14px;
+  transition: border-color .14s, box-shadow .14s, transform .14s, background .14s;
+}
+.t-canal:not(:disabled):hover {
+  border-color: var(--ink); box-shadow: var(--shadow-sm); transform: translateY(-1px);
+}
+.t-canal:disabled { opacity: .55; cursor: progress; }
+.t-canal-on { border-color: var(--ink); background: var(--paper-off); }
+
+.t-canal-actual {
+  position: absolute; top: -9px; left: 16px; padding: 2px 8px; border-radius: 999px;
+  background: var(--ink); color: var(--paper);
+  font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+}
+.t-canal-icono {
+  flex: none; width: 46px; height: 46px; border-radius: 12px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--paper-dim); color: var(--ink);
+}
+.t-canal-on .t-canal-icono { background: var(--ink); color: var(--paper); }
+
+.t-canal-cuerpo { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.t-canal-nombre { font-size: 16px; font-weight: 800; letter-spacing: -.01em; }
+.t-canal-bajada { font-size: 13px; color: var(--ink-soft); }
+.t-canal-detalle { font-size: 12.5px; color: var(--ink-muted); }
+.t-canal-min {
+  display: inline-flex; align-items: center; gap: 5px; margin-top: 5px;
+  font-size: 12px; font-weight: 600; color: var(--ink-soft);
+}
+.t-canal-min svg { flex: none; color: var(--ink-muted); }
+
+.t-canal-ir {
+  flex: none; display: inline-flex; align-items: center; gap: 4px;
+  font-size: 13px; font-weight: 700; color: var(--ink-muted);
+}
+.t-canal:not(:disabled):hover .t-canal-ir { color: var(--ink); }
+.t-canal-cargando { font-size: 12.5px; font-weight: 600; color: var(--ink-muted); }
+
+/* El chip del header: en qué catálogo está parado. */
+.t-canal-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px;
+  border-radius: 999px; border: 1px solid var(--border-md); background: var(--paper);
+  font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap;
+  transition: background .12s, border-color .12s;
+}
+.t-canal-chip:hover { background: var(--paper-dim); border-color: var(--border-str); }
+.t-canal-chip-fijo { cursor: default; background: var(--paper-off); color: var(--ink-soft); }
+.t-canal-chip-fijo:hover { background: var(--paper-off); border-color: var(--border-md); }
+
+/* ── Responsive de estas pantallas ─────────────────────────────────────── */
+@media (max-width: 860px) {
+  /* El panel oscuro se esconde: en el celular el cliente viene a completar
+     el formulario, no a leer el discurso. La marca pasa adentro del panel
+     del formulario para no perder de quién es la tienda. */
+  .t-acceso { padding: 0; }
+  .t-acceso-split {
+    grid-template-columns: 1fr; max-width: 460px; border-radius: 0;
+    border: none; box-shadow: none; min-height: 100dvh;
+  }
+  .t-acceso-brand { display: none; }
+  .t-acceso-panel-marca { display: block; }
+  .t-acceso-panel { padding: 30px 22px 44px; }
+}
+
+@media (max-width: 620px) {
+  .t-fila { grid-template-columns: 1fr; gap: 0; }
+  .t-paso-t { display: none; }
+  .t-pasos { gap: 6px; }
+  .t-paso { flex: none; }
+
+  .t-elegir { padding: 0; align-items: stretch; }
+  .t-elegir-caja {
+    max-width: none; min-height: 100dvh; border-radius: 0; border: none;
+    box-shadow: none; padding: 28px 20px 44px;
+  }
+  .t-elegir-titulo { font-size: 21px; }
+
+  /* La tarjeta pasa a dos filas: el "Comprar así" no entra al lado del texto
+     en 360px y, con nowrap, empujaba el nombre fuera de la tarjeta. */
+  .t-canal { flex-wrap: wrap; padding: 16px; gap: 12px; }
+  .t-canal-cuerpo { flex: 1 1 60%; }
+  .t-canal-ir { width: 100%; justify-content: flex-end; }
+  .t-canal-detalle { display: none; }
+
+  /* El chip del catálogo tiene que sobrevivir al header apretado: es el que
+     dice con qué lista de precios está mirando. */
+  .t-header-user { gap: 6px; }
+  .t-canal-chip { padding: 5px 9px; font-size: 12px; }
+}

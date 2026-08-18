@@ -72,6 +72,20 @@ const USUARIOS = [
     cliente:{ id:'c3', nombre:'Maderera Este', cuit:'30-333-3', b2b_canal:'minorista', b2b_habilitado:true } },
 ];
 
+/* La ficha de la empresa. Corralon Sur con un solo catálogo y Distribuidora
+   Norte con los dos: son los dos casos que cambian la pantalla (uno solo =
+   no hay nada que elegir; dos = el comprador elige al entrar). */
+const CLIENTES = [
+  { cliente_id:'c1', nombre:'Corralon Sur', cuit:'30-111-1', canal:'mayorista',
+    canales:['mayorista'], habilitado:true, activo:true, condicion_pago:'30 dias',
+    notas_internas:null, coeficiente:0.70, usuarios:2, usuarios_pendientes:0,
+    pedidos:3, ultimo_pedido:'2026-08-14T12:00:00Z', total_pedido:210000 },
+  { cliente_id:'c2', nombre:'Distribuidora Norte', cuit:'30-222-2', canal:'distribuidor',
+    canales:['distribuidor','mayorista'], habilitado:true, activo:true, condicion_pago:null,
+    notas_internas:'Paga a 60 dias', coeficiente:0.55, usuarios:1, usuarios_pendientes:1,
+    pedidos:1, ultimo_pedido:null, total_pedido:55000 },
+];
+
 const INVITACIONES = [
   { id:'i1', email:'nuevo@cliente.com', cliente_nombre:'Cliente Nuevo', cliente_cuit:'30-444-4',
     canal:'mayorista', estado:'pendiente', expira_at:'2099-01-01T00:00:00Z', created_at:'2026-08-14T09:00:00Z' },
@@ -147,6 +161,16 @@ const SUPA = {
       case 'b2b_rpc_admin_canales':      return Promise.resolve({ data: CANALES, error:null });
       case 'b2b_rpc_admin_catalogo':     return Promise.resolve({ data: CATALOGO, error:null });
       case 'b2b_rpc_admin_pedidos':      return Promise.resolve({ data: PEDIDOS, error:null });
+      case 'b2b_rpc_admin_clientes':     return Promise.resolve({ data: CLIENTES, error:null });
+      /* Espeja la regla del backend (0162): sin ningún catálogo, rebota. */
+      case 'b2b_rpc_admin_set_cliente': {
+        if (p.canales && p.canales.length === 0) {
+          return Promise.resolve({ data:null,
+            error:{ message:'Hay que dejarle habilitado al menos un catalogo.', code:'22023' } });
+        }
+        return Promise.resolve({ data:{ ok:true, cliente_id:p.cliente_id,
+          canal:p.canal, canales:p.canales }, error:null });
+      }
       case 'b2b_rpc_resolver_usuario':   return Promise.resolve({ data:{ ok:true, usuario_id:p.usuario_id, estado:p.estado }, error:null });
       case 'b2b_rpc_admin_set_producto': return Promise.resolve({ data:{ ok:true, actualizados:(p.items||[]).length }, error:null });
       case 'b2b_rpc_crear_invitacion':   return Promise.resolve({ data:{ ok:true, invitacion_id:'i9', token:'TOKENSECRETO123', expira_at:'2026-08-28T00:00:00Z' }, error:null });
@@ -195,7 +219,8 @@ new Function('window', 'navigator', fs.readFileSync(path.join(BASE, 'b2b-data.js
   (dom.window, dom.window.navigator);
 
 for (const f of ['admin/b2b-solicitudes-tab.jsx', 'admin/b2b-catalogo-tab.jsx',
-                 'admin/b2b-pedidos-tab.jsx', 'admin/b2b-tienda-tab.jsx']) {
+                 'admin/b2b-pedidos-tab.jsx', 'admin/b2b-clientes-tab.jsx',
+                 'admin/b2b-tienda-tab.jsx']) {
   const file = path.join(BASE, f);
   const code = Babel.transform(preamble + fs.readFileSync(file, 'utf8'),
                                { presets:['react'], filename:file }).code;
@@ -629,6 +654,82 @@ function check(nombre, cond, extra) {
     check('avisa fuerte que el código no se vuelve a ver', /una sola vez/i.test(cuerpo()));
     check('dice a qué mail hay que mandárselo', cuerpo().includes('test@mayorista.com'));
   }
+
+
+  /* (N) Clientes: qué catálogos ve cada uno --------------------------- */
+  console.log('\n— Clientes · catálogos habilitados —');
+
+  const filaCli = (nombre) => filas().find(tr => txt(tr).includes(nombre));
+  const enModal = (sel) => Array.from(container.querySelectorAll('[data-modal] ' + sel));
+  const chkCanal = (nombre) => {
+    const l = enModal('.b2b-cli-canal').find(x => txt(x).includes(nombre));
+    return l && l.querySelector('input[type="checkbox"]');
+  };
+  const btnGuardarCli = () => enModal('button').find(b => txt(b).includes('Guardar cambios'));
+  const ultimoSet = () => [...RPC_LOG].reverse().find(r => r.nombre === 'b2b_rpc_admin_set_cliente');
+
+  await montar('owner', true);
+  await clickTab('Clientes');
+  check('la lista de clientes carga', !!filaCli('Corralon Sur') && !!filaCli('Distribuidora Norte'),
+        filas().length + ' filas');
+  check('★ la fila muestra TODOS los catálogos que tiene habilitados, no solo el de arranque',
+        /Distribuidor/.test(txt(filaCli('Distribuidora Norte')))
+        && /\+ Mayorista/.test(txt(filaCli('Distribuidora Norte'))),
+        txt(filaCli('Distribuidora Norte')));
+  check('el que tiene uno solo no muestra un "+" vacío',
+        !/\+/.test(txt(filaCli('Corralon Sur'))), txt(filaCli('Corralon Sur')));
+
+  /* Un catálogo → dos. Es el alta del "mismo usuario, dos listas". */
+  await click(filaCli('Corralon Sur').querySelector('button'));
+  check('el modal ofrece los 3 catálogos activos', enModal('.b2b-cli-canal').length === 3);
+  check('viene tildado solo el que tiene',
+        enModal('.b2b-cli-canal input:checked').length === 1 && !!chkCanal('Mayorista').checked);
+  check('★ con un solo catálogo no se pregunta con cuál arranca (no hay nada que elegir)',
+        enModal('select').length === 0);
+
+  await tildar(chkCanal('Distribuidor'), true);
+  check('★ avisa que sigue siendo el mismo usuario y que va a elegir al entrar',
+        /mismo usuario/i.test(cuerpo()) && /preguntar/i.test(cuerpo()));
+  check('recién con dos aparece con cuál arranca', enModal('select').length === 1);
+
+  await click(btnGuardarCli());
+  const setA = ultimoSet();
+  check('★ guarda la lista de catálogos habilitados',
+        !!setA && Array.isArray(setA.payload.canales)
+        && setA.payload.canales.join(',') === 'distribuidor,mayorista',
+        JSON.stringify(setA && setA.payload));
+  check('no manda el catálogo de arranque si no cambió',
+        !!setA && !('canal' in setA.payload), JSON.stringify(setA && setA.payload));
+
+  /* Sacarle el catálogo que además era el de arranque. */
+  await clickTab('Clientes');
+  await click(filaCli('Distribuidora Norte').querySelector('button'));
+  check('el cliente con dos viene con los dos tildados',
+        enModal('.b2b-cli-canal input:checked').length === 2);
+
+  await tildar(chkCanal('Distribuidor'), false);
+  check('★ avisa que el pedido en curso de ese catálogo NO se borra',
+        /no se borra nada/i.test(cuerpo()) && /vuelve a aparecer/i.test(cuerpo()));
+  check('★ el catálogo de arranque se corre solo al que queda (igual que el backend)',
+        enModal('select').length === 0 && /Mayorista/.test(txt(container.querySelector('[data-modal]'))));
+
+  await click(btnGuardarCli());
+  const setB = ultimoSet();
+  check('guarda la lista achicada', !!setB && setB.payload.canales.join(',') === 'mayorista',
+        JSON.stringify(setB && setB.payload));
+  check('★ y manda también el nuevo catálogo de arranque, no lo deja apuntando al que sacó',
+        !!setB && setB.payload.canal === 'mayorista', JSON.stringify(setB && setB.payload));
+
+  /* Ninguno: el backend lo rechaza, así que acá ni se ofrece. */
+  await clickTab('Clientes');
+  await click(filaCli('Corralon Sur').querySelector('button'));
+  const antesCli = RPC_LOG.filter(r => r.nombre === 'b2b_rpc_admin_set_cliente').length;
+  await tildar(chkCanal('Mayorista'), false);
+  check('★ sin ningún catálogo no deja guardar', !!btnGuardarCli() && btnGuardarCli().disabled);
+  check('y explica que para cortarle la compra se usa el acceso, no las listas',
+        /al menos un catálogo/i.test(cuerpo()) && /Puede entrar y hacer pedidos/.test(cuerpo()));
+  check('no llegó ninguna escritura al backend',
+        RPC_LOG.filter(r => r.nombre === 'b2b_rpc_admin_set_cliente').length === antesCli);
 
   console.log(`\n${pass}/${pass + fail} checks · fallos: ${fail}\n`);
   process.exit(fail ? 1 : 0);

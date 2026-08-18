@@ -262,6 +262,19 @@ window.B2B_DATA = window.B2B_DATA || (function () {
        otra app (y porque el panel interno todavia puede querer mirar un
        carrito ajeno el dia que se agregue "pedir por cuenta del cliente"). */
     miCuenta:      (p) => rpc('b2b_rpc_mi_cuenta', p, 'No se pudo leer la cuenta'),
+
+    /* Elegir con que catalogo comprar (0162). El cliente puede tener
+       habilitados los dos: 'mayorista' y 'distribuidor' salen en
+       cuenta.cliente.canales, y esto fija cual usa de ahora en mas.
+       payload: { canal: 'mayorista' | 'distribuidor' }
+       ★ Cambia el precio de TODO el catalogo y cambia de carrito: desde 0162
+       hay un borrador por canal, asi que el pedido que armo como mayorista
+       lo sigue esperando cuando vuelva a ese catalogo.
+       ★ Un canal que existe pero que el cliente no tiene habilitado da el
+       mismo 42501 que uno inventado, a proposito: la respuesta no sirve para
+       averiguar que listas de precios hay del otro lado.
+       Devuelve { ok, canal, nombre, minimo_pedido, minimo_unidades }. */
+    setCanal:      (p) => rpc('b2b_rpc_set_canal', p, 'No se pudo cambiar el catalogo'),
     verInvitacion: (p) => rpc('b2b_rpc_ver_invitacion', p, 'No se pudo leer la invitacion'),
     canjearInvitacion: (p) => rpc('b2b_rpc_canjear_invitacion', p, 'No se pudo canjear la invitacion'),
     catalogo:      (p) => lista('b2b_rpc_catalogo', p, 'No se pudo cargar el catalogo'),

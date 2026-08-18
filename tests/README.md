@@ -5,7 +5,7 @@ npm install     # una sola vez
 npm test        # corre las 10 suites
 ```
 
-Verde = `10/10 suites en verde · 398 checks ok · 0 fail`. Si algo sale en rojo,
+Verde = `10/10 suites en verde · 467 checks ok · 0 fail`. Si algo sale en rojo,
 el runner imprime la salida completa de esa suite y devuelve código 1.
 
 No hay build ni framework de testing: son scripts de Node que levantan los
@@ -16,9 +16,9 @@ chequeo deja de significar algo.
 
 | Suite | Qué protege |
 |---|---|
-| `checkjsx.js` | Compila los 173 archivos de las 3 entradas (`web/`, `mobile/`, `tienda/`) y busca **declaraciones top-level repetidas**. Todos los `<script type="text/babel">` de una entrada comparten un solo scope léxico: un `const` duplicado tira `SyntaxError` y deja la pantalla **en blanco**. Compilar de a un archivo no lo detecta. |
-| `b2b-render-test.js` | Las 4 pestañas del panel mayorista (solicitudes, catálogo, pedidos, tienda) por rol y con el flag `b2b` prendido y apagado. |
-| `tienda-render-test.js` | La tienda de `tienda/`: registro, canje de invitación, carrito, alta de pedido. |
+| `checkjsx.js` | Compila los 174 archivos de las 3 entradas (`web/`, `mobile/`, `tienda/`) y busca **declaraciones top-level repetidas**. Todos los `<script type="text/babel">` de una entrada comparten un solo scope léxico: un `const` duplicado tira `SyntaxError` y deja la pantalla **en blanco**. Compilar de a un archivo no lo detecta. |
+| `b2b-render-test.js` | Las 5 pestañas del panel mayorista (solicitudes, catálogo, pedidos, **clientes**, tienda) por rol y con el flag `b2b` prendido y apagado. En Clientes, los **catálogos habilitados**: que el payload lleve `canales`, que el catálogo de arranque se corra solo cuando apuntaría a uno que se sacó, y que sin ningún catálogo no deje guardar (el backend lo rechaza con `22023`). |
+| `tienda-render-test.js` | La tienda de `tienda/`: **alta abierta por link** (los dos pasos, el CUIT que valida y el que no, correo repetido, CUIT ya conocido → queda `pendiente`, y que el payload no lleve `role`, `token` ni `canal`), **elección de catálogo** (no pide precios antes de elegir, el cambio recarga cuenta **y** carrito, y con un solo canal se auto-elige), canje de invitación, carrito y alta de pedido. |
 | `hub-render-test.js` | El hub de producción y sus pantallas de Línea Productiva. |
 | `deeplink-test.js` | La campanita: que cada aviso abra la pantalla que dice, en web y en mobile. |
 | `rol-ventas-test.js` | Que el rol `ventas` vea **una sola** pestaña en Ventas (la tienda mayorista) y que ningún otro rol pierda las suyas. |
