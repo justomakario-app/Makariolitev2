@@ -63,6 +63,10 @@ const MIS_PEDIDOS = [
   { pedido_id:'p2', numero:'B2B-0001', estado:'en_produccion', enviado_at:'2026-08-01T12:00:00Z',
     fecha_entrega_deseada:null, total_neto:54000, unidades:6,
     items:[{ sku:'MAD200', cantidad:6, precio_unitario:9000, subtotal:54000 }] },
+  { pedido_id:'p3', numero:'B2B-0003', estado:'facturado', enviado_at:'2026-07-20T12:00:00Z',
+    fecha_entrega_deseada:null, total_neto:100000, total_con_iva:121000, unidades:2,
+    factura_nro:'A 0001-00012345',
+    items:[{ sku:'MAD100', cantidad:2, precio_unitario:50000, subtotal:100000 }] },
 ];
 
 /* Cuenta: se cambia por escenario antes de montar. */
@@ -495,7 +499,7 @@ const SIN_ELEGIR = Object.assign({}, APROBADO, { canal_elegido:false });
   console.log('\n— Mis pedidos —');
   await montar(APROBADO);
   await clickTexto('.t-tab', 'Mis pedidos');
-  check('lista los 2 pedidos', container.querySelectorAll('.t-pedido').length === 2);
+  check('lista los 3 pedidos', container.querySelectorAll('.t-pedido').length === 3);
   check('rótulo "Enviado" tal cual lo ve el equipo', /Enviado/.test(cuerpo()));
   check('rótulo "En producción" tal cual lo ve el equipo', /En producción/.test(cuerpo()));
 
@@ -508,6 +512,20 @@ const SIN_ELEGIR = Object.assign({}, APROBADO, { canal_elegido:false });
   const pedProd = Array.from(container.querySelectorAll('.t-pedido')).find(p => txt(p).includes('B2B-0001'));
   await click(pedProd.querySelector('.t-pedido-head'));
   check('★ un pedido "en producción" NO ofrece darse de baja', !boton('Dar de baja', pedProd));
+
+  /* La factura: el numero baja en b2b_rpc_mis_pedidos desde 0158 y hasta el
+     2026-08-18 no se mostraba en ningun lado. Es lo unico que le permite al
+     cliente atar su pedido con el comprobante que recibio por afuera — el
+     sistema no emite facturas. */
+  const pedFact = Array.from(container.querySelectorAll('.t-pedido')).find(p => txt(p).includes('B2B-0003'));
+  await click(pedFact.querySelector('.t-pedido-head'));
+  check('★ un pedido facturado muestra el numero del comprobante',
+        /A 0001-00012345/.test(txt(pedFact)), txt(pedFact).slice(0, 200));
+  check('el facturado muestra neto, IVA y total',
+        /IVA/.test(txt(pedFact)) && /121\.000/.test(txt(pedFact)) && /21\.000/.test(txt(pedFact)),
+        txt(pedFact).slice(0, 300));
+  check('★ un pedido sin total_con_iva (anterior a 0158) no inventa un IVA',
+        !/IVA/.test(txt(pedEnviado)) && !/comprobante/i.test(txt(pedEnviado)));
 
   await clickTexto('button', 'Dar de baja', pedEnviado);
   check('la baja pide confirmación', /No se puede deshacer/i.test(cuerpo()));
@@ -845,6 +863,9 @@ const SIN_ELEGIR = Object.assign({}, APROBADO, { canal_elegido:false });
   check('★ tienda-acceso.jsx y tienda-app.jsx también',
         /tienda-acceso\.jsx\?v=([4-9]|\d\d)/.test(HTML_RECU)
         && /tienda-app\.jsx\?v=([5-9]|\d\d)/.test(HTML_RECU));
+  check('★ tienda-pedidos.jsx y tienda.css también (el número de factura)',
+        /tienda-pedidos\.jsx\?v=([3-9]|\d\d)/.test(HTML_RECU)
+        && /tienda\.css\?v=([6-9]|\d\d)/.test(HTML_RECU));
 
   console.log(`\n${pass}/${pass + fail} checks · fallos: ${fail}\n`);
   process.exit(fail ? 1 : 0);

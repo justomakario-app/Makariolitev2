@@ -135,6 +135,22 @@ El veredicto GO inicial fue **rechazado por el dueño**: faltaban 4 correcciones
 
 ## Registro de tareas
 
+### [2026-08-18] ✅ El número de factura ahora se ve del lado del cliente
+
+Salió de explicarle al dueño cómo funciona el circuito de facturación y encontrarme con que la mitad no estaba conectada. `b2b_rpc_admin_facturar_pedido` guarda `factura_nro` desde `0158`, `b2b_rpc_mis_pedidos` **ya lo devolvía** al browser del cliente, y el comentario de `b2b-pedidos-tab.jsx` dice textualmente *"acá se anota el número para que el cliente lo vea en Mis pedidos"* — pero **`tienda-pedidos.jsx` nunca lo dibujaba**. El dato viajaba y se tiraba. El cliente veía el cartelito "Facturado" y nada más: para atar su pedido con el comprobante que le llegó por mail tenía que llamar por teléfono, que es exactamente lo que la tienda existe para evitar.
+
+Ahora el pedido facturado, al abrirlo, muestra **"Facturado con el comprobante A 0001-00012345"**. Aprovecho el mismo viaje para el otro dato que bajaba sin mostrarse: `total_con_iva`. El pie de la tabla decía solo *Neto* — que es honesto pero incompleto, porque el mayorista paga el total con IVA y el carrito sí se lo muestra. Ahora el pie es **Neto · IVA · Total**, con el IVA calculado como la diferencia entre los dos totales que manda el servidor, no recalculado acá.
+
+**Los pedidos anteriores a `0158` tienen `total_con_iva` en null y siguen mostrando solo el neto.** No se les inventa un IVA: nadie lo calculó cuando se cerró ese pedido y estimarlo hacia atrás sería mostrar un número que no coincide con ningún papel. Hay un check dedicado a eso.
+
+**Lo que sigue sin existir, y conviene que quede escrito acá y no solo en el comentario del código: este sistema no emite facturas.** No hay tabla de facturas ni integración con ARCA. La factura se emite afuera (el sistema de facturación que ya use Makario) y acá se anota el número después. La pestaña "Facturación" de Ventas es un placeholder de *Próximamente*. Lo que sí está numerado y ordenado solo son los **pedidos** (`B2B-00001` del lado del cliente, `MAY-xxxx` del lado interno, del mismo contador que ya usaba el admin) y los **remitos** (`REM-xxxx`, con PDF).
+
+**Tests: 498 → 502.** La tienda pasó de 126 a 130. El fixture suma un tercer pedido ya facturado, y el que estaba en 'enviado' queda a propósito sin `total_con_iva` para cubrir el caso viejo. Validado con mutantes: apagar el bloque del número y forzar el IVA en un pedido viejo hacen fallar sus checks.
+
+**Archivos:** `tienda/components/tienda-pedidos.jsx`, `tienda/tienda.css`, `tienda/index.html` (`tienda.css?v=6`, `tienda-pedidos.jsx?v=3`), `tests/tienda-render-test.js`.
+
+---
+
 ### [2026-08-18] ✅ "Olvidé mi contraseña" en la tienda — el hueco que quedaba abierto del alta por link
 
 Lo dejé escrito la entrada de abajo como pendiente y lo cierro acá mismo, porque no es un detalle: **desde que el alta es abierta, nadie del lado de Makario conoce ni puede setear la contraseña de un cliente.** El cliente la elige él cuando se registra. Si se la olvida y no la puede recuperar solo, el único camino era que alguien tocara `auth.users` a mano — o sea, un cliente que deja de comprar hasta que alguien se acuerde de rescatarlo. Todo del lado del código; **no hay migración**, Supabase ya trae el circuito de recuperación.

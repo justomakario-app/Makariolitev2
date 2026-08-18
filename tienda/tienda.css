@@ -391,6 +391,12 @@ button { font: inherit; color: inherit; }
 .t-pedido-cuerpo { padding: 0 16px 16px; border-top: 1px solid var(--border); }
 .t-pedido-ayuda { font-size: 12.5px; color: var(--ink-soft); padding: 11px 0; }
 .t-pedido-dato { font-size: 12.5px; color: var(--ink-soft); padding-bottom: 10px; }
+.t-pedido-factura {
+  display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-soft);
+  background: var(--green-bg); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 9px 11px; margin-bottom: 11px;
+}
+.t-pedido-factura b { font-family: var(--mono); font-size: 12px; }
 .t-pedido-pie { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; }
 
 .t-tabla { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -401,6 +407,7 @@ button { font: inherit; color: inherit; }
 .t-tabla th.t-num { text-align: right; }
 .t-tabla td { padding: 7px 8px; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
 .t-tabla tfoot td { border-bottom: none; padding-top: 10px; }
+.t-tabla tfoot tr.t-fila-suave td { color: var(--ink-muted); padding-top: 2px; }
 
 /* ── Modal ─────────────────────────────────────────────────────────────── */
 .t-overlay {

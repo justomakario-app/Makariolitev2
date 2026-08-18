@@ -63,6 +63,19 @@ const Pedido = ({ p, onAnular, anulando, onRepetir }) => {
         <div className="t-pedido-cuerpo">
           {info && info.ayuda && <div className="t-pedido-ayuda">{info.ayuda}</div>}
 
+          {/* El numero de factura lo escribe el equipo despues de emitirla
+              afuera (b2b_rpc_admin_facturar_pedido). El comprobante en si NO
+              sale de este sistema: se manda por mail o se entrega con la
+              mercaderia. Mostrar el numero acá es lo que le permite al
+              cliente cruzar "mi pedido B2B-00012" con la factura que tiene
+              en la mano sin llamar por telefono. */}
+          {p.factura_nro && (
+            <div className="t-pedido-factura">
+              <Icon n="ticket" s={14} c="var(--green)"/>
+              <span>Facturado con el comprobante <b>{p.factura_nro}</b></span>
+            </div>
+          )}
+
           {p.fecha_entrega_deseada && (
             <div className="t-pedido-dato">
               Entrega pedida para <b>{fecha(p.fecha_entrega_deseada)}</b>
@@ -91,8 +104,20 @@ const Pedido = ({ p, onAnular, anulando, onRepetir }) => {
             <tfoot>
               <tr>
                 <td colSpan="3">Neto</td>
-                <td className="t-num"><b>{money(p.total_neto)}</b></td>
+                <td className="t-num">{money(p.total_neto)}</td>
               </tr>
+              {p.total_con_iva != null && (
+                <tr className="t-fila-suave">
+                  <td colSpan="3">IVA</td>
+                  <td className="t-num">{money(Number(p.total_con_iva) - Number(p.total_neto || 0))}</td>
+                </tr>
+              )}
+              {p.total_con_iva != null && (
+                <tr>
+                  <td colSpan="3">Total</td>
+                  <td className="t-num"><b>{money(p.total_con_iva)}</b></td>
+                </tr>
+              )}
             </tfoot>
           </table>
 
