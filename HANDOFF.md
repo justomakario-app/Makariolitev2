@@ -178,9 +178,11 @@ npm test        # 10/10 suites en verde · 398 checks ok · 0 fail
 | Pendiente | Por qué no se pudo |
 |---|---|
 | Apagar *"Allow new users to sign up"* · prender leaked-password protection | El MCP de Supabase **no tiene herramienta de configuración de Auth** (tiene SQL, migraciones, edge functions y advisors, nada más). Se hace desde el Dashboard, o por Management API con un PAT — que está prohibido usar acá. El advisor confirma que leaked-password **sigue apagado**. |
-| `git push` | **No hay credencial guardada** para `justomakario-app`: el helper (`manager`) quiere abrir su ventana de login. Leer del remoto funciona (el repo deja leer sin cuenta), escribir no. Por la regla de aislamiento **no se toca ninguna credencial ni se prueba otra cuenta**: lo tiene que autenticar el dueño. El commit local **sí** está hecho. |
+| ~~`git push`~~ | ✅ **HECHO** — ver abajo. |
 | Redeploy en EasyPanel | Regla permanente: Claude no toca EasyPanel. |
 | URL pública · smoke con Seba | La URL no está en el repo, y el smoke necesita el sitio ya desplegado y una persona. Lo más cerca que se puede correr desde acá es el E2E contra la base real dentro de un bloque con `rollback` (hecho el 15: 36 asserts). |
+
+**4 · Push hecho — `680273c..1183f29` en `master`.** No había credencial guardada para `justomakario-app` (el helper `manager` quería abrir su ventana; el primer intento se canceló y esta sesión no tiene `/dev/tty`). Se relanzó forzando el flujo de navegador (`GCM_GITHUB_AUTHMODES=browser`) y **lo autenticó el dueño**: por la regla de aislamiento no se toca ninguna credencial ni se prueba otra cuenta. Antes fallaba 403 autenticando como `ascendtech1`. Remote, rama e identidad de Git coinciden exactamente con la tabla de aislamiento, verificado antes de subir. **El repo remoto ya tiene todo; falta solo el redeploy.**
 
 ### [2026-08-16] ✅ B2B — auditoría de las dos puntas · **precio propio por canal** (`0158`–`0161`) · headers de nginx · export a Excel
 
