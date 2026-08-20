@@ -222,7 +222,7 @@ También se corrigió el filtro: decía **"Solo mayoristas"** y filtra `es_mayor
 
 El dueño hizo `git push`, apretó **Redeploy** en EasyPanel, el build salió en verde y la app quedó igual. No era el código: `git ls-remote origin master` daba exactamente el HEAD local. El push estaba bien hecho.
 
-**Motivo 1 — este servicio no lee GitHub.** Despliega del **ZIP subido a mano** (lo dice el propio DEPLOY.md paso 2: *"Tab Subir → arrastrar el zip"* / *"NO usar las opciones GitHub / Git"*). "Redeploy" reconstruye la imagen del **mismo ZIP viejo**: tarda sus dos minutos, sale verde, y no cambia una línea. `git push` versiona el código; **no lo lleva al servidor**. Son dos pasos, no uno.
+**Motivo 1 — ~~este servicio no lee GitHub~~ → ⚠️ ESTO ERA FALSO. Ver la entrada del 2026-08-20.** Se dedujo del síntoma, sin comprobarlo, apoyándose en que el propio DEPLOY.md decía *"Tab Subir → arrastrar el zip"*. **El service lee GitHub**: el 2026-08-20 se pusheó y se apretó Deploy sin ningún ZIP, y producción quedó idéntica al repo (~90 archivos por hash, 0 diferencias). **La causa real de aquel deploy que salió verde sin cambiar nada quedó sin resolver.** Lo demás de esta entrada —lo del `Compress-Archive`— sí es correcto y está medido.
 
 **Motivo 2 — el ZIP que generaban las instrucciones estaba roto.** Y esto es lo grave, porque el error es silencioso:
 

@@ -31,20 +31,22 @@ Las URLs finales:
 
 ## Paso a paso en EasyPanel
 
-### 0. Antes de armar el ZIP — correr los chequeos
+### 0. Antes de cualquier deploy — correr los chequeos
 
 ```bash
 npm install     # una sola vez, en la máquina
 npm test
 ```
 
-Tiene que decir **`10/10 suites en verde · 508 checks ok · 0 fail`**. Si algo sale en rojo, **no se sube**: el runner imprime la salida de la suite que falló.
+Tiene que decir **`12/12 suites en verde · 572 checks ok · 0 fail`**. Si algo sale en rojo, **no se sube**: el runner imprime la salida de la suite que falló.
 
 El que más importa acá es el primero, `checkjsx.js`: los tres frontends cargan sus `.jsx` como `<script type="text/babel">`, y **todos los archivos de una entrada comparten un solo scope**. Un `const` declarado dos veces en archivos distintos tira `SyntaxError` y deja **la pantalla en blanco** — sin error visible, sin nada. Eso no se ve compilando archivo por archivo ni abriendo la app por arriba, y ya pasó. Detalle de las 10 suites en `tests/README.md`.
 
-### 1. Preparar el ZIP del repo
+### 1. Armar un ZIP — **sólo si alguna vez hace falta**
 
-> ⚠️ **Dos trampas que ya rompieron un deploy. Leer antes de copiar y pegar.**
+> **El deploy normal no usa esto.** Sale de GitHub: `git push` + **Deploy**, ver el paso 2. Esta receta queda escrita porque el día que necesites un ZIP (mudar de hosting, una copia offline, un servidor de prueba), `Compress-Archive` te va a dar uno roto **sin avisarte**. Si estás haciendo un deploy común, saltá al paso 2.
+
+> ⚠️ **Dos trampas del `Compress-Archive` de Windows. Leer antes de copiar y pegar.**
 >
 > **1 · `Compress-Archive` genera un ZIP que el build de EasyPanel no puede usar.** El `Compress-Archive` de Windows PowerShell 5.1 escribe los separadores de carpeta al revés (`web\index.html` en vez de `web/index.html`), contra lo que dice la especificación ZIP. Windows lo abre igual y **parece que está bien**, pero el builder de EasyPanel corre sobre Linux: ahí no ve carpetas, ve un archivo llamado literalmente `web\index.html`. El `COPY web /usr/share/nginx/html` del Dockerfile no encuentra nada y el build falla o sube vacío.
 > **Solución: usar `tar.exe`**, que viene con Windows 10 desde la 1803 y escribe el ZIP como corresponde.
@@ -102,21 +104,24 @@ $n = @([System.IO.Compression.ZipFile]::OpenRead($zip).Entries | ForEach-Object 
   ForEach-Object { if ($n -contains $_) { "  OK    $_" } else { "  FALTA $_" } }
 ```
 
-### 2. En EasyPanel — configurar el Service
+### 2. En EasyPanel — el deploy sale de GitHub
 
-1. Ir al proyecto `app_gestion_interna` → service `makario_lite_nueva`.
-2. **Tab "Subir"** → arrastrar `macario-lite-deploy.zip`.
-3. **NO usar** las opciones GitHub / Git por ahora (a menos que tengas el repo subido a GitHub).
+El service **lee el repositorio**. Publicar un cambio son dos pasos y ninguno involucra archivos:
 
-EasyPanel detecta automáticamente el `Dockerfile` en la raíz del ZIP y lo usa como instrucciones de build.
+1. `git push` a `master` en `justomakario-app/Makariolitev2`.
+2. EasyPanel → proyecto `app_gestion_interna` → service `makario_lite_nueva` → **Deploy**.
 
-> 🔴 **Este servicio NO lee GitHub. Despliega del ZIP que subiste a mano.**
+EasyPanel detecta el `Dockerfile` en la raíz del repo y lo usa como instrucciones de build.
+
+**Cómo comprobarlo sin creerle a este archivo:** el **Historial de implementaciones** del service rotula cada deploy con el **mensaje del commit** que desplegó. Si ahí ves el texto de tu último commit, el origen es GitHub.
+
+> ⚠️ **CORRECCIÓN — 2026-08-20.** Acá había un recuadro rojo que afirmaba *"Este servicio NO lee GitHub, despliega del ZIP que subiste a mano"*. **Es falso.** Estuvo escrito dos días y desvió una sesión entera.
 >
-> Es la confusión más cara de este deploy, así que queda escrita: **hacer `git push` no cambia nada en la app**. El código sube al repo, sí, pero EasyPanel no está mirando el repo — está guardando una copia del último ZIP.
+> Verificado contra el server real: se pusheó `5c1e449`, se apretó **Deploy sin subir ningún ZIP**, y los ~90 scripts de `/`, `/m/` y `/tienda/` quedaron **idénticos al repo** — comparados por hash, **0 diferencias**. El Historial de implementaciones mostró el mensaje del commit.
 >
-> Y el botón **"Redeploy" tampoco alcanza**: reconstruye la imagen a partir del **mismo ZIP viejo**. El build sale en verde, tarda sus 2 minutos, y la app queda exactamente igual que antes. Parece que falló el código; lo que pasó es que nunca llegó.
+> **De dónde salió el error:** el 2026-08-18 el dueño pusheó, apretó Redeploy, el build salió verde y la app no cambió. De ahí se dedujo lo del ZIP. **La causa real de ese episodio quedó sin resolver** — lo único seguro es que no era ésta. Lo que sí se sabe hoy: producción estaba en `9e9a8bf` y `423f7b1` se había pusheado sin redeployar después, que explica el mismo síntoma sin ninguna teoría.
 >
-> Para que un cambio se vea en la app hay que hacer **las dos cosas**: `git push` (para que el código quede versionado) **y** subir un ZIP nuevo (para que el código llegue al servidor). Si alguna vez subís algo y "no se ve", empezá por acá antes de tocar el código.
+> **Si algún día pusheás y "no se ve":** mirá primero **qué commit dice el Historial de implementaciones**. Ahí está la respuesta. No rearmes nada antes de eso.
 
 ### 3. Build args — **no hace falta ninguna**
 
@@ -355,19 +360,34 @@ VITE_SUPABASE_ANON_KEY=<eyJhbGc...>
 
 ## Re-deploys (cuando hagas cambios)
 
-Cada vez que pushees cambios al código:
-
 0. `npm test` → tiene que dar **0 fail**. Si algo está en rojo, no se sube.
-1. Re-zippear el repo (mismo comando de paso 1 — **con `tar.exe`**, no con `Compress-Archive`).
-2. EasyPanel → Service → "Subir" → reemplazar ZIP. **Este paso no se puede saltear.**
-3. Click "Rebuild" → tarda 1-3 min.
-4. Service worker autodetecta la nueva versión y la actualiza en el browser del operario al refrescar.
+1. `git push` a `master`.
+2. EasyPanel → service `makario_lite_nueva` → **Deploy**. Tarda menos de un minuto: la imagen es un `nginx:alpine` que copia archivos, no buildea nada.
+3. Confirmar en el **Historial de implementaciones** que el deploy que corrió dice el mensaje de **tu** commit. Es el chequeo de 5 segundos que evita toda la confusión.
+4. El service worker autodetecta la nueva versión y la actualiza en el browser del operario al refrescar.
 
-⚠️ **El paso 2 es el que se olvida.** Apretar "Redeploy" sin haber subido el ZIP nuevo reconstruye el ZIP anterior: build verde, cero cambios. Ver el recuadro rojo del paso 2 de arriba.
+**Cómo comprobar que producción quedó igual al repo**, sin mirar pantallas y sin caché de por medio — baja cada `src` del HTML servido y lo compara por hash contra tu archivo local:
+
+```bash
+comparar() {   # $1 = ruta URL, $2 = carpeta local
+  curl -s "https://justomakario.lat$1" | grep -oE 'src="[^"]+\.(jsx|js)(\?v=[0-9]+)?"' \
+    | sed 's/src="//;s/"$//' | sed 's/?v=[0-9]*//' | grep -v '^http' | grep -v '^/' | sort -u |
+  while read -r rel; do
+    [ -f "$2/$rel" ] || continue
+    a=$(curl -s "https://justomakario.lat$1$rel" | tr -d '\r' | md5sum | cut -c1-8)
+    b=$(tr -d '\r' < "$2/$rel" | md5sum | cut -c1-8)
+    [ "$a" = "$b" ] || echo "DISTINTO  $1$rel  (server $a / repo $b)"
+  done
+}
+comparar "/" web ; comparar "/m/" mobile ; comparar "/tienda/" tienda
+echo "si no imprimió nada, producción == repo"
+```
+
+El `tr -d '\r'` no es adorno: en este repo conviven archivos LF y CRLF, y sin normalizar te da distinto todo.
 
 > **Detalle de la tienda (`/tienda/`):** los `.jsx` y el `.css` se cargan con un `?v=N` en `tienda/index.html`. Si tocás un archivo de `tienda/components/` o `tienda.css` **y no subís el `?v=`**, el browser del mayorista sigue sirviendo la versión cacheada aunque el deploy haya salido bien. La suite `tienda-render-test.js` chequea que el número esté al día.
 
-**Si querés dejar de hacer esto a mano** (recomendado): en el service de EasyPanel, cambiar el origen de "Subir" a **GitHub**, apuntando a `justomakario-app/Makariolitev2`, rama `master`. A partir de ahí cada `git push` dispara el deploy solo y el ZIP deja de existir como paso. Es un cambio de configuración del dueño, y conviene hacerlo en un momento tranquilo: el primer build desde GitHub hay que verlo salir en verde antes de confiarle la operación.
+**Lo único que queda manual es apretar Deploy.** Si algún día querés que ni eso —que cada `git push` dispare el build solo— es un auto-deploy/webhook que se activa en la configuración del service. Conviene verlo salir en verde una vez antes de confiarle la operación.
 
 ## Troubleshooting
 
