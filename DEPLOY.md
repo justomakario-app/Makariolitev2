@@ -135,21 +135,71 @@ La URL y la anon key de Supabase están **escritas adentro del código**, en dos
 
 ### 4. Configurar el dominio + HTTPS
 
-⚠️ **CRÍTICO para que ande la PWA y el QR scanner.**
+⚠️ **CRÍTICO para que ande la PWA y el QR scanner.** Sin HTTPS:
 
-- En EasyPanel → service → "Domains" o similar.
-- Si tenés un dominio (ej. `macario.tu-empresa.com`), apuntalo a `72.62.15.150` con un A record.
-- Activá **Let's Encrypt SSL** desde el panel (suele ser un toggle).
-- Sin HTTPS:
-  - ❌ El QR scanner no funciona (`getUserMedia` requiere secure context).
-  - ❌ El service worker no se registra (PWA no instalable).
-  - ❌ Algunos browsers bloquean Supabase Auth en HTTP.
+- ❌ El QR scanner no funciona (`getUserMedia` exige secure context).
+- ❌ El service worker no se registra → la PWA de `/m/` no se puede instalar.
+- ❌ Varios browsers bloquean Supabase Auth sobre HTTP.
 
-Si momentáneamente no tenés dominio, podés probar en `localhost` localmente o usar un túnel tipo ngrok para HTTPS.
+**El dominio del proyecto es `justomakario.lat`** (registrado en Namecheap, nameservers **BasicDNS** — `dns1/dns2.registrar-servers.com`). El server de EasyPanel es **`72.62.15.150`**.
+
+#### 4.1 — El código no se toca
+
+No hay ni una URL de producción escrita a mano en la app. Está hecho a propósito y conviene no romperlo:
+
+| dónde | cómo resuelve el host |
+|---|---|
+| `nginx.conf` | `server_name _` — atiende cualquier dominio, sin lista |
+| `tienda/components/tienda-acceso.jsx` | la URL de vuelta de los mails sale de `window.location.origin` |
+| `supabase/functions/b2b_signup` | `Access-Control-Allow-Origin: *` — no hay allowlist por dominio |
+| `mobile/manifest.webmanifest` + `sw.js` | `start_url`/`scope` = `/m/`, todo relativo |
+
+Cambiar de dominio mañana **no requiere tocar un archivo ni rearmar el ZIP**: es todo configuración de Namecheap + EasyPanel + Supabase.
+
+#### 4.2 — Namecheap (Advanced DNS)
+
+⚠️ **Primero borrar el redirect que viene de fábrica.** Un dominio nuevo trae un **URL Redirect Record** (`justomakario.lat → http://www.justomakario.lat/`) y el `www` apuntando a `parkingpage.namecheap.com`. Mientras eso siga ahí, el apex resuelve al servicio de redirección de Namecheap (`192.64.119.127`) y **la app nunca se sirve**, por más que EasyPanel esté perfecto.
+
+Borrar esas dos entradas y dejar estas dos:
+
+| Type | Host | Value | TTL |
+|---|---|---|---|
+| A Record | `@` | `72.62.15.150` | Automatic |
+| A Record | `www` | `72.62.15.150` | Automatic |
+
+(`www` como **A**, no como CNAME: un CNAME en el apex no se puede, y tenerlos iguales evita explicar dos casos.)
+
+#### 4.3 — EasyPanel
+
+**El orden importa.** Let's Encrypt valida por HTTP-01: entra por el dominio a pedirle al server una prueba. Si el DNS todavía no apunta a `72.62.15.150`, la emisión falla y hay que reintentar.
+
+1. Esperar a que el DNS propague — `nslookup justomakario.lat 8.8.8.8` tiene que devolver `72.62.15.150` (BasicDNS suele tardar entre minutos y 1–2 h).
+2. Recién ahí: EasyPanel → proyecto `app_gestion_interna` → servicio `makario_lite_nueva` → **Domains** → agregar `justomakario.lat` y `www.justomakario.lat`, **port 80** (nginx escucha solo en 80; el TLS lo termina Traefik).
+3. Activar **Let's Encrypt / SSL** en cada uno.
+
+**Cómo verificar sin depender del DNS**, mandándole el Host a mano a la IP:
+
+```bash
+curl -sk -o /dev/null -w "%{http_code}\n" -H "Host: justomakario.lat" https://72.62.15.150/tienda/
+```
+
+- **404 con una página que dice "Not Found" de EasyPanel** → el dominio todavía no está dado de alta en el servicio (Traefik no tiene ruta para ese host).
+- **200** → la ruta ya existe; lo que falte es DNS o certificado.
+
+#### 4.4 — Supabase Auth
+
+El dominio nuevo hay que declararlo o los mails de la tienda caen en el lugar equivocado. Dashboard → **Authentication → URL Configuration**:
+
+- **Site URL:** `https://justomakario.lat`
+- **Redirect URLs**, agregar:
+  - `https://justomakario.lat/tienda/`
+  - `https://www.justomakario.lat/tienda/`
+
+Si `/tienda/` no está en esa lista, el link de **"olvidé mi contraseña"** ignora el `redirectTo` y manda al usuario a la Site URL — es decir, al **sistema interno** en vez de a la tienda. El mayorista recibe el mail, hace click y aterriza en un login que no es el suyo.
 
 ### 5. Deploy
 
-Click en **"Deploy"** o **"Rebuild"** en EasyPanel. El primer build tarda **3-5 minutos** (npm install + 2 builds de Vite). Builds posteriores son más rápidos por el cache de Docker.
+Click en **"Deploy"** o **"Rebuild"** en EasyPanel. El proyecto **no buildea**: la imagen es un nginx que copia los archivos estáticos tal cual, así que tarda menos de un minuto.
 
 ### 6. Verificación post-deploy
 

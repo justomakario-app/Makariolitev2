@@ -135,6 +135,41 @@ El veredicto GO inicial fue **rechazado por el dueño**: faltaban 4 correcciones
 
 ## Registro de tareas
 
+### [2026-08-20] `justomakario.lat` — el dominio no toca el código, y el redirect de fábrica es el que rompe
+
+Llegó el dominio. Lo primero fue buscar qué había que cambiar en la app: **nada**. Se revisó uno por uno y está bien resuelto de antes:
+
+| dónde | por qué no le afecta el dominio |
+|---|---|
+| `nginx.conf` | `server_name _` — atiende cualquier host, no hay lista que actualizar |
+| `tienda-acceso.jsx:147` | la URL de vuelta de los mails sale de `window.location.origin` |
+| `b2b_signup/index.ts:67` | `Access-Control-Allow-Origin: *` — no hay allowlist por dominio |
+| `manifest.webmanifest` + `sw.js` | `start_url`/`scope` = `/m/`, todo relativo |
+| las 3 entradas HTML | ni una URL absoluta que no sea un CDN |
+
+Un `grep` por URLs de producción en todo el repo da **cero** en código: los únicos aciertos son documentación y un mock del proyecto viejo. Mover de dominio mañana no obliga a rearmar el ZIP.
+
+**Estado real, medido — no supuesto.** Se le mandó el `Host` a mano a la IP del server, salteando el DNS:
+
+```
+curl -H "Host: justomakario.lat" https://72.62.15.150/tienda/   -> 404 "Not Found" de EasyPanel
+openssl s_client -servername justomakario.lat                   -> CN=Easypanel (autofirmado)
+```
+
+Traefik **no tiene ruta** para ese host: el dominio todavía no está dado de alta en el servicio. Y no hay certificado de Let's Encrypt emitido. Del lado de Namecheap, `nslookup` muestra el apex resolviendo a `192.64.119.127` (servicio de redirección) y el `www` a `parkingpage.namecheap.com`.
+
+**La trampa que se llevaría el día.** Un dominio nuevo de Namecheap viene con un **URL Redirect Record** `justomakario.lat → http://www.justomakario.lat/`. No es decorativo: bajo BasicDNS ese registro **se queda con el apex**. Si se agrega el A record sin borrarlo antes, el dominio sigue yendo al redirector de Namecheap y la app no aparece — con EasyPanel perfectamente configurado. El síntoma no señala la causa.
+
+**El orden también importa.** Let's Encrypt valida por HTTP-01, entrando por el dominio. Si se da de alta en EasyPanel **antes** de que el DNS propague, la emisión del certificado falla. Primero DNS, después EasyPanel.
+
+**Lo que se corrigió de paso:** `DEPLOY.md` decía que el primer build tarda "3-5 minutos (npm install + 2 builds de Vite)". El `Dockerfile` es `FROM nginx:alpine` single-stage con puros `COPY`: no hay npm install ni build. Era el último resto del Vite que este proyecto nunca usó (el resto lo había limpiado `0bac638`).
+
+**Queda documentado en `DEPLOY.md § 4`** con los valores reales —los dos A records, el borrado del redirect, el alta en EasyPanel en port 80, y las Redirect URLs de Supabase— más el `curl` con `Host` forzado para diagnosticar sin depender de la propagación.
+
+> **Por qué `/tienda/` tiene que estar sí o sí en las Redirect URLs de Supabase:** si no está, el link de *"olvidé mi contraseña"* ignora el `redirectTo` y cae en la Site URL, o sea en el **sistema interno**. El mayorista pide su contraseña, hace click en el mail y aterriza en el login de los empleados. Anda todo "bien" y la experiencia es un desastre.
+
+---
+
 ### [2026-08-18] "¿Por qué no me aparece distribuidor acá?" — porque el canal nunca llegaba a esa pantalla
 
 El dueño abrió **Ventas → Alta y mod. clientes** y vio tres tarjetas: CLIENTES ACTIVOS · **MAYORISTAS** · NUEVOS ESTE MES. Faltaba distribuidores. No era que estuviera vacía: **no existía**, y no podía existir.
