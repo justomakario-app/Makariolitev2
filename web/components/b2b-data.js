@@ -220,9 +220,18 @@ window.B2B_DATA = window.B2B_DATA || (function () {
     /* Ruta guardada -> URL para el <img>. La ruta de un SKU es siempre la
        misma a proposito (subir de nuevo pisa la anterior), asi que despues de
        cambiar la foto el navegador seguiria mostrando la vieja: `v` es el
-       cache-buster para ese caso. No se guarda en la base, es solo de vista. */
+       cache-buster para ese caso. No se guarda en la base, es solo de vista.
+
+       `foto_path` admite DOS formas y hay que respetar las dos: una ruta del
+       bucket (`MAD201/foto.webp`, lo que sube el dueño desde este panel) o una
+       URL absoluta a una foto de afuera (la de la tienda publica). La absoluta
+       se devuelve tal cual: no vive en nuestro storage, y el cache-buster no
+       le corresponde porque no somos nosotros los que la pisamos. Sin este
+       caso el panel muestra la imagen rota mientras la tienda la muestra bien,
+       que es la clase de diferencia que nadie encuentra mirando el codigo. */
     fotoUrl: (path, v) => {
       if (!path) return null;
+      if (/^https?:\/\//i.test(path)) return path;
       const { data } = sb().storage.from('b2b_fotos').getPublicUrl(path);
       const url = data && data.publicUrl ? data.publicUrl : null;
       if (!url) return null;
