@@ -340,7 +340,8 @@ const TiendaApp = () => {
                          onSeguirComprando={() => { setEnviado(null); setTab('catalogo'); }}/>
         ) : tab === 'catalogo' ? (
           <PantallaCatalogo key={cuenta.canal} carrito={carrito}
-                            onSetCantidad={setCantidad} ocupado={ocupado}/>
+                            onSetCantidad={setCantidad} ocupado={ocupado}
+                            onIrCarrito={() => setTab('carrito')}/>
         ) : tab === 'carrito' ? (
           <PantallaCarrito carrito={carrito} onSetCantidad={setCantidad}
                            onGuardarDatos={guardarDatos} onEnviar={enviar}

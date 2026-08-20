@@ -358,6 +358,41 @@ button { font: inherit; color: inherit; }
 .t-minimo-barra i { display: block; height: 100%; background: var(--amber); transition: width .2s; }
 .t-minimo-ok .t-minimo-barra i { background: var(--green); }
 
+/* ── Aviso de compra mínima (catálogo) ─────────────────────────────────────
+   `sticky` y no `fixed`: se apoya en el fondo de la ventana mientras hay
+   catálogo abajo y se detiene solo al llegar al final, sin taparle el pie de
+   página ni pelearse con el teclado del celular. */
+.t-barramin { position: sticky; bottom: 10px; z-index: 20; margin-top: 20px; }
+.t-barramin-in {
+  display: flex; align-items: center; gap: 14px; padding: 10px 12px 10px 14px;
+  background: rgba(255,255,255,0.90); backdrop-filter: saturate(180%) blur(12px);
+  border: 1px solid var(--border-md); border-radius: 12px; box-shadow: var(--shadow-sm);
+}
+.t-barramin-ok .t-barramin-in { border-color: rgba(22,163,74,0.35); background: rgba(240,253,244,0.92); }
+.t-barramin-icono {
+  display: grid; place-items: center; width: 30px; height: 30px; flex: none;
+  border-radius: 8px; background: var(--amber-bg); color: var(--amber);
+}
+.t-barramin-ok .t-barramin-icono { background: var(--green-bg); color: var(--green); }
+.t-barramin-txt { display: flex; flex-direction: column; line-height: 1.35; min-width: 0; }
+.t-barramin-txt b { font-size: 13.5px; font-weight: 700; }
+.t-barramin-txt span { font-size: 11.5px; color: var(--ink-muted); }
+.t-barramin-barra {
+  flex: 1; min-width: 60px; height: 5px; border-radius: 3px;
+  background: var(--paper-dim); overflow: hidden;
+}
+.t-barramin-barra i { display: block; height: 100%; background: var(--amber); transition: width .25s; }
+.t-barramin-ok .t-barramin-barra i { background: var(--green); }
+.t-barramin .t-btn { flex: none; }
+
+/* En pantalla angosta la barra de progreso se va abajo y ocupa el ancho: en
+   una fila de 4 elementos no le queda lugar util. */
+@media (max-width: 640px) {
+  .t-barramin-in { flex-wrap: wrap; gap: 10px; }
+  .t-barramin-txt { flex: 1; }
+  .t-barramin-barra { order: 3; flex-basis: 100%; }
+}
+
 /* ── Pedido enviado ────────────────────────────────────────────────────── */
 .t-enviado {
   background: var(--paper); border: 1px solid var(--border); border-radius: 14px;

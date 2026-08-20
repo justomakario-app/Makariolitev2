@@ -17,10 +17,12 @@
    que hace que getPublicUrl() de abajo sirva (en un bucket privado devuelve
    una URL que da 400). Lo confidencial de esta tienda no es la foto — es el
    precio, y el precio nunca sale del catalogo sin filtrar por canal.
-   b2b_producto.foto_path sigue en null para todos los SKU hasta que alguien
-   suba las imagenes: mientras tanto las tarjetas muestran el recuadro vacio
-   de abajo, que es deliberado — una tienda sin fotos se usa igual, una con
-   fotos rotas no. */
+   `foto_path` admite DOS formas: una ruta del bucket (lo que sube el dueño
+   desde el panel) o una URL absoluta a una foto de afuera — hoy la mayoria
+   apunta a la tienda publica justomakario.com, que es donde ya estaban las
+   fotos de los mismos SKU. urlFoto() de abajo resuelve las dos.
+   El que se queda sin foto muestra el recuadro vacio, que es deliberado: una
+   tienda sin fotos se usa igual, una con fotos rotas no. */
 const BUCKET_FOTOS = 'b2b_fotos';
 
 const urlFoto = (path) => {
@@ -126,8 +128,99 @@ const TarjetaProducto = ({ prod, enCarrito, onSetCantidad, ocupado }) => {
   );
 };
 
+/* ── Aviso de compra mínima ────────────────────────────────────────────
+   El mínimo del canal se avisaba SOLO en el carrito: el cliente cargaba diez
+   productos y recién al final se enteraba de que no llegaba. Esta barra lo
+   acompaña mientras compra, así la restricción no es una sorpresa al final.
+
+   Hace la MISMA cuenta que el carrito a propósito — neto sin IVA, sumando
+   `subtotal` — porque dos lugares mostrando números distintos del mismo
+   pedido es peor que no mostrarlo. Si el canal no tiene mínimo (0 =
+   desactivado, que es como estuvo hasta que el dueño pasó los montos) no se
+   muestra nada.                                                          */
+const BarraMinimo = ({ carrito, onIrCarrito }) => {
+  const minMonto = Number(carrito && carrito.minimo_pedido) || 0;
+  const minUnid  = Number(carrito && carrito.minimo_unidades) || 0;
+  if (!minMonto && !minUnid) return null;
+
+  const items = (carrito && carrito.items) || [];
+  const neto  = items.reduce((a, i) => a + (Number(i.subtotal)  || 0), 0);
+  const unid  = items.reduce((a, i) => a + (Number(i.cantidad) || 0), 0);
+
+  const faltaMonto = minMonto > 0 && neto < minMonto;
+  const faltaUnid  = minUnid  > 0 && unid < minUnid;
+  const vacio = !items.length;
+  const listo = !faltaMonto && !faltaUnid && !vacio;
+
+  /* Con los dos mínimos activos manda el que va más atrasado: es el que
+     decide si puede enviar, así que es el que hay que mostrar. */
+  const avances = [];
+  if (minMonto > 0) avances.push(neto / minMonto);
+  if (minUnid  > 0) avances.push(unid / minUnid);
+  const pct = Math.min(100, Math.round(Math.min.apply(null, avances) * 100));
+
+  /* Lo que falta, dicho en las unidades que le faltan y no en porcentaje. */
+  const faltan = [];
+  if (faltaMonto) faltan.push(money(minMonto - neto));
+  if (faltaUnid) {
+    const n = minUnid - unid;
+    faltan.push(num(n) + (n === 1 ? ' unidad' : ' unidades'));
+  }
+
+  /* El mínimo enunciado entero, para cuando el pedido todavía está vacío. */
+  const enunciado = [];
+  if (minMonto > 0) enunciado.push(money(minMonto) + ' + IVA');
+  if (minUnid  > 0) enunciado.push(num(minUnid) + (minUnid === 1 ? ' unidad' : ' unidades'));
+
+  return (
+    <div className={'t-barramin' + (listo ? ' t-barramin-ok' : '')}
+         role="status" aria-live="polite">
+      <div className="t-barramin-in">
+        <span className="t-barramin-icono">
+          <Icon n={listo ? 'check' : 'cart'} s={15}/>
+        </span>
+
+        <div className="t-barramin-txt">
+          {vacio ? (
+            <>
+              <b>Mínimo de compra: {enunciado.join(' y ')}</b>
+              <span>{minMonto > 0 ? 'Se mide sobre el neto, sin IVA.' : 'Agregá productos para empezar.'}</span>
+            </>
+          ) : listo ? (
+            <>
+              <b>Llegaste al mínimo</b>
+              <span>Ya podés enviar tu pedido cuando quieras.</span>
+            </>
+          ) : (
+            <>
+              <b>Te falta {faltan.join(' y ')} para el mínimo</b>
+              <span>
+                {minMonto > 0
+                  ? 'Llevás ' + money(neto) + ' netos de ' + money(minMonto)
+                  : 'Llevás ' + num(unid) + ' de ' + num(minUnid) + ' unidades'}
+              </span>
+            </>
+          )}
+        </div>
+
+        {!vacio && (
+          <>
+            <div className="t-barramin-barra" aria-hidden="true">
+              <i style={{ width: pct + '%' }}/>
+            </div>
+            <button className={'t-btn ' + (listo ? 't-btn-primary' : 't-btn-ghost')}
+                    onClick={onIrCarrito}>
+              Ver mi pedido
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
 /* ══ Catálogo ═══════════════════════════════════════════════════════════ */
-const PantallaCatalogo = ({ carrito, onSetCantidad, ocupado }) => {
+const PantallaCatalogo = ({ carrito, onSetCantidad, ocupado, onIrCarrito }) => {
   const [items, setItems]   = useState(null);
   const [error, setError]   = useState(null);
   const [q, setQ]           = useState('');
@@ -238,8 +331,10 @@ const PantallaCatalogo = ({ carrito, onSetCantidad, ocupado }) => {
           </div>
         </>
       )}
+
+      <BarraMinimo carrito={carrito} onIrCarrito={onIrCarrito}/>
     </div>
   );
 };
 
-window.TiendaCatalogo = { PantallaCatalogo, TarjetaProducto, Cantidad, urlFoto, BUCKET_FOTOS };
+window.TiendaCatalogo = { PantallaCatalogo, TarjetaProducto, Cantidad, BarraMinimo, urlFoto, BUCKET_FOTOS };
