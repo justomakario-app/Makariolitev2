@@ -107,8 +107,82 @@ const CanjearLogueado = ({ onListo, onSalir }) => {
   );
 };
 
+/* Primer nombre, para saludar. `cuenta.nombre` es el de la PERSONA que
+   compra (b2b_usuario.nombre); `cuenta.cliente.nombre` es el de la empresa.
+   Se confundían fácil y hasta ahora el header mostraba siempre la empresa:
+   del otro lado hay alguien, no una razón social. */
+const primerNombre = (n) => String(n || '').trim().split(/\s+/)[0] || '';
+
+/* ── Mi cuenta ─────────────────────────────────────────────────────────
+   Lo que el cliente tenía que preguntar por teléfono: con qué CUIT quedó
+   registrado, en qué condición de pago está, cuál es el mínimo de SU canal.
+   Todo esto ya venía en b2b_rpc_mi_cuenta desde el principio y no se
+   mostraba en ningún lado — el CUIT sólo asomaba en el pie de página, en
+   gris, a 12px. */
+const FilaCuenta = ({ icono, rotulo, valor }) => {
+  /* Dato vacío: la fila directamente no existe. Una lista llena de "—" se
+     lee como un sistema al que le falta información sobre vos. */
+  if (!valor) return null;
+  return (
+    <div className="t-cuenta-fila">
+      <span className="t-cuenta-icono"><Icon n={icono} s={15}/></span>
+      <div className="t-cuenta-txt">
+        <span>{rotulo}</span>
+        <b>{valor}</b>
+      </div>
+    </div>
+  );
+};
+
+const ModalCuenta = ({ cuenta, onCerrar, onSalir }) => {
+  const cli = cuenta.cliente || {};
+
+  /* El mínimo del canal en el que está parado, no el del cliente en general:
+     mayorista y distribuidor tienen mínimos distintos y mostrar el que no es
+     lo manda a cargar de más (o de menos, y no puede enviar). Misma fuente
+     que la barra del catálogo. */
+  const canalActual = ((cli.canales || []).find(c => c.codigo === cuenta.canal)) || null;
+  const minMonto = Number((canalActual ? canalActual.minimo_pedido   : cli.minimo_pedido))   || 0;
+  const minUnid  = Number((canalActual ? canalActual.minimo_unidades : cli.minimo_unidades)) || 0;
+  const minimo = [
+    minMonto > 0 ? money(minMonto) + ' + IVA' : null,
+    minUnid  > 0 ? num(minUnid) + (minUnid === 1 ? ' unidad' : ' unidades') : null,
+  ].filter(Boolean).join(' y ');
+
+  return (
+    <Modal open={true} title="Mi cuenta" onClose={onCerrar}
+           footer={
+             <button className="t-btn t-btn-ghost" onClick={onSalir}>
+               <Icon n="logout" s={14}/> Cerrar sesión
+             </button>
+           }>
+      <div className="t-cuenta">
+        <div className="t-cuenta-grupo">Quién compra</div>
+        <FilaCuenta icono="user" rotulo="Tu nombre" valor={cuenta.nombre}/>
+        <FilaCuenta icono="mail" rotulo="Tu correo" valor={cuenta.email}/>
+
+        <div className="t-cuenta-grupo">Tu empresa</div>
+        <FilaCuenta icono="briefcase" rotulo="Razón social" valor={cli.nombre}/>
+        <FilaCuenta icono="ticket" rotulo="CUIT" valor={cli.cuit}/>
+        <FilaCuenta icono="card" rotulo="Condición de pago" valor={cli.condicion_pago}/>
+
+        <div className="t-cuenta-grupo">Cómo comprás</div>
+        <FilaCuenta icono="box" rotulo="Catálogo actual"
+                    valor={(canalActual && canalActual.nombre) || cuenta.canal}/>
+        <FilaCuenta icono="cart" rotulo="Mínimo de compra" valor={minimo}/>
+      </div>
+
+      <p className="t-cuenta-pie">
+        ¿Algo de esto está mal? Escribinos y lo corregimos — desde acá no se
+        edita para que nadie cambie los datos fiscales de la empresa sin que
+        quede registro.
+      </p>
+    </Modal>
+  );
+};
+
 /* ── Cabecera ──────────────────────────────────────────────────────────── */
-const Header = ({ cuenta, tab, setTab, unidades, onSalir, onCambiarCanal }) => (
+const Header = ({ cuenta, tab, setTab, unidades, onSalir, onCambiarCanal, onVerCuenta }) => (
   <header className="t-header">
     <div className="t-header-in">
       <Marca chico/>
@@ -134,10 +208,21 @@ const Header = ({ cuenta, tab, setTab, unidades, onSalir, onCambiarCanal }) => (
             contestar mirando un precio: la misma pieza vale distinto en
             mayorista que en distribuidor. */}
         <SelectorCanal cuenta={cuenta} onElegido={onCambiarCanal}/>
-        <div className="t-header-cli">
-          <b>{(cuenta.cliente && cuenta.cliente.nombre) || cuenta.nombre}</b>
-          <span>{cuenta.email}</span>
-        </div>
+
+        {/* Saluda a la PERSONA y abajo dice para qué empresa está comprando.
+            Antes decía la empresa arriba y el mail abajo: información
+            correcta y de nadie. Es un botón porque además es la puerta a
+            "Mi cuenta" — el mail, el CUIT y la condición de pago se fueron
+            ahí adentro, que es donde se los va a buscar cuando hacen falta. */}
+        <button className="t-header-cli" onClick={onVerCuenta}
+                title="Ver los datos de mi cuenta">
+          <span className="t-header-cli-txt">
+            <b>Hola{primerNombre(cuenta.nombre) ? ', ' + primerNombre(cuenta.nombre) : ''}</b>
+            <span>{(cuenta.cliente && cuenta.cliente.nombre) || cuenta.email}</span>
+          </span>
+          <Icon n="chev-down" s={14}/>
+        </button>
+
         <button className="t-icon-btn" onClick={onSalir} aria-label="Salir" title="Salir">
           <Icon n="logout" s={17}/>
         </button>
@@ -156,6 +241,7 @@ const TiendaApp = () => {
   const [enviado, setEnviado] = useState(null);      // resultado de enviarPedido
   const [senalPedidos, setSenalPedidos] = useState(0);
   const [fatal, setFatal]     = useState(null);
+  const [verCuenta, setVerCuenta] = useState(false);
 
   /* Alguien que llega por el link del mail. Se decide UNA vez, con lo que el
      archivo de acceso leyó del hash al cargar; 'null' es el caso normal.
@@ -331,7 +417,13 @@ const TiendaApp = () => {
   return (
     <div className="t-app">
       <Header cuenta={cuenta} tab={tab} setTab={t => { setTab(t); setEnviado(null); }}
-              unidades={unidades} onSalir={salir} onCambiarCanal={cambiarCanal}/>
+              unidades={unidades} onSalir={salir} onCambiarCanal={cambiarCanal}
+              onVerCuenta={() => setVerCuenta(true)}/>
+
+      {verCuenta && (
+        <ModalCuenta cuenta={cuenta} onCerrar={() => setVerCuenta(false)}
+                     onSalir={() => { setVerCuenta(false); salir(); }}/>
+      )}
 
       <main className="t-main">
         {enviado ? (

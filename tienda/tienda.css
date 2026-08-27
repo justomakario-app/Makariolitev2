@@ -210,9 +210,29 @@ button { font: inherit; color: inherit; }
   text-align: center;
 }
 .t-header-user { display: flex; align-items: center; gap: 8px; }
-.t-header-cli { display: flex; flex-direction: column; line-height: 1.25; text-align: right; }
-.t-header-cli b { font-size: 13px; }
-.t-header-cli span { font-size: 11.5px; color: var(--ink-muted); }
+
+/* Los datos del comprador son un BOTÓN, no un rótulo: además de decir quién
+   sos abre "Mi cuenta". Como <button> no hereda nada, hay que apagarle todo
+   lo propio antes de vestirlo.
+   Ojo con el selector: adentro hay un .t-header-cli-txt que también es un
+   <span>, así que las reglas del texto chico van sobre
+   `.t-header-cli-txt span` y NO sobre `.t-header-cli span` — esa segunda
+   forma agarraría la caja entera. */
+.t-header-cli {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 7px; border-radius: var(--radius);
+  background: none; border: 1px solid transparent; cursor: pointer;
+  font: inherit; color: inherit; text-align: right;
+  transition: background .12s, border-color .12s;
+}
+.t-header-cli:hover { background: var(--paper-dim); border-color: var(--border); }
+.t-header-cli > svg { flex: none; color: var(--ink-muted); }
+.t-header-cli-txt { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.t-header-cli-txt b { font-size: 13px; white-space: nowrap; }
+.t-header-cli-txt span {
+  font-size: 11.5px; color: var(--ink-muted);
+  max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
 .t-main { flex: 1; width: 100%; max-width: var(--ancho); margin: 0 auto; padding: 22px 20px 48px; }
 .t-footer {
@@ -497,7 +517,10 @@ button { font: inherit; color: inherit; }
   .t-nav { order: 3; width: 100%; margin-left: 0; overflow-x: auto; }
   .t-tab { flex: 1; justify-content: center; }
   .t-header-user { margin-left: auto; }
-  .t-header-cli span { display: none; }
+  /* En el header apretado queda sólo el "Hola, Nombre". La empresa, el mail
+     y el resto están a un toque, adentro de "Mi cuenta". */
+  .t-header-cli-txt span { display: none; }
+  .t-header-cli > svg { display: none; }
   .t-main { padding: 16px 14px 40px; }
   .t-grilla { grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); gap: 12px; }
   .t-prod-cuerpo { padding: 11px; }
@@ -794,4 +817,98 @@ button { font: inherit; color: inherit; }
      dice con qué lista de precios está mirando. */
   .t-header-user { gap: 6px; }
   .t-canal-chip { padding: 5px 9px; font-size: 12px; }
+}
+
+/* ══ MI CUENTA Y "COMPRÁ DE NUEVO" ═══════════════════════════════════════
+   Las dos piezas que hacen que la tienda se sienta de cada cliente y no una
+   vidriera igual para todos. Van al final por la misma razón que el bloque
+   de acceso premium: se escribieron después, y así se ve de un vistazo qué
+   es lo último que se tocó.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Mi cuenta ─────────────────────────────────────────────────────────
+   Fichas en vez de una tabla de dos columnas: son seis datos, no una
+   planilla, y en 360px una tabla de rótulo + valor se parte fea. */
+.t-cuenta { display: flex; flex-direction: column; }
+.t-cuenta-grupo {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink-muted); margin: 17px 0 7px;
+}
+.t-cuenta-grupo:first-child { margin-top: 0; }
+.t-cuenta-fila {
+  display: flex; align-items: center; gap: 11px; padding: 9px 11px; margin-bottom: 6px;
+  background: var(--paper-off); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.t-cuenta-icono {
+  flex: none; display: grid; place-items: center; width: 28px; height: 28px;
+  border-radius: 7px; background: var(--paper); border: 1px solid var(--border);
+  color: var(--ink-soft);
+}
+.t-cuenta-txt { display: flex; flex-direction: column; line-height: 1.35; min-width: 0; }
+.t-cuenta-txt span { font-size: 11px; color: var(--ink-muted); }
+.t-cuenta-txt b { font-size: 13.5px; overflow-wrap: anywhere; }
+.t-cuenta-pie { font-size: 12px; color: var(--ink-muted); margin-top: 17px; line-height: 1.55; }
+
+/* ── Comprá de nuevo ───────────────────────────────────────────────────
+   Fila horizontal con scroll propio. Ocho fichas no entran en el ancho de
+   un celular, y bajarlas a una grilla le comería la pantalla al catálogo,
+   que es lo que la persona vino a mirar. Con scroll lateral la franja
+   ocupa siempre lo mismo: una fila. */
+.t-denuevo { margin-bottom: 22px; }
+.t-denuevo-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.t-denuevo-titulo {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 15px; font-weight: 800; letter-spacing: -.01em;
+}
+.t-denuevo-titulo svg { color: var(--ink-muted); }
+.t-denuevo-bajada { font-size: 12.5px; color: var(--ink-muted); }
+
+.t-denuevo-fila {
+  display: flex; gap: 10px; overflow-x: auto; padding-bottom: 5px;
+  scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch;
+}
+.t-denuevo-fila::-webkit-scrollbar { height: 6px; }
+.t-denuevo-fila::-webkit-scrollbar-track { background: transparent; }
+.t-denuevo-fila::-webkit-scrollbar-thumb { background: var(--border-md); border-radius: 3px; }
+
+.t-repe {
+  flex: none; width: 272px; scroll-snap-align: start;
+  display: flex; align-items: center; gap: 10px; padding: 9px;
+  background: var(--paper); border: 1px solid var(--border); border-radius: 12px;
+  transition: border-color .14s, box-shadow .14s;
+}
+.t-repe:hover { border-color: var(--border-md); box-shadow: var(--shadow-sm); }
+/* Ya está en el pedido: se marca en verde, igual que la barra del mínimo
+   cuando llegó. Es el mismo idioma en las dos pantallas. */
+.t-repe-on { border-color: rgba(22,163,74,.35); background: rgba(240,253,244,.6); }
+
+.t-repe-foto {
+  position: relative; flex: none; width: 52px; height: 52px;
+  border-radius: 9px; overflow: hidden; background: var(--paper-dim);
+}
+.t-repe-foto img { width: 100%; height: 100%; object-fit: cover; }
+.t-repe-ok {
+  position: absolute; right: 2px; bottom: 2px; display: grid; place-items: center;
+  width: 16px; height: 16px; border-radius: 50%; background: var(--green); color: #fff;
+}
+
+.t-repe-cuerpo { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+/* Los tres textos van a una línea con puntos suspensivos: la ficha tiene
+   que medir siempre lo mismo o la fila queda con los botones bailando. */
+.t-repe-nombre,
+.t-repe-veces { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.t-repe-nombre { font-size: 13px; font-weight: 700; line-height: 1.25; }
+.t-repe-veces { font-size: 11px; color: var(--ink-muted); }
+.t-repe-precio { font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.t-repe-btn { flex: none; padding: 7px 11px; font-size: 13px; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 720px) {
+  /* La franja se estira de borde a borde de la pantalla aunque .t-main
+     tenga padding: cortada a la mitad de una ficha se lee como que hay
+     más para el costado, que es justo lo que se quiere. */
+  .t-denuevo-fila {
+    margin: 0 -14px; padding: 0 14px 5px;
+  }
+  .t-repe { width: 244px; }
+  .t-denuevo-bajada { flex-basis: 100%; }
 }

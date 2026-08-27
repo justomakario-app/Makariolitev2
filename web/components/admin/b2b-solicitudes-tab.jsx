@@ -154,6 +154,44 @@ function B2BSolicitudesTab({ onCambio } = {}) {
         </button>
       </div>
 
+      {/* ── Link para sumar clientes ─────────────────────────────────────
+          Desde 0163 el alta es abierta: se manda UN link y el comprador se
+          registra solo — sus datos y los de su empresa — y queda comprando.
+          Ese link no estaba en NINGUNA pantalla del panel: lo único que se
+          veía era el código de una invitación puntual, así que parecía que
+          la única forma de sumar gente era emitir códigos de a uno.
+          Va arriba de todo porque es lo que se usa siempre; la invitación
+          quedó para el caso raro (segundo comprador de una empresa que ya
+          existe, que no puede registrarse solo porque el CUIT ya está
+          tomado — ver el encabezado de tienda-acceso.jsx). */}
+      <div className="card" style={{marginBottom:16, padding:'14px 16px'}}>
+        <div style={{fontWeight:700, fontSize:13}}>Link para que un cliente cree su cuenta</div>
+        <div style={{fontSize:12, color:'var(--ink-muted)', margin:'4px 0 10px', lineHeight:1.5}}>
+          Mandáselo por WhatsApp o por mail a cualquier mayorista. Se registra
+          solo, con sus datos y los de su empresa, y queda comprando en el
+          momento. No vence y sirve para todos.
+        </div>
+        <div style={{display:'flex', gap:8, alignItems:'center', flexWrap:'wrap'}}>
+          <input className="field-input" readOnly
+                 value={`${window.location.origin}/tienda/?alta=1`}
+                 onFocus={e => e.target.select()}
+                 style={{fontFamily:'ui-monospace, monospace', fontSize:12, flex:'1 1 260px'}}/>
+          <button className="btn-primary" style={{whiteSpace:'nowrap'}}
+                  onClick={() => copiar(`${window.location.origin}/tienda/?alta=1`)}>
+            <Icon n="copy" s={14}/> Copiar link
+          </button>
+          <a className="btn-ghost" style={{whiteSpace:'nowrap', textDecoration:'none'}}
+             href={`${window.location.origin}/tienda/`} target="_blank" rel="noopener noreferrer">
+            <Icon n="store" s={14}/> Ver la tienda
+          </a>
+        </div>
+        <div className="field-help" style={{marginTop:8}}>
+          El que ya tiene cuenta entra por <b>{window.location.origin}/tienda/</b>.
+          "Invitar mayorista" es para otra cosa: sumar un <b>segundo comprador</b> a
+          una empresa que ya está registrada.
+        </div>
+      </div>
+
       {/* ── Usuarios ── */}
       <div className="card">
         <div style={{padding:'12px 14px 0', fontWeight:700, fontSize:13}}>

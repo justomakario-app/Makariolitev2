@@ -128,6 +128,116 @@ const TarjetaProducto = ({ prod, enCarrito, onSetCantidad, ocupado }) => {
   );
 };
 
+/* ══ Comprá de nuevo ═════════════════════════════════════════════════════
+   Un mayorista no navega: repite. La misma persona pide los mismos ocho o
+   diez modelos todos los meses y hasta ahora tenía que ir a buscarlos de a
+   uno en una grilla de cien productos, o acordarse del código.
+
+   Se arma entera en el browser cruzando dos cosas que YA estaban: el
+   historial que devuelve b2b_rpc_mis_pedidos (viene con los items de cada
+   pedido) contra el catálogo que ya está en pantalla. Cero RPC nuevas.
+
+   ★ El producto que se muestra sale del CATÁLOGO ACTUAL, nunca del pedido
+   viejo. O sea que el precio es el de hoy y el del canal en el que está
+   parado, y lo que se dio de baja o no existe en este canal simplemente no
+   aparece. Mostrar el precio congelado de un pedido de marzo sería la peor
+   version de esta pantalla: el cliente arma el pedido con un numero y le
+   llega otro.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Los SKU que más veces pidió, de más a menos. Un pedido cuenta UNA vez por
+   SKU aunque tenga varias líneas del mismo. Los anulados no cuentan: buena
+   parte se anula justamente porque estaban mal cargados. */
+const topSkus = (pedidos, catalogo, tope) => {
+  const enCatalogo = new Map();
+  (catalogo || []).forEach(p => { if (p && p.sku) enCatalogo.set(p.sku, p); });
+
+  /* mis_pedidos ya viene ordenado por fecha descendente, así que la primera
+     vez que aparece un SKU es la última vez que lo pidió. */
+  const stat = new Map();
+  (pedidos || []).forEach(ped => {
+    if (!ped || ped.estado === 'anulado') return;
+    const vistos = new Set();
+    ((ped && ped.items) || []).forEach(it => {
+      const sku = it && it.sku;
+      if (!sku || vistos.has(sku) || !enCatalogo.has(sku)) return;
+      vistos.add(sku);
+      const s = stat.get(sku) || { veces: 0, ultimo: null };
+      s.veces += 1;
+      if (!s.ultimo) s.ultimo = ped.enviado_at || null;
+      stat.set(sku, s);
+    });
+  });
+
+  return Array.from(stat.entries())
+    .sort((a, b) => b[1].veces - a[1].veces)
+    .slice(0, tope || 8)
+    .map(([sku, s]) => ({ prod: enCatalogo.get(sku), veces: s.veces, ultimo: s.ultimo }));
+};
+
+/* Ficha compacta: foto chica, qué es, cuántas veces lo pidió y un solo botón
+   que agrega la cantidad mínima válida. Un toque, como promete la pantalla
+   de entrada. El "+6" dice de a cuánto se vende sin tener que abrir nada:
+   ese número sale de reglaSku(), el mismo que usa el catálogo grande. */
+const TarjetaRepetir = ({ prod, veces, ultimo, enCarrito, onSetCantidad, ocupado }) => {
+  const foto = urlFoto(prod.foto_path);
+  const { inicial } = reglaSku(prod);
+
+  return (
+    <article className={'t-repe' + (enCarrito > 0 ? ' t-repe-on' : '')}>
+      <div className="t-repe-foto">
+        {foto
+          ? <img src={foto} alt={prod.modelo || prod.sku} loading="lazy"/>
+          : <div className="t-prod-sinfoto"><Icon n="box" s={18} c="var(--ink-faint)"/></div>}
+        {enCarrito > 0 && (
+          <span className="t-repe-ok" title={num(enCarrito) + ' en el pedido'}>
+            <Icon n="check" s={11}/>
+          </span>
+        )}
+      </div>
+
+      <div className="t-repe-cuerpo">
+        {/* El modelo solo no alcanza: el mismo modelo viene en varios colores
+           y son SKU distintos. Sin el color quedarían dos fichas idénticas y el
+           cliente termina agregando la que no era. */}
+        <h3 className="t-repe-nombre">
+          {prod.modelo || prod.sku}{prod.color ? " · " + prod.color : ""}
+        </h3>
+        <span className="t-repe-veces">
+          {veces === 1 ? 'Lo pediste una vez' : 'Lo pediste ' + num(veces) + ' veces'}
+          {ultimo ? ' · ' + fecha(ultimo) : ''}
+        </span>
+        <b className="t-repe-precio">{money(prod.precio)}</b>
+      </div>
+
+      <button className="t-btn t-btn-ghost t-repe-btn" disabled={ocupado}
+              title={'Agregar ' + num(inicial) + ' al pedido'}
+              onClick={() => onSetCantidad(prod.sku, (Number(enCarrito) || 0) + inicial)}>
+        <Icon n="plus" s={14}/> {num(inicial)}
+      </button>
+    </article>
+  );
+};
+
+const CompraDeNuevo = ({ favoritos, enCarrito, onSetCantidad, ocupado }) => {
+  if (!favoritos || !favoritos.length) return null;
+  return (
+    <section className="t-denuevo">
+      <div className="t-denuevo-head">
+        <h2 className="t-denuevo-titulo"><Icon n="history" s={16}/> Comprá de nuevo</h2>
+        <span className="t-denuevo-bajada">Lo que más pedís, con el precio de hoy</span>
+      </div>
+      <div className="t-denuevo-fila">
+        {favoritos.map(f => (
+          <TarjetaRepetir key={f.prod.sku} prod={f.prod} veces={f.veces} ultimo={f.ultimo}
+                          enCarrito={enCarrito[f.prod.sku] || 0}
+                          onSetCantidad={onSetCantidad} ocupado={ocupado}/>
+        ))}
+      </div>
+    </section>
+  );
+};
+
 /* ── Aviso de compra mínima ────────────────────────────────────────────
    El mínimo del canal se avisaba SOLO en el carrito: el cliente cargaba diez
    productos y recién al final se enteraba de que no llegaba. Esta barra lo
@@ -225,6 +335,7 @@ const PantallaCatalogo = ({ carrito, onSetCantidad, ocupado, onIrCarrito }) => {
   const [error, setError]   = useState(null);
   const [q, setQ]           = useState('');
   const [cat, setCat]       = useState(null);
+  const [historial, setHistorial] = useState([]);
   const toast = useToast();
 
   useEffect(() => {
@@ -240,12 +351,31 @@ const PantallaCatalogo = ({ carrito, onSetCantidad, ocupado, onIrCarrito }) => {
     return () => { vivo = false; };
   }, []);
 
+  /* El historial va aparte y con su propio catch: "Comprá de nuevo" es un
+     agregado, no el catálogo. Si esta llamada falla — o el cliente todavía
+     no pidió nunca — la tienda tiene que abrir igual, sin franja y sin
+     cartel de error. */
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      try {
+        const p = await window.B2B_DATA.misPedidos({});
+        if (vivo) setHistorial(p || []);
+      } catch (e) { if (vivo) setHistorial([]); }
+    })();
+    return () => { vivo = false; };
+  }, []);
+
   /* Cantidad ya pedida por SKU, para marcarlo en la tarjeta. */
   const enCarrito = useMemo(() => {
     const m = {};
     ((carrito && carrito.items) || []).forEach(i => { m[i.sku] = i.cantidad; });
     return m;
   }, [carrito]);
+
+  const favoritos = useMemo(
+    () => topSkus(historial, items, 8),
+    [historial, items]);
 
   const categorias = useMemo(() => {
     const s = new Set();
@@ -290,8 +420,17 @@ const PantallaCatalogo = ({ carrito, onSetCantidad, ocupado, onIrCarrito }) => {
     );
   }
 
+  /* Con búsqueda o filtro puesto la franja se va: el que está buscando algo
+     puntual no quiere que le tapen el resultado con lo de siempre. */
+  const mostrarDeNuevo = !q.trim() && !cat;
+
   return (
     <div className="t-catalogo">
+      {mostrarDeNuevo && (
+        <CompraDeNuevo favoritos={favoritos} enCarrito={enCarrito}
+                       onSetCantidad={setCantidad} ocupado={ocupado}/>
+      )}
+
       <div className="t-filtros">
         <div className="t-buscador">
           <Icon n="search" s={16} c="var(--ink-muted)"/>
@@ -337,4 +476,5 @@ const PantallaCatalogo = ({ carrito, onSetCantidad, ocupado, onIrCarrito }) => {
   );
 };
 
-window.TiendaCatalogo = { PantallaCatalogo, TarjetaProducto, Cantidad, BarraMinimo, urlFoto, BUCKET_FOTOS };
+window.TiendaCatalogo = { PantallaCatalogo, TarjetaProducto, Cantidad, BarraMinimo,
+                          CompraDeNuevo, TarjetaRepetir, topSkus, urlFoto, BUCKET_FOTOS };
