@@ -323,16 +323,38 @@ function B2BSolicitudesTab({ onCambio } = {}) {
                          background:'#fef3c7', color:'#92400e', fontSize:12, lineHeight:1.5}}>
               <Icon n="alert" s={16} c="#92400e"/>
               <div>
-                <b>Este código se muestra una sola vez.</b> En la base queda guardado
-                solo su hash, así que no hay forma de volver a verlo: si lo perdés,
-                hay que emitir una invitación nueva. Copialo y mandáselo
+                <b>Este link se muestra una sola vez.</b> En la base queda guardado
+                solo el hash del código, así que no hay forma de volver a verlo: si
+                se pierde, hay que emitir una invitación nueva. Copialo y mandáselo
                 a <b>{tokenNuevo.email}</b> antes de cerrar.
               </div>
             </div>
           </div>
 
+          {/* /tienda/?codigo=XYZ abre directo en "Canjear invitación" con el
+              código ya puesto — ver tienda-acceso.jsx (modoDesdeUrl/codigoDesdeUrl).
+              window.location.origin porque el panel y la tienda viven en el
+              mismo dominio (nginx: / → panel, /tienda/ → tienda mayorista). */}
           <div className="field-group">
-            <label className="field-label">Código de invitación</label>
+            <label className="field-label">Link para mandarle</label>
+            <div style={{display:'flex', gap:8}}>
+              <input className="field-input" readOnly
+                     value={`${window.location.origin}/tienda/?codigo=${encodeURIComponent(tokenNuevo.token)}`}
+                     onFocus={e => e.target.select()}
+                     style={{fontFamily:'ui-monospace, monospace', fontSize:12}}/>
+              <button className="btn-ghost"
+                      onClick={() => copiar(`${window.location.origin}/tienda/?codigo=${encodeURIComponent(tokenNuevo.token)}`)}>
+                <Icon n="copy" s={14}/> Copiar
+              </button>
+            </div>
+            <div className="field-help">
+              Vence el {window.B2B_DATA.fecha(tokenNuevo.expira_at)}. Al abrirlo le
+              aparece el código ya puesto — solo tiene que crear su acceso.
+            </div>
+          </div>
+
+          <div className="field-group">
+            <label className="field-label">Código, por si se lo pasás así</label>
             <div style={{display:'flex', gap:8}}>
               <input className="field-input" readOnly value={tokenNuevo.token}
                      onFocus={e => e.target.select()}
@@ -342,8 +364,7 @@ function B2BSolicitudesTab({ onCambio } = {}) {
               </button>
             </div>
             <div className="field-help">
-              Vence el {window.B2B_DATA.fecha(tokenNuevo.expira_at)}. La dirección web
-              donde se canjea depende de cómo se publique la tienda — todavía sin definir.
+              Lo pega en "Tengo un código de invitación" desde {window.location.origin}/tienda/
             </div>
           </div>
         </window.Modal>
