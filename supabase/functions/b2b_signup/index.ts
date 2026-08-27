@@ -15,9 +15,9 @@
  *      body: { email, password, nombre, telefono?, empresa, cuit,
  *              localidad?, provincia?, canal? }
  *
- *   B. INVITACIÓN (el de antes, sigue vivo). Sirve para sumar un SEGUNDO
- *      comprador a un cliente que ya existe, que es justo lo que el registro
- *      abierto no puede hacer solo (ver más abajo).
+ *   B. INVITACIÓN (el de antes, sigue vivo). Es la vía prolija para sumar un
+ *      SEGUNDO comprador a un cliente que ya existe: el mail lo elige el dueño
+ *      acá y no quien se registra. Desde 0166 tampoco espera aprobación.
  *      body: { token, password, nombre?, telefono? }
  *
  * El camino lo decide la presencia de `token`.
@@ -38,13 +38,18 @@
  * B2B sin quedar registrado en auth_alta_bloqueada. app_metadata solo lo puede
  * escribir el service_role, o sea únicamente esta función.
  *
- * ─── El alta abierta y el CUIT ajeno ─────────────────────────────────────
+ * ─── El alta abierta y el CUIT ajeno (0166) ──────────────────────────────
  * La empresa y el comprador los crea b2b_rpc_alta_publica (0163), que es
- * service_role-only. Ahí está la regla importante: si el CUIT ya pertenece a
- * un cliente existente, el que se registra NO entra a esa cuenta — queda
- * 'pendiente'. El CUIT de una empresa está en cualquier factura suya; si
- * alcanzara para entrar, cualquiera vería el historial de pedidos y la lista
- * de precios de otro. Para ese caso está el camino B, la invitación.
+ * service_role-only. Hasta 0165, si el CUIT ya pertenecía a un cliente, el que
+ * se registraba quedaba 'pendiente' y no entraba a esa cuenta. Ese freno lo
+ * SACÓ el dueño en 0166: ahora entra derecho, aprobado, a la cuenta de esa
+ * empresa. Hay que tenerlo claro: el CUIT está en cualquier factura, así que
+ * quien lo consiga ve el historial de pedidos y la lista de precios de esa
+ * empresa. El control dejó de ser previo — al equipo le llega el aviso en la
+ * campanita y se suspende al que no reconozca desde Ventas > Tienda mayorista
+ * > Accesos. Cómo revertirlo, en el encabezado de la migración 0166.
+ * Lo único que esta función sigue devolviendo para ese caso es
+ * empresa_nueva:false, que la tienda usa para avisarle a QUÉ empresa entró.
  *
  * ─── Si el alta se corta por la mitad ────────────────────────────────────
  * Crear la credencial y crear la empresa son dos sistemas distintos (auth y la

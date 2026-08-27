@@ -357,7 +357,7 @@ Prenderlo **no expuso nada**: no hay ningún producto publicado, no existe ning�
 Es el que confirma lo que pidió el dueño de punta a punta. El circuito ya se probó contra la base real con rollback (36 asserts en verde, ver `HANDOFF.md`), pero eso valida la **base**, no la operación con gente de verdad.
 
 1. **Darse de alta solo** — abrir `/tienda/` en otro browser o ventana privada, "Crear mi cuenta", cargar empresa + CUIT y después los datos personales. **Tiene que quedar comprando en el momento**, sin aprobación de nadie: ésa fue la decisión del dueño. En la campanita del equipo tiene que caer el aviso del alta nueva.
-2. **Probar el freno del CUIT** — repetir el alta con el **mismo CUIT** y otro correo: esa segunda cuenta tiene que quedar **"en revisión"**, NO entrar. Si entra, el circuito está abierto: cualquiera con el CUIT de un cliente (está en cualquier factura) ve el historial y los precios de esa empresa. Es el chequeo más importante de todos.
+2. **Probar el segundo comprador de la misma empresa** — repetir el alta con el **mismo CUIT** y otro correo. Desde `0166` esa segunda cuenta **tiene que entrar en el momento**, a la cuenta de esa empresa, y mostrar la pantalla *"Listo, ya podés comprar — te sumamos a X"*. Ya no queda "en revisión": el dueño pidió sacar la aprobación de todos los caminos. ⚠ La contrapartida es real y conviene tenerla escrita: **el CUIT está en cualquier factura**, así que quien lo consiga puede registrarse y ver el historial y los precios de esa empresa. El freno pasó a ser posterior — en la campanita cae el aviso *"Se sumó un comprador a X"* y se lo suspende desde `Ventas → Tienda mayorista → Accesos`. Para volver atrás, ver el encabezado de `supabase/migrations/0166_b2b_sin_aprobacion.sql`: es una línea.
 3. **Sumar un segundo comprador de esa misma empresa por invitación** — `Ventas → Tienda mayorista → Accesos → Nueva invitación`. Copiar el código **en ese momento**: en la tabla queda solo el hash, no se puede recuperar después. Canjearlo desde `/tienda/?codigo=XXXX`.
 4. **Elegir qué catálogos ve** en la solapa *Clientes*: marcar **los dos** (mayorista y distribuidor), el de arranque y la condición de pago.
 5. **Comprar**: al entrar tiene que aparecer la **elección de catálogo** con el mínimo de cada uno; el cliente ve **solo el precio del canal que eligió**, se respetan múltiplos y mínimos, y envía.
@@ -449,9 +449,13 @@ Si el link llega pero dice **"El link no sirve más"**: o ya se usó, o pasó un
 
 → Se quedó **sin canal**. `b2b_fn_precio` se llama con el canal, así que sin canal no hay precio y el catálogo queda sin valuar. Desde `0164` no debería pasar: `b2b_fn_canal_actual()` cae al **primero de los catálogos habilitados** cuando el comprador todavía no eligió y el cliente no tiene canal de arranque. Si pasa igual, mirar `select b2b_canal, b2b_canales, b2b_habilitado, activo from customers_b2b where id = '<cliente>';` — lo más probable es que **no tenga ningún catálogo habilitado**, o que los que tiene estén `activo = false` en `b2b_canal`. Se arregla desde *Clientes* en el panel, sin redeploy.
 
-### El alta nueva queda "en revisión" y el dueño no quería aprobación
+### El alta nueva queda "en revisión"
 
-→ **No es un bug: es el freno del CUIT.** Si el CUIT que cargó ya es de un cliente existente, el alta queda `pendiente` a propósito (ver `0163`). El camino correcto para esa persona es una **invitación** emitida por alguien que ya compra en esa empresa. Si el CUIT era distinto y aun así quedó pendiente, ahí sí revisar la edge function.
+→ Desde `0166` **eso no tiene que pasar más**: ningún camino deja al usuario en `pendiente`, ni el registro abierto, ni el que repite un CUIT ya existente, ni el canje de invitación. Si aparece uno en revisión, es porque alguien del equipo lo frenó **a mano** desde el panel, o porque la base quedó con las funciones viejas: comprobar con `select estado, aprobado_at from b2b_usuario order by created_at desc limit 5;` y que la migración `0166` esté aplicada (`select name from supabase_migrations.schema_migrations order by version desc limit 5;`). Se destraba desde `Ventas → Tienda mayorista → Accesos` con **Rehabilitar**.
+
+### Un cliente entra y ve los pedidos de OTRA empresa
+
+→ Cargó el **CUIT** de esa otra empresa en el alta. Desde `0166` eso alcanza para entrar: el freno que lo impedía lo sacó el dueño a propósito (ver el encabezado de `0166_b2b_sin_aprobacion.sql`, que también trae la línea exacta para volver atrás). Mientras tanto: **suspenderlo** en `Ventas → Tienda mayorista → Accesos`, que le corta el acceso en el acto. El aviso de que eso pasó llega a la campanita cuando se registra — dice *"Se sumó un comprador a X"* y aclara que ya está adentro.
 
 ### La tienda dice "cerrada en este momento" pero el flag está en true
 

@@ -162,7 +162,11 @@ window.B2B_DATA = window.B2B_DATA || (function () {
       'No se pudieron cargar los usuarios de la tienda'
     ),
 
-    /* Cuantos esperan aprobacion, para el badge del tab. Sin traer las filas. */
+    /* Cuantos quedaron frenados en 'pendiente', para el badge del tab. Sin
+       traer las filas. OJO: desde 0166 el alta ya no deja a nadie pendiente,
+       asi que en la practica esto da 0 y el badge no se ve. Sigue estando
+       porque el estado existe y un admin se lo puede poner a mano: si alguien
+       queda frenado, el badge es lo unico que lo hace notar. */
     pendientesCount: async () => {
       try {
         const { count, error } = await sb()

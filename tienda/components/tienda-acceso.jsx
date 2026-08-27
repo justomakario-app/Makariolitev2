@@ -2,19 +2,20 @@
    Todo lo que pasa ANTES de poder comprar: entrar, crear la cuenta, canjear
    una invitacion y esperar cuando todavia falta algo.
 
-   ─── Como se entra (0163) ──────────────────────────────────────────────
+   ─── Como se entra (0163; sin aprobacion desde 0166) ───────────────────
    El dueño manda UN link. Del otro lado el comprador se registra solo — sus
-   datos y los de su empresa — y queda comprando en el momento. No hay codigo
-   de invitacion de por medio ni aprobacion manual: fue decision del dueño, y
-   significa que cualquiera que reciba (o reenvie) el link puede ver la lista
-   mayorista. La contrapartida esta del lado del backend: un CUIT por empresa,
-   y si el CUIT ya es de un cliente, el que se registra NO entra a esa cuenta
-   — queda pendiente hasta que alguien confirme que trabaja ahi. El CUIT de
-   una empresa esta en cualquier factura suya: si alcanzara para entrar, se
-   verian los pedidos y los precios de otro.
+   datos y los de su empresa — y queda comprando en el momento. Nadie aprueba
+   nada: ni el alta con empresa nueva, ni el que pone el CUIT de una empresa
+   que ya es cliente (ese entra derecho a esa cuenta), ni el que canjea una
+   invitacion. Fue decision del dueño y hay que tenerla clara: el CUIT de una
+   empresa esta en cualquier factura suya, asi que quien lo consiga puede
+   registrarse y ver los pedidos y los precios de esa empresa. El freno dejo
+   de ser previo y paso a ser posterior — al dueño le llega el aviso y lo
+   suspende desde Ventas > Tienda mayorista > Accesos si no lo reconoce.
 
-   La invitacion (modo 'codigo') sigue viva y es justo para ese caso: sumar
-   un SEGUNDO comprador a un cliente que ya existe.
+   La invitacion (modo 'codigo') sigue viva: es la via prolija para sumar un
+   SEGUNDO comprador a un cliente que ya existe, con el mail elegido por el
+   dueño en lugar de por quien se registra.
 
    El link se puede mandar apuntado:
      /tienda/            → pantalla de entrar
@@ -373,7 +374,7 @@ const FormRegistro = ({ onEntro, irAEntrar, irACodigo }) => {
   const [paso, setPaso] = useState(0);
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState(null);
-  const [pendiente, setPendiente] = useState(null);   // alta que quedó a confirmar
+  const [sumado, setSumado] = useState(null);   // alta sobre una empresa que ya existía
 
   const [empresa, setEmpresa]     = useState('');
   const [cuit, setCuit]           = useState('');
@@ -445,12 +446,13 @@ const FormRegistro = ({ onEntro, irAEntrar, irACodigo }) => {
       });
       if (eIn) throw new Error('Tu cuenta quedó creada. Entrá con tu correo y contraseña.');
 
-      /* El backend deja 'pendiente' al que se registra con el CUIT de una
-         empresa que ya es cliente. No es un rechazo y no se puede tapar: si
-         no se le explica, el comprador cree que el alta falló y vuelve a
-         intentar con otro mail. */
-      if (data && data.estado === 'pendiente') {
-        setPendiente(data);
+      /* Ese CUIT ya era de un cliente, así que en vez de abrir una empresa
+         nueva lo sumamos a la que ya existe. Entra igual y en el momento
+         (0166), pero se lo decimos: si se equivocó de CUIT, este es el único
+         momento en que se puede dar cuenta antes de estar mirando los pedidos
+         de otra empresa. No es una espera — es un toque y sigue. */
+      if (data && data.empresa_nueva === false) {
+        setSumado(data);
         return;                      // el botón de esa pantalla llama a onEntro
       }
       await onEntro();
@@ -464,23 +466,23 @@ const FormRegistro = ({ onEntro, irAEntrar, irACodigo }) => {
     } finally { setBusy(false); }
   };
 
-  /* Alta que quedó a confirmar (CUIT de una empresa que ya es cliente). */
-  if (pendiente) {
+  /* Se sumó a una empresa que ya era cliente. Ojo: NO es una pantalla de
+     espera, ya está adentro. Está para que vea a qué cuenta entró. */
+  if (sumado) {
     return (
       <div className="t-form t-form-centro">
-        <div className="t-espera t-espera-info"><Icon n="clock" s={26}/></div>
-        <h3 className="t-espera-titulo">Tu cuenta quedó creada</h3>
+        <div className="t-espera t-espera-ok"><Icon n="check" s={26}/></div>
+        <h3 className="t-espera-titulo">Listo, ya podés comprar</h3>
         <p className="t-espera-texto">
-          Ese CUIT ya es de un cliente nuestro{pendiente.cliente ? <> (<b>{pendiente.cliente}</b>)</> : null}.
-          Para que veas sus pedidos y sus precios, alguien del equipo tiene que confirmar
-          que trabajás ahí — ya les avisamos.
+          Ese CUIT ya es de un cliente nuestro{sumado.cliente ? <> (<b>{sumado.cliente}</b>)</> : null},
+          así que te sumamos a esa cuenta: vas a ver sus precios y sus pedidos.
         </p>
-        <Aviso tipo="info" titulo="¿Lo necesitás ahora?">
-          Pedile a quien ya compra en tu empresa que te mande un código de invitación:
-          con eso entrás sin esperar.
+        <Aviso tipo="info" titulo="¿No es tu empresa?">
+          Fijate el CUIT que cargaste. Si te equivocaste, escribinos antes de usar la
+          cuenta y la damos de baja.
         </Aviso>
         <button className="t-btn t-btn-primary t-btn-block t-btn-alto" type="button" onClick={onEntro}>
-          Entendido
+          Entrar a la tienda
         </button>
       </div>
     );
@@ -940,10 +942,14 @@ const ESPERA = {
     titulo: 'La tienda mayorista está cerrada',
     texto: 'La cerramos por un rato — no es nada de tu cuenta, que sigue habilitada igual que siempre. Volvé a probar más tarde; si necesitás algo urgente, escribinos.',
   },
+  /* Desde 0166 nadie queda 'pendiente' al registrarse: el alta entra derecho.
+     La pantalla se deja porque el estado sigue existiendo y alguien del equipo
+     se lo puede poner a mano desde el panel. Es raro — pero si pasa, el
+     comprador tiene que leer algo que se entienda. */
   pendiente: {
     icono: 'clock', tono: 'info',
     titulo: 'Tu acceso está en revisión',
-    texto: 'Ya recibimos tu solicitud. Te habilitamos la cuenta apenas la revise alguien del equipo — te va a llegar un aviso al correo.',
+    texto: 'Tu cuenta existe, pero quedó frenada para revisarla. Escribinos y la destrabamos.',
   },
   rechazado: {
     icono: 'x', tono: 'error',
@@ -955,10 +961,13 @@ const ESPERA = {
     titulo: 'Tu cuenta está suspendida',
     texto: 'Por ahora no podés hacer pedidos. Escribinos para reactivarla — tus pedidos anteriores siguen guardados.',
   },
+  /* Tu usuario está bien; la que está frenada es la EMPRESA (b2b_habilitado
+     en false). En la práctica es el corte por deuda, y no se dice con esas
+     palabras en una pantalla que puede ver cualquier empleado del cliente. */
   sin_habilitar: {
     icono: 'clock', tono: 'info',
     titulo: 'Falta habilitar tu cuenta para comprar',
-    texto: 'Tu usuario ya está aprobado, pero el cliente todavía no quedó habilitado para operar. Es un último paso que hace el equipo.',
+    texto: 'Tu usuario está listo, pero la cuenta de tu empresa está frenada para hacer pedidos. Escribinos y lo vemos.',
   },
 };
 

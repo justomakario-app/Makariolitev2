@@ -1,15 +1,19 @@
-/* ══ TIENDA MAYORISTA — ACCESOS (invitaciones + aprobación de usuarios)
-   Dos listas, porque son dos momentos distintos del mismo camino:
+/* ══ TIENDA MAYORISTA — ACCESOS (quién entra y quién deja de entrar)
+   Dos listas, porque son dos formas distintas de sumar gente:
 
-     1. INVITACIONES: el admin emite un link para un email concreto. Nadie
-        puede registrarse sin uno — la tienda es cerrada.
-     2. USUARIOS: quien ya canjeó su invitación queda en 'pendiente' y no ve
-        precios ni puede pedir hasta que alguien lo apruebe a mano.
+     1. USUARIOS: todos los que tienen cuenta en la tienda. Desde 0166 nadie
+        espera aprobación — el que se registra con el link queda comprando en
+        el momento, igual que el que canjea una invitación. Esta lista dejó de
+        ser una bandeja de pendientes y pasó a ser el registro de quién está
+        adentro; lo que se hace acá es SACAR a alguien, no dejarlo entrar.
+     2. INVITACIONES: un link apuntado a un email concreto, para sumar a mano
+        un comprador a un cliente que ya existe. Es opcional: cualquiera puede
+        registrarse solo con el link abierto de arriba.
 
-   Aprobar no es solo un cambio de estado: b2b_rpc_resolver_usuario marca al
-   cliente como es_mayorista + b2b_habilitado, o sea que recién ahí el
-   cliente aparece en la ficha de "Clientes mayoristas". Por eso conviene
-   aprobar desde acá y no tocar customers_b2b a mano.
+   Suspender no es solo un cambio de estado: b2b_rpc_resolver_usuario también
+   toca al cliente (es_mayorista / b2b_habilitado), que es lo que decide si
+   aparece en "Clientes mayoristas". Por eso se hace desde acá y no editando
+   customers_b2b a mano.
    ══ */
 
 function B2BSolicitudesTab({ onCambio } = {}) {
@@ -19,7 +23,10 @@ function B2BSolicitudesTab({ onCambio } = {}) {
   const [invits,   setInvits]     = useState([]);
   const [loading,  setLoading]    = useState(true);
   const [error,    setError]      = useState(null);
-  const [verTodos, setVerTodos]   = useState(false);   // false = solo pendientes
+  /* Arranca en TODOS. Antes arrancaba filtrando por 'pendiente', que era la
+     bandeja de aprobación; desde 0166 ya nadie queda pendiente, así que ese
+     filtro mostraba una tabla vacía siempre y la pestaña parecía rota. */
+  const [verTodos, setVerTodos]   = useState(true);    // false = solo los pendientes
   const [corriendo, setCorriendo] = useState(null);    // usuario_id en curso
   const [rechazo,  setRechazo]    = useState(null);    // { usuario } → modal motivo
   const [nuevaInv, setNuevaInv]   = useState(false);
@@ -31,7 +38,7 @@ function B2BSolicitudesTab({ onCambio } = {}) {
     setLoading(true); setError(null);
     try {
       const [us, iv] = await Promise.all([
-        window.B2B_DATA.usuarios(verTodos ? {} : { estado: 'pendiente' }),
+        window.B2B_DATA.usuarios({}),
         window.B2B_DATA.invitaciones({}),
       ]);
       setUsuarios(us || []);
@@ -44,7 +51,14 @@ function B2BSolicitudesTab({ onCambio } = {}) {
     }
   };
 
-  useEffect(() => { reload(); /* eslint-disable-next-line */ }, [verTodos]);
+  useEffect(() => { reload(); /* eslint-disable-next-line */ }, []);
+
+  /* El filtro se aplica acá y no en la consulta: son pocos usuarios, ya están
+     todos traídos, y así destildar la casilla es instantáneo en vez de ir y
+     volver a la base. "Frenado" es cualquiera que hoy NO puede comprar —
+     pendiente, rechazado o suspendido — y no solo los pendientes, que desde
+     0166 son siempre cero. */
+  const visibles = verTodos ? usuarios : usuarios.filter(u => u.estado !== 'aprobado');
 
   const resolver = async (usuario, estado, motivo) => {
     if (corriendo) return;
@@ -146,7 +160,7 @@ function B2BSolicitudesTab({ onCambio } = {}) {
       <div className="admin-tab-header">
         <label className="admin-toggle-inactive">
           <input type="checkbox" checked={verTodos} onChange={e => setVerTodos(e.target.checked)}/>
-          Ver todos los usuarios (no solo los pendientes)
+          Ver todos los usuarios (destildá para ver solo los que quedaron frenados)
         </label>
         <button className="btn-ghost" onClick={reload}><Icon n="refresh" s={13}/> Actualizar</button>
         <button className="btn-primary" onClick={() => setNuevaInv(true)}>
@@ -160,10 +174,12 @@ function B2BSolicitudesTab({ onCambio } = {}) {
           Ese link no estaba en NINGUNA pantalla del panel: lo único que se
           veía era el código de una invitación puntual, así que parecía que
           la única forma de sumar gente era emitir códigos de a uno.
-          Va arriba de todo porque es lo que se usa siempre; la invitación
-          quedó para el caso raro (segundo comprador de una empresa que ya
-          existe, que no puede registrarse solo porque el CUIT ya está
-          tomado — ver el encabezado de tienda-acceso.jsx). */}
+          Va arriba de todo porque es lo que se usa siempre. Desde 0166 no hay
+          aprobación de por medio en ningún camino: el que pone el CUIT de una
+          empresa que ya es cliente también entra derecho, a esa cuenta. La
+          invitación quedó como la vía prolija para sumar un segundo comprador
+          con el mail elegido por acá — ver el encabezado de tienda-acceso.jsx
+          para el detalle de lo que eso implica. */}
       <div className="card" style={{marginBottom:16, padding:'14px 16px'}}>
         <div style={{fontWeight:700, fontSize:13}}>Link para que un cliente cree su cuenta</div>
         <div style={{fontSize:12, color:'var(--ink-muted)', margin:'4px 0 10px', lineHeight:1.5}}>
@@ -187,25 +203,25 @@ function B2BSolicitudesTab({ onCambio } = {}) {
         </div>
         <div className="field-help" style={{marginTop:8}}>
           El que ya tiene cuenta entra por <b>{window.B2B_DATA.linkTienda()}</b>.
-          "Invitar mayorista" es para otra cosa: sumar un <b>segundo comprador</b> a
-          una empresa que ya está registrada.
+          Nadie tiene que aprobar nada: se registra y compra. Si aparece alguien que
+          no conocés, suspendelo en la lista de abajo.
         </div>
       </div>
 
       {/* ── Usuarios ── */}
       <div className="card">
         <div style={{padding:'12px 14px 0', fontWeight:700, fontSize:13}}>
-          {verTodos ? 'Usuarios de la tienda' : 'Esperando aprobación'}
+          {verTodos ? 'Usuarios de la tienda' : 'Usuarios frenados'}
         </div>
         <table className="data-table">
           <thead>
             <tr>
               <th>Persona</th><th>Cliente</th><th>Canal</th>
-              <th>Pidió acceso</th><th>Estado</th><th></th>
+              <th>Se registró</th><th>Estado</th><th></th>
             </tr>
           </thead>
           <tbody>
-            {usuarios.map(u => (
+            {visibles.map(u => (
               <tr key={u.id}>
                 <td>
                   <div style={{fontWeight:600}}>{u.nombre}</div>
@@ -258,10 +274,10 @@ function B2BSolicitudesTab({ onCambio } = {}) {
                 </td>
               </tr>
             ))}
-            {usuarios.length === 0 && (
+            {visibles.length === 0 && (
               <tr><td colSpan={6} style={{textAlign:'center', padding:'24px', color:'var(--ink-muted)'}}>
                 {verTodos ? 'Todavía no hay nadie registrado en la tienda.'
-                          : 'No hay solicitudes esperando. '}
+                          : 'No hay ningún usuario frenado: están todos comprando.'}
               </td></tr>
             )}
           </tbody>
