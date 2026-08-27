@@ -2,7 +2,11 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <!-- `viewport-fit=cover` deja que la página llegue hasta el borde real del
+       teléfono. Es lo que enciende los env(safe-area-inset-*) de tienda.css:
+       sin esto, la barra de pestañas de abajo se dibujaría encima de la
+       rayita del gesto del iPhone. -->
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>Justo Makario Home · Tienda mayorista</title>
   <meta name="description" content="Tienda mayorista de Justo Makario Home. Acceso solo para clientes con invitación.">
   <!-- Tienda cerrada: no queremos que Google la indexe ni la muestre. -->
@@ -12,7 +16,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="icon" href="/favicon.ico" sizes="any">
-  <link rel="stylesheet" href="tienda.css?v=9">
+  <link rel="stylesheet" href="tienda.css?v=10">
 </head>
 <body>
   <noscript>

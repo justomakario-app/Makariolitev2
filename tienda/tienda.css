@@ -513,15 +513,33 @@ button { font: inherit; color: inherit; }
 }
 
 @media (max-width: 720px) {
-  .t-header-in { flex-wrap: wrap; gap: 10px 14px; padding: 10px 14px; }
-  .t-nav { order: 3; width: 100%; margin-left: 0; overflow-x: auto; }
-  .t-tab { flex: 1; justify-content: center; }
-  .t-header-user { margin-left: auto; }
-  /* En el header apretado queda sólo el "Hola, Nombre". La empresa, el mail
-     y el resto están a un toque, adentro de "Mi cuenta". */
-  .t-header-cli-txt span { display: none; }
-  .t-header-cli > svg { display: none; }
-  .t-main { padding: 16px 14px 40px; }
+  /* El header se queda con UNA sola fila. Las pestañas se fueron al pie de
+     la pantalla (ver el bloque "CELULAR" al final del archivo), así que acá
+     sobra todo el ancho que antes se comía la fila de solapas. */
+  .t-header-in {
+    flex-wrap: nowrap; gap: 10px; padding: 10px 14px;
+    padding-top:   calc(10px + env(safe-area-inset-top));
+    padding-left:  max(14px, env(safe-area-inset-left));
+    padding-right: max(14px, env(safe-area-inset-right));
+  }
+  .t-header-user { margin-left: auto; min-width: 0; gap: 6px; }
+
+  /* La empresa y el chevron VUELVEN al celular. Se habían escondido por
+     falta de ancho, y con las pestañas abajo el ancho existe. Para qué
+     empresa está comprando es justo lo que hay que poder contestar sin
+     abrir nada — el mismo teléfono puede tener dos cuentas. Lo que no
+     entra se corta con puntos suspensivos; no se esconde. */
+  .t-header-cli { min-width: 0; padding: 4px 5px; }
+  .t-header-cli-txt b,
+  .t-header-cli-txt span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .t-header-cli-txt span { display: block; max-width: 18ch; }
+  .t-header-cli > svg { display: block; }
+
+  .t-main {
+    padding: 16px 14px 40px;
+    padding-left:  max(14px, env(safe-area-inset-left));
+    padding-right: max(14px, env(safe-area-inset-right));
+  }
   .t-grilla { grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); gap: 12px; }
   .t-prod-cuerpo { padding: 11px; }
 
@@ -776,47 +794,105 @@ button { font: inherit; color: inherit; }
 
 /* ── Responsive de estas pantallas ─────────────────────────────────────── */
 @media (max-width: 860px) {
-  /* El panel oscuro se esconde: en el celular el cliente viene a completar
-     el formulario, no a leer el discurso. La marca pasa adentro del panel
-     del formulario para no perder de quién es la tienda. */
+  /* El panel oscuro NO se esconde: se convierte en la portada. Antes se
+     borraba entero y en el celular quedaba un formulario blanco solo, igual
+     al de cualquier otro lado — y esta es la única pantalla que tiene un
+     cliente nuevo para decidir si vale la pena registrarse. Ahora se apila
+     arriba y se aprieta: la misma promesa, en menos alto (≈280px, así el
+     campo de mail sigue entrando sin scrollear en un teléfono chico). */
   .t-acceso { padding: 0; }
+  /* `auto 1fr`: la portada mide exactamente lo que ocupa y el formulario se
+     queda con todo el resto del alto. Con las dos filas en `auto`, el sobrante
+     de una pantalla larga se repartía entre las dos y la portada crecía sola. */
   .t-acceso-split {
-    grid-template-columns: 1fr; max-width: 460px; border-radius: 0;
+    grid-template-columns: 1fr; grid-template-rows: auto 1fr;
+    max-width: 460px; border-radius: 0;
     border: none; box-shadow: none; min-height: 100dvh;
   }
-  .t-acceso-brand { display: none; }
-  .t-acceso-panel-marca { display: block; }
-  .t-acceso-panel { padding: 30px 22px 44px; }
+  .t-acceso-brand {
+    gap: 18px; padding: 26px 22px 22px;
+    padding-top:   calc(26px + env(safe-area-inset-top));
+    padding-left:  max(22px, env(safe-area-inset-left));
+    padding-right: max(22px, env(safe-area-inset-right));
+  }
+  /* El hilo de luz separaba dos columnas. Apilado no hay costado que
+     separar: se acuesta y hace de zócalo entre la portada y el papel. */
+  .t-acceso-brand::after {
+    inset: auto 0 0 0; width: auto; height: 1px;
+    background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.16), rgba(255,255,255,0));
+  }
+  .t-acceso-h1 { font-size: 22px; }
+  .t-acceso-p { margin-top: 10px; font-size: 13px; max-width: 46ch; }
+  .t-acceso-puntos { margin-top: 15px; gap: 8px; }
+  .t-acceso-puntos li { font-size: 12.5px; }
+  .t-acceso-sello { margin-top: 17px; padding-top: 14px; font-size: 10px; }
+  /* La marca ya está arriba, en claro, adentro de la portada: repetirla en
+     el formulario la deja dos veces en la misma pantalla. */
+  .t-acceso-panel-marca { display: none; }
+  .t-acceso-panel {
+    padding: 28px 22px 44px;
+    padding-bottom: calc(44px + env(safe-area-inset-bottom));
+    padding-left:  max(22px, env(safe-area-inset-left));
+    padding-right: max(22px, env(safe-area-inset-right));
+  }
+
+  /* Las pantallas de una sola caja (esperá, cambiar contraseña, canjear un
+     código, "no pudimos conectarnos") acompañan: sin `.t-acceso` con padding
+     quedaban con la tarjeta pegada al borde y las esquinas redondeadas al
+     ras. Full-bleed, centradas, como el resto. */
+  .t-acceso > .t-acceso-caja {
+    max-width: none; min-height: 100dvh; justify-content: center;
+    border-radius: 0; border: none; box-shadow: none;
+    padding: 30px 22px;
+    padding-bottom: calc(40px + env(safe-area-inset-bottom));
+    padding-top:    calc(30px + env(safe-area-inset-top));
+  }
 }
 
 @media (max-width: 620px) {
   .t-fila { grid-template-columns: 1fr; gap: 0; }
-  .t-paso-t { display: none; }
+
+  /* Los títulos de los pasos VUELVEN. Se habían borrado por ancho, pero
+     "Tu empresa · Tu acceso" es lo que le dice al que se está registrando
+     cuánto más le vamos a pedir; sin eso quedan dos circulitos numerados
+     que no informan nada y el formulario se abandona. En 320px entran de
+     sobra a 11.5px, y si algún día un título es largo se corta, no se va. */
+  .t-paso-t { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; }
+  .t-pasos { gap: 10px; }
+  .t-paso { flex: 0 1 auto; min-width: 0; }
 
   /* En 360px el link no puede quedar tan pegado al campo: el pulgar apunta
      al ojito de la contraseña y termina abriendo la recuperación. */
-  .t-link-fin { margin-top: 0; padding: 4px 0; }
-  .t-pasos { gap: 6px; }
-  .t-paso { flex: none; }
+  .t-link-fin { margin-top: 0; padding: 6px 0; }
 
   .t-elegir { padding: 0; align-items: stretch; }
   .t-elegir-caja {
     max-width: none; min-height: 100dvh; border-radius: 0; border: none;
     box-shadow: none; padding: 28px 20px 44px;
+    padding-bottom: calc(44px + env(safe-area-inset-bottom));
+    padding-top:    calc(28px + env(safe-area-inset-top));
+    padding-left:  max(20px, env(safe-area-inset-left));
+    padding-right: max(20px, env(safe-area-inset-right));
   }
   .t-elegir-titulo { font-size: 21px; }
 
   /* La tarjeta pasa a dos filas: el "Comprar así" no entra al lado del texto
-     en 360px y, con nowrap, empujaba el nombre fuera de la tarjeta. */
-  .t-canal { flex-wrap: wrap; padding: 16px; gap: 12px; }
+     en 360px y, con nowrap, empujaba el nombre fuera de la tarjeta.
+     `.t-canal-detalle` se queda: es el renglón que dice qué incluye cada
+     catálogo. Escondido, la pantalla pedía elegir entre dos nombres a
+     ciegas — y esa elección define con qué lista de precios compra. */
+  /* `align-items: flex-start`: con el detalle del catálogo de vuelta, el
+     cuerpo creció y el ícono quedaba flotando en el medio, a la altura de
+     ningún renglón. Arriba se alinea con el nombre del catálogo, que es a
+     lo que pertenece. */
+  .t-canal { flex-wrap: wrap; align-items: flex-start; padding: 16px; gap: 12px; }
   .t-canal-cuerpo { flex: 1 1 60%; }
   .t-canal-ir { width: 100%; justify-content: flex-end; }
-  .t-canal-detalle { display: none; }
 
   /* El chip del catálogo tiene que sobrevivir al header apretado: es el que
      dice con qué lista de precios está mirando. */
   .t-header-user { gap: 6px; }
-  .t-canal-chip { padding: 5px 9px; font-size: 12px; }
+  .t-canal-chip { padding: 7px 10px; font-size: 12px; }
 }
 
 /* ══ MI CUENTA Y "COMPRÁ DE NUEVO" ═══════════════════════════════════════
@@ -1137,8 +1213,12 @@ button { font: inherit; color: inherit; }
   .t-res-kpis { grid-template-columns: 1fr 1fr; gap: 8px; }
   .t-res-kpi { padding: 13px 12px 12px; }
   .t-res-kpi-val { font-size: 20px; }
-  .t-res-kpi-ico { display: none; }   /* el rótulo ya dice qué es; el ícono roba ancho */
-  .t-res-kpi-rot { padding-right: 0; font-size: 10px; }
+  /* El ícono vuelve, más chico. Se había sacado por ancho, pero es lo que
+     hace que las cuatro fichas se distingan de un vistazo cuando están
+     apiladas de a dos: sin él quedan cuatro rectángulos con números. */
+  .t-res-kpi-ico { width: 24px; height: 24px; top: 11px; right: 11px; border-radius: 7px; }
+  .t-res-kpi-ico svg { width: 14px; height: 14px; }
+  .t-res-kpi-rot { padding-right: 30px; font-size: 10px; }
   .t-res-panel { padding: 14px 12px 12px; }
   .t-res-graf-val { font-size: 21px; }
   .t-res-graf-costado { align-items: flex-start; }
@@ -1146,9 +1226,243 @@ button { font: inherit; color: inherit; }
   .t-res-col-rot { font-size: 9.5px; }
   .t-res-top-foto { width: 34px; height: 34px; }
   .t-res-leyenda-it em { min-width: 0; }
+  .t-res-leyenda-it { padding: 9px 6px; }   /* la leyenda también se toca */
+}
 
-  /* Con cuatro pestañas ya no entran repartidas en partes iguales en 360px.
-     Cada una se queda con su ancho natural y la barra scrollea, que es mejor
-     que cuatro rótulos cortados por la mitad. */
-  .t-tab { flex: 1 0 auto; white-space: nowrap; }
+/* ══ CELULAR · LA MISMA TIENDA, HECHA PARA EL PULGAR ══════════════════════
+   Todo lo que sigue es agregado, no recorte: no se esconde ninguna función
+   que exista en la computadora, y las que estaban escondidas volvieron (la
+   empresa en el header, el detalle de cada catálogo, los títulos de los
+   pasos del registro, los íconos de las cifras). Lo que cambia es dónde
+   caen las cosas y cuánto miden.
+
+   Cuatro decisiones mandan sobre el resto:
+
+   1. Las pestañas se van al piso de la pantalla. Arriba quedaban a la altura
+      de la ceja del teléfono y, con cuatro rótulos, la barra scrolleaba de
+      costado: "Mi resumen" existía pero no se veía. Abajo entran las cuatro
+      juntas, quedan bajo el pulgar, y el contador del pedido está siempre a
+      la vista, en cualquier pantalla.
+   2. Nada que se toque mide menos de 44px. Un "+" de 30px pegado a un "−"
+      de 30px, cargando veinte renglones parado en el depósito, es la
+      diferencia entre un pedido cargado y una llamada por teléfono.
+   3. Los campos escriben en 16px. Abajo de eso Safari hace zoom solo al
+      tocar el input y deja la página corrida para el costado; es el detalle
+      que más rápido arruina la sensación de aplicación.
+   4. Los modales suben desde abajo como una hoja, en vez de aparecer
+      flotando en el medio. Es donde está la mano, y es lo que el teléfono
+      hace en todos lados: "Mi cuenta" y "cambiar de catálogo" tienen que
+      sentirse parte del teléfono, no una ventana de escritorio achicada.
+
+   `env(safe-area-inset-*)` aparece por todos lados, de la mano del
+   `viewport-fit=cover` del index: sin eso, en un iPhone con muesca la barra
+   de pestañas queda debajo de la rayita del gesto y el header debajo del
+   reloj.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Barra de pestañas al pie ────────────────────────────────────────────
+   Va en 950px y no en 720 a propósito. El header de la tienda —marca,
+   selector de catálogo, las cuatro solapas, la empresa y el botón de
+   salir— necesita 948px para entrar en una fila; abajo de eso se
+   desbordaba para el costado y la página entera scrolleaba en horizontal
+   (una tablet parada de 768 mostraba 948px de ancho). Sacándole las
+   solapas al header, lo que queda entra siempre. Así que el umbral no es
+   un número redondo elegido a ojo: es el ancho en el que el header deja de
+   entrar, medido.
+
+   `fixed` y no `sticky`: tiene que estar SIEMPRE, aunque la pantalla sea
+   corta y no haya scroll. Vive adentro del <header>, que es sticky y tiene
+   z-index propio, así que hereda su plano: queda arriba del catálogo y de
+   la barra del mínimo, y abajo de los modales y de los avisos. */
+@media (max-width: 950px) {
+
+  .t-app { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+
+  /* El `margin-left:auto` que empujaba todo a la derecha lo tenía .t-nav.
+     Al sacarla del flujo hay que pasárselo al bloque del comprador, o marca
+     y usuario quedan pegados a la izquierda con medio header vacío. */
+  .t-header-user { margin-left: auto; }
+
+  .t-nav {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
+    width: 100%; margin: 0;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    /* El tercer término del max() centra las cuatro pestañas cuando la
+       pantalla es ancha (tablet): la barra sigue pintando de borde a
+       borde, pero las solapas no se estiran a 230px cada una, que se lee
+       como cuatro botones sueltos y no como una barra. */
+    padding-left:  max(8px, env(safe-area-inset-left),  calc((100% - 520px) / 2));
+    padding-right: max(8px, env(safe-area-inset-right), calc((100% - 520px) / 2));
+    background: rgba(255,255,255,0.92);
+    -webkit-backdrop-filter: saturate(180%) blur(14px);
+    backdrop-filter: saturate(180%) blur(14px);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -10px 28px rgba(0,0,0,0.05);
+  }
+  .t-tab {
+    flex-direction: column; justify-content: center; gap: 3px;
+    min-height: 50px; padding: 6px 2px 5px; border-radius: 11px;
+    font-size: 10.5px; font-weight: 700; line-height: 1.1; letter-spacing: -.01em;
+  }
+  .t-tab span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* El ícono manda cuando el rótulo baja a 10.5px: en una barra de pie se
+     reconoce la solapa por el dibujo, no por la palabra. */
+  .t-tab > svg { width: 20px; height: 20px; }
+  /* En el celular no hay hover: lo único que hace es dejar pintada la última
+     pestaña que se tocó, como si estuviera activa. */
+  .t-tab:hover { background: none; color: var(--ink-muted); }
+  .t-tab-on, .t-tab-on:hover { background: var(--paper-dim); color: var(--ink); }
+  .t-tab:active { background: var(--paper-dim); }
+
+  /* El contador de unidades se monta SOBRE el ícono del carrito. Apilado,
+     "al lado del rótulo" pasa a ser "abajo del rótulo", y ahí ya no se lee
+     como un contador. El anillo blanco lo despega del ícono. */
+  .t-nav .t-badge {
+    position: absolute; top: 3px; left: 50%; margin-left: 3px;
+    box-shadow: 0 0 0 2px var(--paper);
+  }
+
+  /* La barra del mínimo se apoya ARRIBA de las pestañas. Si no, el aviso de
+     cuánto falta para poder enviar queda tapado justo cuando importa. */
+  .t-barramin { bottom: calc(70px + env(safe-area-inset-bottom)); }
+
+  /* Los avisos también: apenas la barra baja al pie, un aviso pegado abajo
+     queda atrás de las pestañas. */
+  .t-toasts { bottom: calc(76px + env(safe-area-inset-bottom)); }
+}
+
+/* ── Teléfono ────────────────────────────────────────────────────────────
+   De acá para abajo ya no es "pantalla angosta": es una mano sosteniendo
+   el aparato. Cambian los tamaños de todo lo que se toca, el cuerpo de los
+   campos y la cantidad de columnas. */
+@media (max-width: 720px) {
+
+  /* El pie sigue visible: lo empuja el padding de .t-app, no un margen
+     inventado acá. */
+  .t-footer { padding: 16px 20px 20px; }
+
+  /* ── Todo lo que se toca ───────────────────────────────────────────────
+     44px es el mínimo con el que un pulgar acierta sin mirar. */
+  .t-btn { min-height: 44px; padding: 11px 16px; }
+  .t-icon-btn { width: 40px; height: 40px; }
+  /* 40px justos: un filtro de categoría es de las cosas que más se tocan en
+     el catálogo y con 38px la yema tapaba el chip de al lado. */
+  .t-chip { min-height: 40px; padding: 8px 15px; font-size: 13px; }
+  .t-radio { padding: 12px; }
+  .t-link { padding: 9px 0; }
+  .t-pedido-head { padding: 15px 16px; }
+
+  .t-cant-btn   { width: 44px; height: 44px; }
+  /* 16px también acá: el campo de cantidad es un input de verdad, y si mide
+     menos Safari hace zoom apenas lo tocan y la ficha se va de la pantalla. */
+  .t-cant-input { width: 52px; height: 44px; font-size: 16px; }
+  /* El "chico" del carrito deja de ser chico: la fila del carrito ya se
+     reordena a tres renglones y la cantidad se queda con uno entero. */
+  .t-cant-chico .t-cant-btn   { width: 44px; height: 42px; }
+  .t-cant-chico .t-cant-input { width: 50px; height: 42px; font-size: 16px; }
+
+  /* En la ficha del catálogo el selector y "Agregar" ya no entran en la
+     misma fila con los botones grandes: se apilan y los dos toman el ancho
+     de la tarjeta. De paso "Agregar" pasa a ser el objetivo más fácil de la
+     pantalla, que es lo que se aprieta veinte veces seguidas. */
+  /* Con dos columnas el precio grande y el "con IVA" no entran en el mismo
+     renglón y el segundo quedaba cortado a la mitad del número
+     ($125.8… con IVA). Baja a su propio renglón: es plata, no puede quedar
+     a medias. */
+  .t-prod-precio { flex-wrap: wrap; row-gap: 1px; }
+  .t-prod-iva { flex: 1 0 100%; }
+
+  .t-prod-accion { flex-direction: column; gap: 8px; }
+  .t-prod-accion .t-cant { display: flex; width: 100%; }
+  /* `min-width: 0` no es opcional: un <input> arrastra un ancho mínimo propio
+     (el famoso size=20 ≈ 177px) y, como el mínimo de un ítem flex es su
+     contenido, el renglón se pasaba de largo y el `+` de la derecha quedaba
+     comido por el overflow:hidden de .t-cant. Se podía restar pero no sumar. */
+  .t-prod-accion .t-cant-input { flex: 1 1 0; width: auto; min-width: 0; }
+  .t-prod-accion .t-cant-btn { flex: none; }
+  .t-prod-accion .t-btn { flex: none; width: 100%; padding: 11px 14px; }
+
+  /* ── Campos ────────────────────────────────────────────────────────────
+     16px es el número exacto abajo del cual Safari hace zoom al enfocar. */
+  .t-input, .t-textarea, .t-buscador-input { font-size: 16px; }
+  .t-input.t-mono { font-size: 16px; }   /* gana sobre .t-mono, que va después en el archivo */
+  .t-input { padding: 11px 12px; }
+  .t-buscador { max-width: none; }
+  .t-buscador-input { padding: 12px 0; }
+  .t-label { font-size: 12.5px; }
+
+  /* ── Detalles de superficie ────────────────────────────────────────────
+     Las tiras que scrollean solas no arrastran la página cuando se llega al
+     final, que es lo que hace que una franja se sienta pegajosa. */
+  .t-denuevo-fila { overscroll-behavior-x: contain; }
+  .t-modal-body   { overscroll-behavior-y: contain; }
+  .t-enviado { padding: 32px 20px; margin: 6px auto 0; }
+  /* Los avisos toman el ancho de la pantalla: en 360px una tarjeta de 380px
+     alineada a la derecha se salía para el costado. */
+  .t-toasts { left: 12px; right: 12px; max-width: none; }
+}
+
+/* ── Modales = hoja que sube desde abajo ────────────────────────────────
+   Sólo en teléfono. En una tablet de 700px una hoja al ras del borde
+   inferior se ve rara: ahí el modal centrado sigue siendo lo correcto. */
+@media (max-width: 620px) {
+  .t-overlay { align-items: flex-end; padding: 0; }
+  .t-modal {
+    position: relative; max-width: none; max-height: 92dvh;
+    border-radius: 18px 18px 0 0;
+    animation: t-sube .24s cubic-bezier(.32,.72,0,1);
+  }
+  /* El agarre de arriba. No arrastra nada, pero es lo que dice "esto se
+     cierra tirando para abajo o tocando afuera", que es el gesto que la
+     gente prueba primero. */
+  .t-modal::before {
+    content: ""; position: absolute; top: 7px; left: 50%; transform: translateX(-50%);
+    width: 36px; height: 4px; border-radius: 2px; background: var(--border-md);
+  }
+  .t-modal-head { padding: 20px 18px 14px; }
+  .t-modal-foot { padding-bottom: calc(13px + env(safe-area-inset-bottom)); }
+  .t-modal-foot .t-btn { flex: 1; }
+  /* Modal sin pie (el de elegir catálogo): el respiro de abajo lo pone el
+     cuerpo, o el último renglón queda sobre la rayita del gesto. */
+  .t-modal-body:last-child { padding-bottom: calc(18px + env(safe-area-inset-bottom)); }
+}
+@keyframes t-sube { from { transform: translateY(100%); } }
+
+/* Teléfono corto (Android chico, iPhone SE, o cualquiera con el teclado
+   abierto). La portada oscura del acceso se queda entera —los tres
+   argumentos y el sello siguen ahí— pero apretada: menos aire entre
+   bloques y un par de puntos menos de tipografía. Es la diferencia entre
+   ver el campo de correo con el botón "Entrar" abajo, o tener que
+   scrollear para encontrar dónde se entra. */
+@media (max-width: 860px) and (max-height: 720px) {
+  .t-acceso-brand {
+    gap: 13px; padding: 19px 20px 15px;
+    padding-top: calc(19px + env(safe-area-inset-top));
+  }
+  .t-acceso-h1 { font-size: 19px; line-height: 1.2; }
+  .t-acceso-p { margin-top: 7px; font-size: 12.5px; line-height: 1.5; }
+  .t-acceso-puntos { margin-top: 11px; gap: 6px; }
+  .t-acceso-puntos li { font-size: 12px; }
+  .t-acceso-sello { margin-top: 12px; padding-top: 10px; font-size: 9.5px; }
+  .t-acceso-brand .t-marca-1,
+  .t-acceso-brand .t-marca-3 { font-size: 9.5px; }
+  .t-acceso-brand .t-marca-2 { font-size: 18px; }
+  .t-acceso-panel { padding-top: 22px; }
+}
+
+/* Quien pidió menos movimiento no lo pide sólo para los carruseles. */
+@media (prefers-reduced-motion: reduce) {
+  .t-modal, .t-toast { animation: none; }
+}
+
+/* Pantalla táctil: se apaga el flash gris de Android al tocar y se saca el
+   retardo del doble-tap. Va por `hover: none` y no por ancho — una tablet
+   grande también se toca, y ahí el hover tampoco existe. */
+@media (hover: none) {
+  button, a, label, .t-canal, .t-tab, .t-chip {
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  }
+  .t-prod:hover, .t-repe:hover { box-shadow: none; }
+  .t-canal:not(:disabled):hover { box-shadow: none; transform: none; }
 }
