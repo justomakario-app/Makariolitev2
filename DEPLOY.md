@@ -148,9 +148,9 @@ La URL y la anon key de Supabase están **escritas adentro del código**, en dos
 
 **El dominio del proyecto es `justomakario.lat`** (registrado en Namecheap, nameservers **BasicDNS** — `dns1/dns2.registrar-servers.com`). El server de EasyPanel es **`72.62.15.150`**.
 
-#### 4.1 — El código no se toca
+#### 4.1 — El código casi no se toca (hay UNA excepción)
 
-No hay ni una URL de producción escrita a mano en la app. Está hecho a propósito y conviene no romperlo:
+Todo lo que sirve la app resuelve el host solo. Está hecho a propósito y conviene no romperlo:
 
 | dónde | cómo resuelve el host |
 |---|---|
@@ -159,7 +159,31 @@ No hay ni una URL de producción escrita a mano en la app. Está hecho a propós
 | `supabase/functions/b2b_signup` | `Access-Control-Allow-Origin: *` — no hay allowlist por dominio |
 | `mobile/manifest.webmanifest` + `sw.js` | `start_url`/`scope` = `/m/`, todo relativo |
 
-Cambiar de dominio mañana **no requiere tocar un archivo ni rearmar el ZIP**: es todo configuración de Namecheap + EasyPanel + Supabase.
+**La excepción: `SITIO_PUBLICO` en `components/b2b-data.js`** (las dos copias, `web/` y `mobile/`).
+
+Es el dominio con el que se arman **los links que el dueño copia y le manda a
+un mayorista** — el de alta abierta y el de una invitación. Ésos no pueden
+salir de `window.location.origin`, porque el dueño entra al panel por la URL
+interna de EasyPanel y entonces el cliente recibe
+`https://app-gestion-interna-....easypanel.host/tienda/?alta=1`: feo, y encima
+frágil, porque esa URL la genera el panel de hosting y el día que cambie el
+link que ya mandó deja de andar.
+
+Todo pasa por `window.B2B_DATA.linkTienda()`:
+
+| llamada | devuelve |
+|---|---|
+| `linkTienda()` | `https://justomakario.lat/tienda/` — el que ya tiene cuenta |
+| `linkTienda({ alta: true })` | `…/tienda/?alta=1` — alta abierta, el que se manda siempre |
+| `linkTienda({ codigo })` | `…/tienda/?codigo=XYZ` — invitación puntual |
+
+En `localhost` devuelve el origin real, para poder probar los links contra el
+build local sin que te manden a producción.
+
+**Cambiar de dominio mañana = tocar UNA línea** (`SITIO_PUBLICO`, en las dos
+copias de `b2b-data.js`, y subirles el `?v=`) **+ la config de Namecheap +
+EasyPanel + Supabase.** La app se sigue sirviendo igual en cualquier dominio;
+lo único que apunta al viejo son los links para copiar.
 
 #### 4.2 — Namecheap (Advanced DNS)
 

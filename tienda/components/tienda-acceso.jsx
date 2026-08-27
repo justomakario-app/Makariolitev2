@@ -139,10 +139,13 @@ function limpiarHash() {
   } catch (e) { /* sin history API el token queda a la vista, pero funciona */ }
 }
 
-/* A donde vuelve el mail. Se calcula del browser y no se escribe a mano: la
-   URL publica no vive en el repo, y si algun dia cambia el dominio esto
-   sigue andando sin tocar codigo. Ojo: tiene que estar en la lista de
-   "Redirect URLs" de Supabase Auth, si no el link cae en la Site URL. */
+/* A donde vuelve el mail de "olvide mi contrasena". Este SI se calcula del
+   browser, a proposito, y no usa el dominio fijo de b2b-data.js: al que esta
+   recuperando la clave hay que devolverlo EXACTAMENTE a donde estaba, no
+   mudarlo de dominio en la mitad del tramite. El dominio fijo es para los
+   links que el dueno copia y manda; este es para volver.
+   Ojo: la URL resultante tiene que estar en la lista de "Redirect URLs" de
+   Supabase Auth, si no el link cae en la Site URL. */
 const urlDeVuelta = () => {
   try { return window.location.origin + window.location.pathname; }
   catch (e) { return undefined; }

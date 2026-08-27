@@ -173,20 +173,20 @@ function B2BSolicitudesTab({ onCambio } = {}) {
         </div>
         <div style={{display:'flex', gap:8, alignItems:'center', flexWrap:'wrap'}}>
           <input className="field-input" readOnly
-                 value={`${window.location.origin}/tienda/?alta=1`}
+                 value={window.B2B_DATA.linkTienda({ alta: true })}
                  onFocus={e => e.target.select()}
                  style={{fontFamily:'ui-monospace, monospace', fontSize:12, flex:'1 1 260px'}}/>
           <button className="btn-primary" style={{whiteSpace:'nowrap'}}
-                  onClick={() => copiar(`${window.location.origin}/tienda/?alta=1`)}>
+                  onClick={() => copiar(window.B2B_DATA.linkTienda({ alta: true }))}>
             <Icon n="copy" s={14}/> Copiar link
           </button>
           <a className="btn-ghost" style={{whiteSpace:'nowrap', textDecoration:'none'}}
-             href={`${window.location.origin}/tienda/`} target="_blank" rel="noopener noreferrer">
+             href={window.B2B_DATA.linkTienda()} target="_blank" rel="noopener noreferrer">
             <Icon n="store" s={14}/> Ver la tienda
           </a>
         </div>
         <div className="field-help" style={{marginTop:8}}>
-          El que ya tiene cuenta entra por <b>{window.location.origin}/tienda/</b>.
+          El que ya tiene cuenta entra por <b>{window.B2B_DATA.linkTienda()}</b>.
           "Invitar mayorista" es para otra cosa: sumar un <b>segundo comprador</b> a
           una empresa que ya está registrada.
         </div>
@@ -370,17 +370,18 @@ function B2BSolicitudesTab({ onCambio } = {}) {
 
           {/* /tienda/?codigo=XYZ abre directo en "Canjear invitación" con el
               código ya puesto — ver tienda-acceso.jsx (modoDesdeUrl/codigoDesdeUrl).
-              window.location.origin porque el panel y la tienda viven en el
-              mismo dominio (nginx: / → panel, /tienda/ → tienda mayorista). */}
+              El dominio lo pone linkTienda(): NO window.location.origin, o el
+              cliente recibiría la URL interna del hosting si el dueño abrió el
+              panel por ahí. Ver el comentario de SITIO_PUBLICO en b2b-data.js. */}
           <div className="field-group">
             <label className="field-label">Link para mandarle</label>
             <div style={{display:'flex', gap:8}}>
               <input className="field-input" readOnly
-                     value={`${window.location.origin}/tienda/?codigo=${encodeURIComponent(tokenNuevo.token)}`}
+                     value={window.B2B_DATA.linkTienda({ codigo: tokenNuevo.token })}
                      onFocus={e => e.target.select()}
                      style={{fontFamily:'ui-monospace, monospace', fontSize:12}}/>
               <button className="btn-ghost"
-                      onClick={() => copiar(`${window.location.origin}/tienda/?codigo=${encodeURIComponent(tokenNuevo.token)}`)}>
+                      onClick={() => copiar(window.B2B_DATA.linkTienda({ codigo: tokenNuevo.token }))}>
                 <Icon n="copy" s={14}/> Copiar
               </button>
             </div>
@@ -401,7 +402,7 @@ function B2BSolicitudesTab({ onCambio } = {}) {
               </button>
             </div>
             <div className="field-help">
-              Lo pega en "Tengo un código de invitación" desde {window.location.origin}/tienda/
+              Lo pega en "Tengo un código de invitación" desde {window.B2B_DATA.linkTienda()}
             </div>
           </div>
         </window.Modal>

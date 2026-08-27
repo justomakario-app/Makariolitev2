@@ -63,7 +63,48 @@ window.B2B_DATA = window.B2B_DATA || (function () {
     return data || [];
   };
 
+  /* ── La dirección pública de la tienda ─────────────────────────────
+     Los links que el dueño copia y le manda a un mayorista NO pueden salir
+     de window.location.origin. Si abrió el panel por la URL interna del
+     hosting, el cliente termina recibiendo algo como
+       https://app-gestion-interna-....easypanel.host/tienda/?alta=1
+     que además de feo es frágil: esa URL la genera el panel de hosting, y
+     el día que cambie, el link que ya mandó deja de andar.
+
+     El dominio se compró justamente para esto, así que va fijo acá. Apex y
+     no www: es el que está cargado como Site URL en Supabase y el más corto
+     para dictar por teléfono. Los dos sirven la app y los dos están en las
+     Redirect URLs, pero se elige UNO para que todos los links salgan iguales.
+
+     ★ SI CAMBIA EL DOMINIO SE CAMBIA ACÁ. Es el único lugar del código donde
+       está escrito (y en DEPLOY.md, que documenta el DNS).
+
+     Excepción: en localhost devuelve el origin real, para poder probar los
+     links contra el build local sin que te manden a producción. */
+  const SITIO_PUBLICO = 'https://justomakario.lat';
+
+  const enLocal = () => {
+    const h = String(window.location.hostname || '').toLowerCase();
+    return h === '' || h === 'localhost' || h === '127.0.0.1' || h === '::1' ||
+           h === '[::1]' || h.endsWith('.local');
+  };
+
+  /* Arma un link a la tienda. Sin argumentos: la puerta de entrada del que ya
+     tiene cuenta. { alta: true }: el de alta abierta, el que se manda siempre.
+     { codigo }: el de una invitación puntual. */
+  const linkTienda = (opciones) => {
+    const o = opciones || {};
+    const base = (enLocal() ? window.location.origin : SITIO_PUBLICO) + '/tienda/';
+    if (o.codigo) return base + '?codigo=' + encodeURIComponent(o.codigo);
+    if (o.alta)   return base + '?alta=1';
+    return base;
+  };
+
   return {
+    /* ── Dirección pública ───────────────────────────────────────────── */
+    linkTienda,
+    sitioPublico: () => (enLocal() ? window.location.origin : SITIO_PUBLICO),
+
     /* ── Feature flag ────────────────────────────────────────────────── */
     flag: async () => {
       try {
