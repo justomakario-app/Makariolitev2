@@ -8,6 +8,11 @@
    - El profile se AUTO-CREA por el trigger handle_new_user() (migration
      0002) leyendo user_metadata {username, name, role}. Por eso este
      script NO inserta en public.profiles manualmente.
+   - Migration 0155 endureció ese trigger: si app_metadata.interno no es
+     'true', NO crea el profile (queda bloqueado en auth_alta_bloqueada y
+     dispara una notificación "Alguien intento registrarse solo" a todo
+     owner/admin activo). createUser()/updateUserById() de abajo YA mandan
+     app_metadata:{interno:true} — no lo saques.
    - username debe matchear el CHECK ^[a-z0-9_]{3,32}$ → sin puntos
      (usamos guión bajo). El login real es por EMAIL completo.
    - El seed de permisos se hace por INSERT directo con la service role
@@ -110,6 +115,7 @@ async function ensureUser(u) {
     // Refrescar metadata por si cambió name/role/username (no toca password).
     await supabase.auth.admin.updateUserById(userId, {
       user_metadata: { username: u.username, name: u.name, role: u.role },
+      app_metadata: { interno: true },
     });
   } else {
     const { data, error } = await supabase.auth.admin.createUser({
@@ -117,6 +123,7 @@ async function ensureUser(u) {
       password: PASSWORD,
       email_confirm: true,
       user_metadata: { username: u.username, name: u.name, role: u.role },
+      app_metadata: { interno: true },
     });
     if (error) throw new Error(`createUser ${u.email}: ${error.message}`);
     userId = data.user.id;
