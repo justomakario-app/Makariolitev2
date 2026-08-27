@@ -912,3 +912,243 @@ button { font: inherit; color: inherit; }
   .t-repe { width: 244px; }
   .t-denuevo-bajada { flex-basis: 100%; }
 }
+
+/* ══ MI RESUMEN ═══════════════════════════════════════════════════════════
+   El tablero del cliente. Es la única pantalla de la tienda que no sirve
+   para comprar: sirve para entender. Por eso se permite más aire, cifras
+   más grandes y un bloque de color que el resto del catálogo no tiene —
+   pero con la misma paleta, la misma tipografía y los mismos radios, para
+   que se lea como parte de la tienda y no como un informe pegado.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.t-res { display: flex; flex-direction: column; gap: 18px; }
+
+/* ── Encabezado ────────────────────────────────────────────────────────── */
+.t-res-hero {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+}
+.t-res-h1 { font-size: 24px; font-weight: 800; letter-spacing: -.02em; line-height: 1.15; }
+.t-res-sub {
+  font-size: 13.5px; color: var(--ink-muted); margin-top: 5px;
+  line-height: 1.5; max-width: 60ch;
+}
+.t-res-verpedidos { flex: none; }
+.t-res-cta { margin-top: 14px; }
+
+/* ── Las cuatro cifras ─────────────────────────────────────────────────
+   Grilla que baja sola: cuatro en escritorio, dos en el celular. Nunca una
+   sola columna: cuatro fichas apiladas obligan a hacer scroll para ver lo
+   que tiene que entrar de un vistazo. */
+.t-res-kpis {
+  display: grid; gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+}
+.t-res-kpi {
+  position: relative; display: flex; flex-direction: column; gap: 2px;
+  padding: 15px 15px 14px;
+  background: var(--paper); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: var(--shadow-xs);
+  overflow: hidden;
+}
+/* La primera ficha —lo que lleva gastado— se pinta oscura. Es el número que
+   el cliente vino a buscar; si las cuatro pesan igual, no pesa ninguna. */
+.t-res-kpi-fuerte { background: var(--ink); border-color: var(--ink); }
+.t-res-kpi-fuerte .t-res-kpi-rot { color: rgba(255,255,255,.62); }
+.t-res-kpi-fuerte .t-res-kpi-val { color: #fff; }
+.t-res-kpi-fuerte .t-res-kpi-pie { color: rgba(255,255,255,.55); }
+.t-res-kpi-fuerte .t-res-kpi-ico {
+  background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.18); color: #fff;
+}
+
+.t-res-kpi-ico {
+  position: absolute; top: 13px; right: 13px;
+  display: grid; place-items: center; width: 28px; height: 28px;
+  border-radius: 8px; background: var(--paper-off);
+  border: 1px solid var(--border); color: var(--ink-soft);
+}
+.t-res-kpi-rot {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--ink-muted); padding-right: 34px;
+}
+.t-res-kpi-val {
+  font-size: 26px; font-weight: 800; letter-spacing: -.025em; line-height: 1.15;
+  font-variant-numeric: tabular-nums; margin-top: 4px;
+}
+.t-res-kpi-pie { font-size: 11.5px; color: var(--ink-muted); margin-top: 3px; }
+
+/* ── Panel ─────────────────────────────────────────────────────────────── */
+.t-res-panel {
+  background: var(--paper); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px 16px 14px;
+}
+.t-res-panel-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap; margin-bottom: 14px;
+}
+.t-res-panel-tit {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 15px; font-weight: 800; letter-spacing: -.01em;
+}
+.t-res-panel-tit svg { color: var(--ink-muted); }
+.t-res-panel-baj { font-size: 12px; color: var(--ink-muted); }
+
+/* Dos paneles a la par en escritorio; se apilan solos cuando no entran. */
+.t-res-cols {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  align-items: start;
+}
+
+/* ── Gráfico mes a mes ─────────────────────────────────────────────────
+   La lectura de arriba es parte del gráfico, no un título: es donde vive el
+   importe exacto del mes que se está mirando. Alto mínimo fijo para que
+   cambiar de mes no mueva las barras de lugar. */
+/* Arrastrar el mouse por las barras no tiene que seleccionar los rótulos:
+   se toca para leer, no para copiar. */
+.t-res-graf { user-select: none; -webkit-user-select: none; }
+
+.t-res-graf-lectura {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; min-height: 52px; margin-bottom: 12px;
+}
+.t-res-graf-mes {
+  display: block; font-size: 11px; font-weight: 700; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--ink-muted);
+}
+.t-res-graf-val {
+  display: block; font-size: 25px; font-weight: 800; letter-spacing: -.025em;
+  font-variant-numeric: tabular-nums; line-height: 1.2;
+}
+.t-res-graf-costado { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.t-res-graf-pie { font-size: 12px; color: var(--ink-muted); }
+
+.t-res-delta {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 8px; border-radius: 999px;
+  font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.t-res-delta-sube { background: var(--green-bg); color: var(--green); }
+/* La flecha del ícono apunta para arriba: cuando el mes cayó se la da vuelta
+   en lugar de tener dos íconos que dibujan lo mismo al revés. */
+.t-res-delta-baja { background: var(--red-bg); color: var(--red); }
+.t-res-delta-baja svg { transform: scaleY(-1); }
+
+.t-res-barras {
+  display: flex; align-items: flex-end; gap: 5px; height: 138px;
+}
+.t-res-col {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  height: 100%; padding: 0; border: none; background: none; cursor: pointer;
+  border-radius: 7px;
+}
+.t-res-col-caja { flex: 1; width: 100%; display: flex; align-items: flex-end; }
+.t-res-barra {
+  display: block; width: 100%; border-radius: 5px 5px 2px 2px;
+  background: var(--border-md);
+  transition: background .14s;
+}
+.t-res-col-rot {
+  font-size: 10.5px; font-weight: 600; color: var(--ink-muted);
+  text-transform: capitalize; line-height: 1;
+}
+.t-res-col:hover .t-res-barra,
+.t-res-col:focus-visible .t-res-barra { background: var(--ink-soft); }
+/* El mes en foco se pinta con el negro de la marca. Un solo mes destacado a
+   la vez: si se resaltan varios, ya no se sabe cuál se está leyendo arriba. */
+.t-res-col-on .t-res-barra { background: var(--ink); }
+.t-res-col-on .t-res-col-rot { color: var(--ink); font-weight: 800; }
+/* Los meses sin pedidos quedan como una rayita gris clara: se ven, se pueden
+   tocar, pero no compiten con los que sí tuvieron movimiento. */
+.t-res-col-cero .t-res-barra { background: var(--border); }
+.t-res-col-cero.t-res-col-on .t-res-barra { background: var(--ink-faint); }
+
+/* ── Ranking de productos ──────────────────────────────────────────────── */
+.t-res-top { list-style: none; display: flex; flex-direction: column; gap: 3px; }
+.t-res-top-fila {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 6px; border-radius: 9px;
+}
+.t-res-top-fila:hover { background: var(--paper-off); }
+.t-res-top-pos {
+  flex: none; width: 17px; text-align: center;
+  font-size: 12px; font-weight: 800; color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+.t-res-top-foto {
+  flex: none; display: grid; place-items: center;
+  width: 40px; height: 40px; border-radius: 8px; overflow: hidden;
+  background: var(--paper-dim); border: 1px solid var(--border);
+}
+.t-res-top-foto img { width: 100%; height: 100%; object-fit: cover; }
+
+.t-res-top-cuerpo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.t-res-top-nom {
+  font-size: 13px; font-weight: 700; line-height: 1.25;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* La barrita va DEBAJO del nombre y no al lado: al lado hay que elegir entre
+   nombre corto o barra corta, y las dos cosas se leen peor. */
+.t-res-top-pista {
+  display: block; height: 4px; border-radius: 2px;
+  background: var(--paper-dim); overflow: hidden;
+}
+.t-res-top-relleno { display: block; height: 100%; border-radius: 2px; background: var(--ink); }
+.t-res-top-datos { font-size: 11px; color: var(--ink-muted); }
+.t-res-top-monto {
+  flex: none; font-size: 13.5px; font-weight: 800;
+  font-variant-numeric: tabular-nums; text-align: right;
+}
+
+/* ── Reparto por estado ────────────────────────────────────────────────
+   Una sola cinta con un tramo por estado. Los colores son los del chip de
+   "Mis pedidos": se toman de ESTADO_CLIENTE en el JSX, no se repiten acá,
+   justamente para que no puedan quedar distintos. */
+.t-res-cinta {
+  display: flex; gap: 2px; height: 9px; margin-bottom: 13px;
+  border-radius: 999px; overflow: hidden; background: var(--paper-dim);
+}
+.t-res-cinta-seg { display: block; height: 100%; min-width: 5px; }
+
+.t-res-estados { display: block; }
+.t-res-leyenda { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.t-res-leyenda-it {
+  display: flex; align-items: center; gap: 9px;
+  padding: 6px; border-radius: 8px; font-size: 13px;
+}
+.t-res-leyenda-it:hover { background: var(--paper-off); }
+.t-res-punto { flex: none; width: 8px; height: 8px; border-radius: 50%; }
+.t-res-leyenda-it span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.t-res-leyenda-it b { font-variant-numeric: tabular-nums; }
+.t-res-leyenda-it em {
+  font-style: normal; font-size: 12.5px; color: var(--ink-muted);
+  font-variant-numeric: tabular-nums; min-width: 88px; text-align: right;
+}
+
+.t-res-nota {
+  font-size: 12px; color: var(--ink-muted); line-height: 1.5;
+  margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--border);
+}
+.t-res-legal { font-size: 12px; color: var(--ink-muted); line-height: 1.55; }
+
+@media (max-width: 720px) {
+  .t-res-h1 { font-size: 20px; }
+  .t-res-verpedidos { width: 100%; justify-content: center; }
+  .t-res-kpis { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .t-res-kpi { padding: 13px 12px 12px; }
+  .t-res-kpi-val { font-size: 20px; }
+  .t-res-kpi-ico { display: none; }   /* el rótulo ya dice qué es; el ícono roba ancho */
+  .t-res-kpi-rot { padding-right: 0; font-size: 10px; }
+  .t-res-panel { padding: 14px 12px 12px; }
+  .t-res-graf-val { font-size: 21px; }
+  .t-res-graf-costado { align-items: flex-start; }
+  .t-res-barras { height: 112px; gap: 3px; }
+  .t-res-col-rot { font-size: 9.5px; }
+  .t-res-top-foto { width: 34px; height: 34px; }
+  .t-res-leyenda-it em { min-width: 0; }
+
+  /* Con cuatro pestañas ya no entran repartidas en partes iguales en 360px.
+     Cada una se queda con su ancho natural y la barra scrollea, que es mejor
+     que cuatro rótulos cortados por la mitad. */
+  .t-tab { flex: 1 0 auto; white-space: nowrap; }
+}

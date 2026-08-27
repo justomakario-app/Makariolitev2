@@ -201,6 +201,12 @@ const Header = ({ cuenta, tab, setTab, unidades, onSalir, onCambiarCanal, onVerC
                 onClick={() => setTab('pedidos')}>
           <Icon n="history" s={15}/> <span>Mis pedidos</span>
         </button>
+        {/* El resumen va último a propósito: el que entra viene a comprar, no
+            a mirar estadísticas. Queda a un toque, no en el camino. */}
+        <button className={'t-tab' + (tab === 'resumen' ? ' t-tab-on' : '')}
+                onClick={() => setTab('resumen')}>
+          <Icon n="chart" s={15}/> <span>Mi resumen</span>
+        </button>
       </nav>
 
       <div className="t-header-user">
@@ -438,6 +444,10 @@ const TiendaApp = () => {
           <PantallaCarrito carrito={carrito} onSetCantidad={setCantidad}
                            onGuardarDatos={guardarDatos} onEnviar={enviar}
                            onSeguirComprando={() => setTab('catalogo')} ocupado={ocupado}/>
+        ) : tab === 'resumen' ? (
+          <PantallaResumen cuenta={cuenta} recargarSenal={senalPedidos}
+                           onIrCatalogo={() => setTab('catalogo')}
+                           onVerPedidos={() => setTab('pedidos')}/>
         ) : (
           <PantallaPedidos recargarSenal={senalPedidos}
                            onIrCatalogo={() => setTab('catalogo')}
