@@ -230,6 +230,9 @@ const Pedido = ({ p, onAnular, anulando, onRepetir, onAdjuntar,
   /* Un pedido dado de baja no se paga: ni comprobante ni datos bancarios. */
   const sigueVivo = p.estado !== 'anulado';
   const comprobantes = p.comprobantes || [];
+  /* b2b_rpc_mis_pedidos ya trae las facturas de cada pedido adentro del
+     pedido (migración 0169). No hay una segunda llamada. */
+  const facturas = p.facturas || [];
 
   /* El PDF se arma con lo que ya está en pantalla: el mismo pedido que el
      backend devolvió, sin volver a pedir nada. Lo único que viaja en el
@@ -263,16 +266,33 @@ const Pedido = ({ p, onAnular, anulando, onRepetir, onAdjuntar,
         <div className="t-pedido-cuerpo">
           {info && info.ayuda && <div className="t-pedido-ayuda">{info.ayuda}</div>}
 
-          {/* El numero de factura lo escribe el equipo despues de emitirla
-              afuera (b2b_rpc_admin_facturar_pedido). El comprobante en si NO
-              sale de este sistema: se manda por mail o se entrega con la
-              mercaderia. Mostrar el numero acá es lo que le permite al
-              cliente cruzar "mi pedido B2B-00012" con la factura que tiene
-              en la mano sin llamar por telefono. */}
-          {p.factura_nro && (
+          {/* El número de factura lo escribe el equipo después de emitirla
+              afuera (b2b_rpc_admin_facturar_pedido) y sirve para cruzar "mi
+              pedido B2B-00012" con el papel que uno tiene en la mano.
+
+              Desde 0169 el PDF también puede estar acá: si lo subieron, se
+              baja de esta misma tarjeta. Los dos casos son reales — hay
+              pedidos marcados facturados con el archivo todavía en el
+              escritorio de alguien — así que el cartel se banca los dos. */}
+          {(p.factura_nro || facturas.length > 0) && (
             <div className="t-pedido-factura">
               <Icon n="ticket" s={14} c="var(--green)"/>
-              <span>Facturado con el comprobante <b>{p.factura_nro}</b></span>
+              <span>
+                {p.factura_nro
+                  ? <>Facturado con el comprobante <b>{p.factura_nro}</b></>
+                  : <>Este pedido ya tiene {facturas.length === 1 ? 'su comprobante' : 'sus comprobantes'}</>}
+                {facturas.length === 0 &&
+                  ' · te lo mandamos por mail, y en cuanto lo subamos acá lo vas a poder descargar'}
+              </span>
+            </div>
+          )}
+
+          {facturas.length > 0 && (
+            <div className="t-pedido-pagos" style={{marginTop:0, marginBottom:12}}>
+              <span className="t-label-mini">
+                {facturas.length === 1 ? 'Tu factura' : 'Tus facturas'}
+              </span>
+              <ListaFacturas facturas={facturas}/>
             </div>
           )}
 
@@ -282,6 +302,11 @@ const Pedido = ({ p, onAnular, anulando, onRepetir, onAdjuntar,
             </div>
           )}
 
+          {/* La tabla va adentro de una caja que scrollea de costado. En un
+              telefono de 360px las cuatro columnas con precios de siete
+              cifras piden 343px y adentro de la tarjeta hay 330: sin esto
+              el ultimo total se sale y arrastra la tarjeta entera. */}
+          <div className="t-tabla-wrap">
           <table className="t-tabla">
             <thead>
               <tr>
@@ -320,6 +345,7 @@ const Pedido = ({ p, onAnular, anulando, onRepetir, onAdjuntar,
               )}
             </tfoot>
           </table>
+          </div>
 
           {/* Cómo pagarlo, y con qué se pagó. Solo mientras el pedido siga
               vivo: en uno anulado esto es ruido que confunde. */}

@@ -1493,6 +1493,106 @@
     return data;
   }
 
+  /* ── Facturas del mayorista (0169) ────────────────────────────────
+     Subir la factura que ya se emitió afuera y dejársela al cliente en su
+     cuenta. El sistema no emite ni numera nada: es un archivero.
+
+     Va acá y no en b2b-data.js por la misma razón que los avisos por mail:
+     b2b-data.js lo carga también la tienda del cliente, y subir o borrar
+     facturas es administración. Del lado del cliente solo quedó la lectura
+     (B2B_DATA.misFacturas y B2B_DATA.facturaUrl).
+
+     Bajar el archivo es lectura, así que se reusa B2B_DATA.facturaUrl — la
+     policy del bucket ya deja leer todo al equipo. */
+  const FACTURA_MIMES = ['application/pdf', 'image/jpeg', 'image/png'];
+  const FACTURA_MAX_BYTES = 10 * 1024 * 1024;
+
+  /* El orden importa: es el orden del desplegable. 'factura' primero porque
+     es lo que se carga el 95% de las veces. */
+  const FACTURA_TIPO_OPTIONS = [
+    { value: 'factura',      label: 'Factura' },
+    { value: 'nota_credito', label: 'Nota de crédito' },
+    { value: 'recibo',       label: 'Recibo' },
+    { value: 'remito',       label: 'Remito' },
+    { value: 'otro',         label: 'Otro comprobante' },
+  ];
+
+  const FACTURA_TIPO_LABELS = FACTURA_TIPO_OPTIONS.reduce(function (a, o) {
+    a[o.value] = o.label; return a;
+  }, {});
+
+  /* Sube el archivo al bucket privado y devuelve los datos que después pide
+     la RPC. La primera carpeta TIENE que ser el cliente: de eso depende que
+     la policy de lectura le muestre la factura al dueño y a nadie más. */
+  async function subirFacturaArchivo(cliente_id, file) {
+    if (!cliente_id || !file) throw new Error('Falta el archivo.');
+    if (FACTURA_MIMES.indexOf(file.type) < 0) throw new Error('Solo aceptamos PDF, JPG o PNG.');
+    if (file.size > FACTURA_MAX_BYTES) throw new Error('El archivo no puede pesar más de 10 MB.');
+    const ext = file.type === 'application/pdf' ? 'pdf'
+              : file.type === 'image/png' ? 'png' : 'jpg';
+    /* crypto.randomUUID no está en Safari viejo ni fuera de https; el
+       fallback no necesita ser criptográfico, solo distinto por archivo. */
+    const id = (window.crypto && window.crypto.randomUUID)
+      ? window.crypto.randomUUID()
+      : (Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
+    const path = cliente_id + '/' + id + '.' + ext;
+    const { error } = await supa.storage.from('b2b_facturas')
+      .upload(path, file, { upsert: false, contentType: file.type });
+    if (error) throw new Error(error.message || 'No se pudo subir el archivo');
+    return { path: path, mime: file.type, size_bytes: file.size, nombre: file.name };
+  }
+
+  /* Los dos pasos juntos, que es como se usa siempre.
+     payload: { cliente_id, file, pedido_id?, tipo?, numero?, fecha?, total?, nota? }
+
+     Si el registro falla después de que el archivo subió, se borra el
+     archivo. Sin esto cada número repetido o cada error de red deja basura
+     en el bucket para siempre. El borrado va en su propio try: si tampoco
+     sale, lo que el usuario tiene que ver es el error de verdad, no
+     "no se pudo limpiar". */
+  async function subirFactura(payload) {
+    const p = payload || {};
+    const sub = await subirFacturaArchivo(p.cliente_id, p.file);
+    try {
+      const { data, error } = await supa.rpc('b2b_rpc_admin_subir_factura', {
+        p_payload: {
+          cliente_id: p.cliente_id,
+          pedido_id: p.pedido_id || null,
+          tipo: p.tipo || 'factura',
+          numero: p.numero || null,
+          fecha: p.fecha || null,
+          total: (p.total === 0 || p.total) ? p.total : null,
+          nota: p.nota || null,
+          path: sub.path, mime: sub.mime,
+          size_bytes: sub.size_bytes, nombre: sub.nombre,
+        },
+      });
+      if (error) throw new Error(error.message || 'No se pudo guardar la factura');
+      return data;
+    } catch (e) {
+      try { await supa.storage.from('b2b_facturas').remove([sub.path]); } catch (_) {}
+      throw e;
+    }
+  }
+
+  /* payload: { pedido_id? , cliente_id? } — sin nada trae todas. */
+  async function listarFacturas(payload) {
+    const { data, error } = await supa.rpc('b2b_rpc_admin_facturas', { p_payload: payload || {} });
+    if (error) throw new Error(error.message || 'No se pudieron cargar las facturas');
+    return data || [];
+  }
+
+  /* Borrado LÓGICO: le sale de la cuenta al cliente, en la base queda. Una
+     factura que el cliente ya vio (y quizá ya cargó en su contabilidad) no
+     puede desaparecer sin rastro. */
+  async function borrarFactura(factura_id) {
+    const { data, error } = await supa.rpc('b2b_rpc_admin_borrar_factura', {
+      p_payload: { factura_id: factura_id },
+    });
+    if (error) throw new Error(error.message || 'No se pudo quitar la factura');
+    return data;
+  }
+
   /* loadRecibos: SELECT directo (RLS owner/admin only). Incluye anulados
      si opts.includeAnulados=true. */
   async function loadRecibos(opts) {
@@ -2284,6 +2384,15 @@
     setMailConfig,
     probarMail,
     mailEstado,
+    // 0169 facturas del mayorista
+    FACTURA_MIMES,
+    FACTURA_MAX_BYTES,
+    FACTURA_TIPO_OPTIONS,
+    FACTURA_TIPO_LABELS,
+    subirFacturaArchivo,
+    subirFactura,
+    listarFacturas,
+    borrarFactura,
     loadRecibos,
     getRecibo,
     createRecibo,

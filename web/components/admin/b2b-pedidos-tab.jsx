@@ -357,6 +357,14 @@ function B2BPedidosTab({ buscarInicial }) {
                               <Icon n="clip" s={11}/>{p.comprobantes}
                             </span>
                           )}
+                          {/* Y el mismo truco del otro lado: cuántas facturas
+                              ya tiene el cliente colgadas de este pedido. */}
+                          {Number(p.facturas) > 0 && (
+                            <span className="b2b-clip fac"
+                                  title={`${p.facturas} factura${p.facturas === 1 ? '' : 's'} cargada${p.facturas === 1 ? '' : 's'} para el cliente`}>
+                              <Icon n="file" s={11}/>{p.facturas}
+                            </span>
+                          )}
                         </div>
                         {p.numero_pedido && (
                           <div style={{fontSize:11, color:'var(--ink-muted)'}}>interno {p.numero_pedido}</div>
@@ -432,7 +440,8 @@ function B2BPedidosTab({ buscarInicial }) {
                     {expandido && (
                       <tr>
                         <td colSpan={nCols} style={{background:'#fafafa', padding:'12px 16px'}}>
-                          <B2BDetallePedido pedido={p} items={items} sinDetalle={sinDetalle}/>
+                          <B2BDetallePedido pedido={p} items={items} sinDetalle={sinDetalle}
+                                            onFacturas={reload}/>
                         </td>
                       </tr>
                     )}
@@ -476,7 +485,7 @@ function B2BPedidosTab({ buscarInicial }) {
    Y el panel se desmonta al cerrar, así que al volver a abrirlo se piden
    de nuevo. Es a propósito: entre que se abrió la tabla y que el que cobra
    entra a mirar, el cliente pudo haber subido la transferencia. ── */
-function B2BDetallePedido({ pedido, items, sinDetalle }) {
+function B2BDetallePedido({ pedido, items, sinDetalle, onFacturas }) {
   const toast = useToast();
   const cuantos = Number(pedido.comprobantes) || 0;
   const renglones = Array.isArray(items) ? items : [];
@@ -656,6 +665,25 @@ function B2BDetallePedido({ pedido, items, sinDetalle }) {
         </ul>
       )}
 
+      {/* ── Facturas ──
+          El espejo exacto del bloque de arriba: allá sube el cliente y
+          miramos nosotros, acá subimos nosotros y la baja él desde su
+          cuenta. El formulario arranca plegado porque a este panel se
+          entra casi siempre a mirar el pedido, no a facturar. ── */}
+      <div className="b2b-det-tit">
+        <Icon n="file" s={13}/> Facturas del cliente
+        {Number(pedido.facturas) > 0 && (
+          <span className="b2b-det-tit-n">{pedido.facturas}</span>
+        )}
+      </div>
+      <B2BFacturasPanel clienteId={pedido.cliente_id}
+                        clienteNombre={pedido.cliente}
+                        pedidoId={pedido.b2b_pedido_id}
+                        pedidoNumero={pedido.numero_b2b}
+                        totalSugerido={pedido.total_con_iva}
+                        formPlegado={true}
+                        onCambio={onFacturas}/>
+
       {/* ── Los dos PDF ──
           Distintos a propósito: el presupuesto lleva precios, IVA y los datos
           para transferir; la hoja de producción no lleva un solo número de
@@ -697,8 +725,36 @@ function B2BFacturarModal({ pedido, onClose, onHecho }) {
   const yaFacturado = pedido.estado_tienda === 'facturado';
 
   const [nro, setNro] = useState(pedido.factura_nro || '');
+  const [file, setFile] = useState(null);
+  const [sobre, setSobre] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  const inputRef = useRef(null);
 
+  const tomarArchivo = (f) => {
+    if (!f) return;
+    if ((window.ADMIN_DATA.FACTURA_MIMES || []).indexOf(f.type) < 0) {
+      toast.error('Solo aceptamos PDF, JPG o PNG.'); return;
+    }
+    if (f.size > window.ADMIN_DATA.FACTURA_MAX_BYTES) {
+      toast.error('El archivo no puede pesar más de 10 MB.'); return;
+    }
+    setFile(f);
+    /* Si el archivo se llama "A-0001-00001234.pdf", el número ya viene
+       escrito ahí. Se propone; el campo sigue siendo editable. */
+    if (!nro.trim()) {
+      const base = f.name.replace(/\.[a-z0-9]+$/i, '');
+      const m = base.match(/\d{3,5}[-\s]?\d{6,8}/) || base.match(/[A-Z]?-?\d{4}-\d{8}/i);
+      if (m) setNro(m[0].trim().slice(0, 40));
+    }
+  };
+
+  /* Dos pasos en un botón, y en este orden a propósito. Primero se marca
+     — que es lo que casi nunca falla — y después se sube el archivo. Si
+     el archivo se cae (número repetido, se cortó internet), el pedido
+     igual queda facturado, que es la verdad: la factura existe afuera. El
+     PDF se puede subir después desde el detalle del pedido. Al revés
+     sería peor: quedaría la factura cargada y el pedido sin marcar, y al
+     reintentar el número repetido no dejaría pasar. */
   const confirmar = async () => {
     if (enviando) return;
     setEnviando(true);
@@ -707,14 +763,38 @@ function B2BFacturarModal({ pedido, onClose, onHecho }) {
         pedido_id: pedido.b2b_pedido_id,
         factura_nro: nro.trim(),
       });
-      toast.success(yaFacturado
-        ? `Factura de ${pedido.numero_b2b} actualizada`
-        : `${pedido.numero_b2b} quedó facturado`);
-      onHecho?.();
     } catch (err) {
       toast.error(err?.message || 'No se pudo facturar');
       setEnviando(false);
+      return;
     }
+
+    if (file) {
+      try {
+        await window.ADMIN_DATA.subirFactura({
+          cliente_id: pedido.cliente_id,
+          pedido_id:  pedido.b2b_pedido_id,
+          file:       file,
+          tipo:       'factura',
+          numero:     nro.trim() || null,
+          fecha:      b2bFacturaHoy(),
+          total:      pedido.total_con_iva != null ? Number(pedido.total_con_iva) : null,
+          nota:       null,
+        });
+      } catch (err) {
+        toast.error('Quedó facturado, pero el archivo no subió: ' +
+                    (err?.message || 'probá de nuevo desde el detalle del pedido.'));
+        onHecho?.();
+        return;
+      }
+    }
+
+    toast.success(file
+      ? `Listo: ${pedido.numero_b2b} facturado y el cliente ya la puede bajar`
+      : (yaFacturado
+          ? `Factura de ${pedido.numero_b2b} actualizada`
+          : `${pedido.numero_b2b} quedó facturado`));
+    onHecho?.();
   };
 
   return (
@@ -725,7 +805,10 @@ function B2BFacturarModal({ pedido, onClose, onHecho }) {
            <>
              <button className="btn-ghost" onClick={onClose} disabled={enviando}>Cancelar</button>
              <button className="btn-primary" onClick={confirmar} disabled={enviando}>
-               {enviando ? 'Guardando…' : (<><Icon n="check" s={14}/> {yaFacturado ? 'Guardar' : 'Marcar facturado'}</>)}
+               {enviando
+                 ? (file ? 'Subiendo…' : 'Guardando…')
+                 : (<><Icon n="check" s={14}/>{' '}
+                      {file ? 'Marcar y subir' : (yaFacturado ? 'Guardar' : 'Marcar facturado')}</>)}
              </button>
            </>
          }>
@@ -733,9 +816,9 @@ function B2BFacturarModal({ pedido, onClose, onHecho }) {
         <b style={{color:'var(--ink)'}}>{pedido.cliente}</b> · {pedido.unidades ?? '—'} unidades ·{' '}
         <b style={{color:'var(--ink)'}}>{window.B2B_DATA.money(pedido.total_neto)}</b>
         <div style={{marginTop:4}}>
-          Esto no emite ninguna factura: anota la que ya emitiste, para que el
-          cliente la vea en “Mis pedidos”. El estado interno del pedido no se
-          mueve — sigue en Despachado.
+          Esto no emite ninguna factura: anota la que ya emitiste y, si querés,
+          le deja el PDF colgado para que se lo baje de su cuenta. El estado
+          interno del pedido no se mueve — sigue en Despachado.
         </div>
       </div>
 
@@ -747,6 +830,36 @@ function B2BFacturarModal({ pedido, onClose, onHecho }) {
         <div className="field-help">
           Se puede dejar vacío y cargarlo después: el pedido queda marcado como
           facturado igual, y este mismo botón vuelve a abrirse para completarlo.
+        </div>
+      </div>
+
+      {/* El archivo, en el mismo paso. Es opcional: hay pedidos que se
+          marcan facturados mientras el PDF todavía no existe, y para esos
+          está el panel del detalle. */}
+      <div className={'b2b-fac-drop' + (sobre ? ' on' : '') + (file ? ' listo' : '')}
+           onDragOver={e => { e.preventDefault(); setSobre(true); }}
+           onDragLeave={() => setSobre(false)}
+           onDrop={e => {
+             e.preventDefault(); setSobre(false);
+             tomarArchivo(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]);
+           }}
+           onClick={() => inputRef.current && inputRef.current.click()}>
+        <input ref={inputRef} type="file" accept="application/pdf,image/jpeg,image/png"
+               onChange={e => tomarArchivo(e.target.files && e.target.files[0])}/>
+        <Icon n={file ? 'check-circle' : 'upload'} s={20}
+              c={file ? 'var(--green, #15803d)' : 'var(--ink-muted)'}/>
+        <div className="b2b-fac-drop-txt">
+          {file ? (
+            <>
+              <b>{file.name}</b>
+              <span>Se la mandamos al cliente · tocá para cambiarla</span>
+            </>
+          ) : (
+            <>
+              <b>Adjuntá la factura en PDF <span style={{fontWeight:400}}>(opcional)</span></b>
+              <span>PDF, JPG o PNG · hasta 10 MB · la baja desde su cuenta</span>
+            </>
+          )}
         </div>
       </div>
 

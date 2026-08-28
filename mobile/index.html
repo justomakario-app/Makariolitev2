@@ -16,7 +16,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="components/styles.css?v=3">
+  <link rel="stylesheet" href="components/styles.css?v=4">
   <link rel="stylesheet" href="components/mobile.css">
 </head>
 <body>
@@ -60,7 +60,7 @@
   <script type="text/babel" src="components/pages.jsx?v=7"></script>
 
   <!-- Admin data layer + modals + tabs -->
-  <script src="components/admin/admin-data.js?v=25"></script>
+  <script src="components/admin/admin-data.js?v=26"></script>
   <script type="text/babel" src="components/admin/customer-modal.jsx?v=2"></script>
   <script type="text/babel" src="components/admin/supplier-historial.jsx?v=1"></script>
   <script type="text/babel" src="components/admin/supplier-modal.jsx?v=1"></script>
@@ -135,17 +135,21 @@
        estos archivos fallara, la app tiene que arrancar igual y el tab caer
        al placeholder, no dejar sin sistema a toda la planta por un módulo
        que además viene apagado por flag. -->
-  <script src="components/b2b-data.js?v=9"></script>
+  <script src="components/b2b-data.js?v=10"></script>
   <!-- El generador de los PDF del pedido mayorista. Va DESPUES de
        b2b-data.js y ANTES del tab de pedidos, que es el que lo llama.
        Es el mismo archivo que carga la tienda del cliente: el presupuesto
        que baja el mayorista y el que baja administracion tienen que salir
        identicos, y dos copias se desincronizan en el primer retoque. -->
   <script src="components/b2b-presupuesto-pdf.js?v=1"></script>
+  <!-- Facturas del mayorista (0169). Va DESPUES de admin-data.js y de
+       b2b-data.js — usa las dos — y ANTES de los tabs de pedidos y de
+       clientes, que son los que montan el panel. -->
+  <script type="text/babel" src="components/admin/b2b-facturas.jsx?v=1"></script>
   <script type="text/babel" src="components/admin/b2b-solicitudes-tab.jsx?v=4"></script>
-  <script type="text/babel" src="components/admin/b2b-clientes-tab.jsx?v=3"></script>
+  <script type="text/babel" src="components/admin/b2b-clientes-tab.jsx?v=4"></script>
   <script type="text/babel" src="components/admin/b2b-catalogo-tab.jsx?v=3"></script>
-  <script type="text/babel" src="components/admin/b2b-pedidos-tab.jsx?v=3"></script>
+  <script type="text/babel" src="components/admin/b2b-pedidos-tab.jsx?v=4"></script>
   <script type="text/babel" src="components/admin/b2b-tienda-tab.jsx?v=3"></script>
 
   <script type="text/babel" src="components/ventas.jsx?v=13"></script>

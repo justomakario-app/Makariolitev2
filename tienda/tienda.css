@@ -457,6 +457,10 @@ button { font: inherit; color: inherit; }
 .t-pedido-factura b { font-family: var(--mono); font-size: 12px; }
 .t-pedido-pie { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; }
 
+/* La caja que deja scrollear la tabla de costado cuando no entra. El
+   `-webkit-overflow-scrolling` es para que en iOS frene con inercia y se
+   sienta parte del telefono; sin el, arrastra duro y parece trabado. */
+.t-tabla-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .t-tabla { width: 100%; border-collapse: collapse; font-size: 13px; }
 .t-tabla th {
   text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
@@ -685,6 +689,14 @@ button { font: inherit; color: inherit; }
 
   /* "Ver" y el tacho tienen que seguir siendo tocables, así que la fila se
      parte: nombre arriba, acciones abajo a la derecha. */
+  /* Se aprieta la tabla del pedido: con el padding de escritorio, cuatro
+     columnas con precios de siete cifras no entran en 360px y hay que
+     arrastrar de costado para leer el total, que es lo que se vino a ver. */
+  .t-tabla { font-size: 12.5px; }
+  .t-tabla th, .t-tabla td { padding-left: 4px; padding-right: 4px; }
+  .t-tabla th:first-child, .t-tabla td:first-child { padding-left: 0; }
+  .t-tabla th:last-child, .t-tabla td:last-child { padding-right: 0; }
+
   .t-comprobante { flex-wrap: wrap; }
   .t-comprobante-txt { flex: 1 1 100%; order: 1; }
   .t-comprobante-ico { order: 0; }
@@ -1354,6 +1366,80 @@ button { font: inherit; color: inherit; }
   .t-res-leyenda-it { padding: 9px 6px; }   /* la leyenda también se toca */
 }
 
+/* ══ MIS FACTURAS ═══════════════════════════════════════════════════════
+   El espejo de "adjuntar comprobante de pago": allá sube el cliente y
+   miramos nosotros, acá subimos nosotros y la baja él. Por eso la fila de
+   una factura reusa .t-comprobante tal cual —misma caja, mismo botón a la
+   derecha— y lo que vive acá abajo es sólo lo que la pantalla propia
+   necesita: las tres fichas de arriba, el buscador y los años.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.t-facturas { display: flex; flex-direction: column; gap: 16px; }
+
+.t-fac-tarjetas {
+  display: grid; gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+}
+.t-fac-tarjeta {
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 15px 15px 14px;
+  background: var(--paper); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: var(--shadow-xs);
+  min-width: 0;
+}
+.t-fac-tarjeta span {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--ink-muted);
+}
+.t-fac-tarjeta b {
+  font-size: 21px; font-weight: 800; letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+}
+/* La segunda ficha es cuánto le facturamos, que es el número que el cliente
+   vino a buscar: si las tres pesan igual, no pesa ninguna. Va por posición
+   y no por clase porque el orden lo fija tienda-facturas.jsx, que está al
+   lado, y siempre son tres. */
+.t-fac-tarjeta:nth-child(2) { background: var(--ink); border-color: var(--ink); }
+.t-fac-tarjeta:nth-child(2) span { color: rgba(255,255,255,.62); }
+.t-fac-tarjeta:nth-child(2) b { color: #fff; }
+
+.t-fac-aclara { margin-top: -6px; font-size: 12px; line-height: 1.5; color: var(--ink-muted); }
+
+/* La lupa va ADENTRO del campo y no al lado: al lado empuja el input y en
+   el teléfono le come 30px de los 300 que hay para escribir. */
+.t-fac-buscar { position: relative; display: flex; align-items: center; }
+.t-fac-buscar > svg { position: absolute; left: 12px; pointer-events: none; }
+.t-fac-buscar .t-input { padding-left: 36px; }
+
+.t-fac-nada {
+  padding: 22px 16px; text-align: center; font-size: 13px; color: var(--ink-muted);
+  background: var(--paper); border: 1px dashed var(--border-md); border-radius: 12px;
+}
+
+.t-fac-grupo { display: flex; flex-direction: column; }
+.t-fac-grupo + .t-fac-grupo { margin-top: 6px; }
+
+.t-fac-pie {
+  padding-top: 13px; border-top: 1px solid var(--border);
+  font-size: 12px; line-height: 1.55; color: var(--ink-muted);
+}
+
+/* Chip del tipo. La nota de crédito en rojo: es la única que resta. */
+.t-fac-tipo {
+  display: inline-block; padding: 1px 6px; margin-right: 4px;
+  border-radius: 5px; background: var(--paper-dim); color: var(--ink-soft);
+  font-size: 10px; font-weight: 800; letter-spacing: .05em;
+  text-transform: uppercase; vertical-align: 1px; white-space: nowrap;
+}
+.t-fac-tipo.es-nc { background: var(--red-bg); color: var(--red); }
+
+.t-fac-nota { font-size: 11.5px; color: var(--ink-soft); overflow-wrap: anywhere; }
+
+/* El nombre de una factura NO se recorta con puntos suspensivos como el de
+   un archivo que subió el cliente: acá el texto ES el número de la factura,
+   y medio número no sirve para nada. Si no entra, baja de renglón. */
+.t-fac .t-comprobante-txt b { white-space: normal; overflow: visible; }
+
 /* ══ CELULAR · LA MISMA TIENDA, HECHA PARA EL PULGAR ══════════════════════
    Todo lo que sigue es agregado, no recorte: no se esconde ninguna función
    que exista en la computadora, y las que estaban escondidas volvieron (la
@@ -1364,8 +1450,8 @@ button { font: inherit; color: inherit; }
    Cuatro decisiones mandan sobre el resto:
 
    1. Las pestañas se van al piso de la pantalla. Arriba quedaban a la altura
-      de la ceja del teléfono y, con cuatro rótulos, la barra scrolleaba de
-      costado: "Mi resumen" existía pero no se veía. Abajo entran las cuatro
+      de la ceja del teléfono y, con cinco rótulos, la barra scrolleaba de
+      costado: "Resumen" existía pero no se veía. Abajo entran las cinco
       juntas, quedan bajo el pulgar, y el contador del pedido está siempre a
       la vista, en cualquier pantalla.
    2. Nada que se toque mide menos de 44px. Un "+" de 30px pegado a un "−"
@@ -1386,20 +1472,26 @@ button { font: inherit; color: inherit; }
    ═══════════════════════════════════════════════════════════════════════ */
 
 /* ── Barra de pestañas al pie ────────────────────────────────────────────
-   Va en 950px y no en 720 a propósito. El header de la tienda —marca,
-   selector de catálogo, las cuatro solapas, la empresa y el botón de
-   salir— necesita 948px para entrar en una fila; abajo de eso se
-   desbordaba para el costado y la página entera scrolleaba en horizontal
-   (una tablet parada de 768 mostraba 948px de ancho). Sacándole las
-   solapas al header, lo que queda entra siempre. Así que el umbral no es
-   un número redondo elegido a ojo: es el ancho en el que el header deja de
-   entrar, medido.
+   Va en 1080px y no en 720 a propósito. El header de la tienda —marca,
+   selector de catálogo, las solapas, la empresa y el botón de salir—
+   necesita entrar en una fila; abajo de eso se desborda para el costado y
+   la página entera scrollea en horizontal. Sacándole las solapas al
+   header, lo que queda entra siempre. Así que el umbral no es un número
+   redondo elegido a ojo: es el ancho en el que el header deja de entrar,
+   medido.
+
+   Era 950 cuando las solapas eran cuatro (medido: 948). Con "Facturas"
+   adentro (0169) pasaron a cinco y el header pide 1061, así que el umbral
+   subió a 1080 — los 19px de sobra son para un nombre de empresa más largo
+   que el de la prueba. Consecuencia buscada: una tablet apaisada de 1024
+   ahora también usa la barra de abajo, que es lo correcto igual, porque se
+   toca.
 
    `fixed` y no `sticky`: tiene que estar SIEMPRE, aunque la pantalla sea
    corta y no haya scroll. Vive adentro del <header>, que es sticky y tiene
    z-index propio, así que hereda su plano: queda arriba del catálogo y de
    la barra del mínimo, y abajo de los modales y de los avisos. */
-@media (max-width: 950px) {
+@media (max-width: 1080px) {
 
   .t-app { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
 
@@ -1410,15 +1502,15 @@ button { font: inherit; color: inherit; }
 
   .t-nav {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
-    display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px;
     width: 100%; margin: 0;
-    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
-    /* El tercer término del max() centra las cuatro pestañas cuando la
+    padding: 6px 7px calc(6px + env(safe-area-inset-bottom));
+    /* El tercer término del max() centra las cinco pestañas cuando la
        pantalla es ancha (tablet): la barra sigue pintando de borde a
-       borde, pero las solapas no se estiran a 230px cada una, que se lee
-       como cuatro botones sueltos y no como una barra. */
-    padding-left:  max(8px, env(safe-area-inset-left),  calc((100% - 520px) / 2));
-    padding-right: max(8px, env(safe-area-inset-right), calc((100% - 520px) / 2));
+       borde, pero las solapas no se estiran a 180px cada una, que se lee
+       como cinco botones sueltos y no como una barra. */
+    padding-left:  max(7px, env(safe-area-inset-left),  calc((100% - 640px) / 2));
+    padding-right: max(7px, env(safe-area-inset-right), calc((100% - 640px) / 2));
     background: rgba(255,255,255,0.92);
     -webkit-backdrop-filter: saturate(180%) blur(14px);
     backdrop-filter: saturate(180%) blur(14px);
@@ -1427,8 +1519,8 @@ button { font: inherit; color: inherit; }
   }
   .t-tab {
     flex-direction: column; justify-content: center; gap: 3px;
-    min-height: 50px; padding: 6px 2px 5px; border-radius: 11px;
-    font-size: 10.5px; font-weight: 700; line-height: 1.1; letter-spacing: -.01em;
+    min-height: 50px; padding: 6px 1px 5px; border-radius: 11px;
+    font-size: 10px; font-weight: 700; line-height: 1.1; letter-spacing: -.015em;
   }
   .t-tab span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* El ícono manda cuando el rótulo baja a 10.5px: en una barra de pie se
@@ -1523,6 +1615,16 @@ button { font: inherit; color: inherit; }
   .t-denuevo-fila { overscroll-behavior-x: contain; }
   .t-modal-body   { overscroll-behavior-y: contain; }
   .t-enviado { padding: 32px 20px; margin: 6px auto 0; }
+  /* ── Mis facturas en el teléfono ──
+     Dos columnas, y la ficha oscura —lo facturado, que es el número que el
+     cliente vino a buscar— se sube arriba de todo y se lleva la fila
+     entera. Con tres fichas iguales en dos columnas queda una sola abajo,
+     descolgada, y ninguna manda. */
+  .t-fac-tarjetas { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .t-fac-tarjeta { padding: 13px 12px 12px; }
+  .t-fac-tarjeta b { font-size: 19px; }
+  .t-fac-tarjeta:nth-child(2) { order: -1; grid-column: 1 / -1; }
+
   /* Los avisos toman el ancho de la pantalla: en 360px una tarjeta de 380px
      alineada a la derecha se salía para el costado. */
   .t-toasts { left: 12px; right: 12px; max-width: none; }

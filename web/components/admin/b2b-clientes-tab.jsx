@@ -38,7 +38,8 @@ function B2BClientesTab({ isOwner } = {}) {
   const [error,    setError]    = useState(null);
   const [q,        setQ]        = useState('');
   const [soloHab,  setSoloHab]  = useState(false);
-  const [editando, setEditando] = useState(null);   // cliente en edición
+  const [editando, setEditando] = useState(null);     // cliente en edición
+  const [facturando, setFacturando] = useState(null);  // cliente cuyas facturas se miran
 
   const reload = async () => {
     setLoading(true); setError(null);
@@ -189,6 +190,13 @@ function B2BClientesTab({ isOwner } = {}) {
                 <td style={{textAlign:'right', fontWeight:600}}>{window.B2B_DATA.money(c.total_pedido)}</td>
                 <td>{c.ultimo_pedido ? window.B2B_DATA.fecha(c.ultimo_pedido) : '—'}</td>
                 <td className="cta-cte-actions">
+                  {/* Acá se ven TODAS sus facturas, incluidas las sueltas: la
+                      venta que se cerró por teléfono y nunca pasó por la
+                      tienda no tiene pedido de dónde colgarse. */}
+                  <button className="btn-ghost-sm" onClick={() => setFacturando(c)}
+                          title="Ver y cargar las facturas de este cliente">
+                    <Icon n="file" s={12}/> Facturas
+                  </button>
                   <button className="btn-ghost-sm" onClick={() => setEditando(c)}>
                     <Icon n="edit" s={12}/> Editar
                   </button>
@@ -205,6 +213,13 @@ function B2BClientesTab({ isOwner } = {}) {
           </tbody>
         </table>
       </div>
+
+      {facturando && (
+        <B2BFacturasModal
+          clienteId={facturando.cliente_id}
+          clienteNombre={facturando.nombre}
+          onClose={() => setFacturando(null)}/>
+      )}
 
       {editando && (
         <B2BClienteModal

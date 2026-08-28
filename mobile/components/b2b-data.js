@@ -409,6 +409,44 @@ window.B2B_DATA = window.B2B_DATA || (function () {
     /* Lo que ve el equipo. payload: { pedido_id? } — sin pedido_id trae todos. */
     adminComprobantes: (p) => lista('b2b_rpc_admin_comprobantes', p, 'No se pudieron cargar los comprobantes'),
 
+    /* ── Facturas del cliente (0169) ──────────────────────────────────
+       El espejo del comprobante de pago: alla sube el cliente y mira el
+       equipo, aca sube el equipo y mira el cliente. Por eso de este lado
+       solo hay LECTURA — subir y borrar son RPC de administracion y viven
+       en admin-data.js, que la tienda no carga.
+       misFacturas() trae el historial completo del cliente que esta logueado
+       (todas sus facturas juntas, no pedido por pedido). Las facturas de UN
+       pedido ya vienen adentro de misPedidos(), en la clave 'facturas', asi
+       que la tarjeta del pedido no necesita pedir nada extra. */
+    misFacturas: (p) => lista('b2b_rpc_mis_facturas', p, 'No se pudieron cargar tus facturas'),
+
+    /* El bucket es privado: hace falta una URL firmada, igual que con los
+       comprobantes. Con `nombre` la URL viene con Content-Disposition
+       attachment y el navegador la BAJA con ese nombre en vez de abrir el
+       PDF en una pestaña — que es lo que el cliente quiere hacer con una
+       factura. Sin `nombre`, la abre para mirarla. */
+    facturaUrl: async (path, nombre, segundos) => {
+      const ttl = Number(segundos) > 0 ? Number(segundos) : 600;
+      const opts = nombre ? { download: nombre } : undefined;
+      const { data, error } = await sb().storage.from('b2b_facturas')
+        .createSignedUrl(path, ttl, opts);
+      if (error) throw wrap(error, 'No se pudo abrir la factura');
+      return data && data.signedUrl;
+    },
+
+    /* Como se llama el archivo cuando el cliente lo baja. Sin esto el
+       navegador guarda el uuid del path y la carpeta de Descargas queda
+       llena de nombres que no dicen nada. */
+    facturaNombreArchivo: (f) => {
+      const t = { nota_credito: 'Nota-de-credito', recibo: 'Recibo',
+                  remito: 'Remito', otro: 'Comprobante' }[f && f.tipo] || 'Factura';
+      const nro = (f && f.numero ? String(f.numero) : '').replace(/[^\w.-]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+      const ext = (f && f.mime) === 'image/png' ? 'png'
+                : (f && f.mime) === 'image/jpeg' ? 'jpg' : 'pdf';
+      return t + (nro ? '-' + nro : '') + '.' + ext;
+    },
+
     /* ── Formato ─────────────────────────────────────────────────────── */
     money: (n) => {
       const v = Number(n);

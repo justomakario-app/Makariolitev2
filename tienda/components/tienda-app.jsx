@@ -199,13 +199,20 @@ const Header = ({ cuenta, tab, setTab, unidades, onSalir, onCambiarCanal, onVerC
         </button>
         <button className={'t-tab' + (tab === 'pedidos' ? ' t-tab-on' : '')}
                 onClick={() => setTab('pedidos')}>
-          <Icon n="history" s={15}/> <span>Mis pedidos</span>
+          <Icon n="history" s={15}/> <span>Pedidos</span>
+        </button>
+        {/* Las facturas van después de los pedidos porque es donde el cliente
+            las va a buscar: primero "mi pedido", después "el papel de mi
+            pedido". Y antes del resumen, que es lo último que se mira. */}
+        <button className={'t-tab' + (tab === 'facturas' ? ' t-tab-on' : '')}
+                onClick={() => setTab('facturas')}>
+          <Icon n="file" s={15}/> <span>Facturas</span>
         </button>
         {/* El resumen va último a propósito: el que entra viene a comprar, no
             a mirar estadísticas. Queda a un toque, no en el camino. */}
         <button className={'t-tab' + (tab === 'resumen' ? ' t-tab-on' : '')}
                 onClick={() => setTab('resumen')}>
-          <Icon n="chart" s={15}/> <span>Mi resumen</span>
+          <Icon n="chart" s={15}/> <span>Resumen</span>
         </button>
       </nav>
 
@@ -445,6 +452,9 @@ const TiendaApp = () => {
           <PantallaCarrito carrito={carrito} onSetCantidad={setCantidad}
                            onGuardarDatos={guardarDatos} onEnviar={enviar}
                            onSeguirComprando={() => setTab('catalogo')} ocupado={ocupado}/>
+        ) : tab === 'facturas' ? (
+          <PantallaFacturas recargarSenal={senalPedidos}
+                            onIrPedidos={() => setTab('pedidos')}/>
         ) : tab === 'resumen' ? (
           <PantallaResumen cuenta={cuenta} recargarSenal={senalPedidos}
                            onIrCatalogo={() => setTab('catalogo')}
