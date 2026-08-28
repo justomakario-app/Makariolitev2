@@ -1153,6 +1153,27 @@ select.field-input { cursor: pointer; }
   color: var(--red, #dc2626);
   font-weight: 600;
 }
+/* Separador con título adentro de un modal largo. Nació para partir
+   "Configuración de la empresa" en dos: lo que es identidad de la empresa y
+   lo que se le muestra al cliente para que pague. Cuando un formulario mezcla
+   campos internos con campos públicos, la línea tiene que verse. */
+.field-sep {
+  margin: 22px 0 14px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.field-sep h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+.field-sep p {
+  margin: 5px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+
 .field-help {
   margin-top: 5px;
   font-size: 11px;
@@ -2173,6 +2194,16 @@ tr.row-inactive:hover { opacity: 0.85; }
   justify-content: space-between;
   gap: 12px;
 }
+/* Los dos engranajes del header de Administracion (Empresa y Avisos). Sin
+   esto quedaban separados por el space-between del .page-header, uno en cada
+   punta, como si no tuvieran nada que ver entre si. */
+.admin-config-botones {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .admin-config-btn {
   display: inline-flex;
   align-items: center;
@@ -2790,3 +2821,134 @@ tr.row-inactive:hover { opacity: 0.85; }
 .b2b-cli-canal:hover { border-color: var(--border-str); }
 .b2b-cli-canal input { cursor: pointer; }
 .b2b-cli-canal-on { border-color: var(--ink); background: var(--paper-off); }
+
+/* Los ultimos intentos de mail (rpc_admin_mail_estado). Verde y rojo de
+   verdad: el owner tiene que poder ver de un vistazo si el proveedor acepto
+   o rechazo, sin leer el numero. */
+.mail-intentos {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 190px;
+  overflow-y: auto;
+}
+.mail-intentos li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  font-size: 11.5px;
+}
+.mail-intentos li.es-ok  { background: var(--green-bg, #e6f7ec); }
+.mail-intentos li.es-mal { background: var(--red-bg, #fee2e2); }
+.mail-intentos li b { font-variant-numeric: tabular-nums; }
+.mail-intento-cuando { color: var(--ink-muted); }
+.mail-intento-msg {
+  grid-column: 1 / -1;
+  color: var(--ink-soft);
+  word-break: break-word;
+  line-height: 1.45;
+}
+
+/* ── Panel que se abre debajo de un pedido de la tienda mayorista ──────
+   (B2BDetallePedido, en admin/b2b-pedidos-tab.jsx) ── */
+
+/* El clip de la fila. Chico y en ambar: no es una alerta, es un "mirá que
+   este ya pago". Si fuera verde parecería conciliado, y nadie concilio
+   nada todavia. */
+.b2b-clip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px 1px 5px;
+  border-radius: 999px;
+  background: var(--amber-bg);
+  color: var(--amber);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.6;
+  flex-shrink: 0;
+}
+
+.b2b-det { display: flex; flex-direction: column; gap: 0; }
+
+/* Los datos que el cliente cargo al comprar y que antes habia que ir a
+   buscar al mail: a donde entregar, como paga, su CUIT. */
+.b2b-det-ficha {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 8px 20px;
+  margin-bottom: 12px;
+}
+.b2b-det-ficha > div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.b2b-det-ficha span { font-size: 10px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: .04em; }
+.b2b-det-ficha b { font-size: 12.5px; overflow-wrap: anywhere; }
+
+.b2b-det-notas {
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.b2b-det-vacio {
+  font-size: 11.5px;
+  color: var(--ink-muted);
+  line-height: 1.55;
+  padding: 6px 0 2px;
+}
+
+.b2b-det-tit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 16px 0 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.b2b-det-tit-n {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--paper-dim);
+  color: var(--ink-soft);
+  font-size: 10.5px;
+  letter-spacing: 0;
+}
+
+.b2b-comps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.b2b-comp {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.b2b-comp-txt { flex: 1 1 220px; min-width: 0; }
+.b2b-comp-nom { font-size: 12.5px; font-weight: 600; overflow-wrap: anywhere; }
+.b2b-comp-sub { font-size: 11px; color: var(--ink-muted); margin-top: 1px; }
+.b2b-comp-nota { font-size: 11.5px; color: var(--ink-soft); margin-top: 3px; overflow-wrap: anywhere; }
+
+.b2b-det-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}

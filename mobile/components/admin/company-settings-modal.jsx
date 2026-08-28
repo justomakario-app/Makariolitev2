@@ -1,7 +1,16 @@
-/* ══ COMPANY SETTINGS MODAL (S2.12)
+/* ══ COMPANY SETTINGS MODAL (S2.12 · ampliado en 0167)
    Modal singleton para editar datos del empleador (razon_social,
    cuit, domicilio, ciudad, provincia, codigo_postal, telefono,
    email, notas). Usados como header en los PDFs de recibos.
+
+   0167 le suma los datos de cobro (banco, cbu, alias, titular, cuit de la
+   cuenta y notas de pago). ⚠ Ojo con esos seis: NO son internos. Salen por
+   b2b_rpc_mi_cuenta y se le muestran al mayorista en la tienda y en el PDF
+   del presupuesto. Lo interno sigue siendo un solo campo, "notas".
+
+   Mientras el CBU y el alias estén los dos vacíos, la tienda directamente
+   no dibuja la caja de "datos para transferir": una caja con lugares en
+   blanco es peor que ninguna.
 
    Carga inicial: rpc_admin_get_company_settings.
    Guardar: rpc_admin_update_company_settings (MERGE pattern).
@@ -26,6 +35,12 @@ function CompanySettingsModal({ onClose, onSuccess }) {
     telefono:      '',
     email:         '',
     notas:         '',
+    banco:          '',
+    cbu:            '',
+    alias_cbu:      '',
+    titular_cuenta: '',
+    cuit_cuenta:    '',
+    notas_pago:     '',
   });
   const [errors, setErrors] = useState({});
 
@@ -45,6 +60,12 @@ function CompanySettingsModal({ onClose, onSuccess }) {
           telefono:      cs.telefono      || '',
           email:         cs.email         || '',
           notas:         cs.notas         || '',
+          banco:          cs.banco          || '',
+          cbu:            cs.cbu            || '',
+          alias_cbu:      cs.alias_cbu      || '',
+          titular_cuenta: cs.titular_cuenta || '',
+          cuit_cuenta:    cs.cuit_cuenta    || '',
+          notas_pago:     cs.notas_pago     || '',
         });
         setLoading(false);
       })
@@ -70,6 +91,16 @@ function CompanySettingsModal({ onClose, onSuccess }) {
       e.email = 'Email inválido';
     }
     if (form.notas.length > 500) e.notas = 'Máximo 500 caracteres';
+    /* El CBU son 22 dígitos exactos. Uno de más o de menos manda la plata a
+       cualquier lado, así que no se guarda a medias: o está bien o no está.
+       Se limpian espacios y guiones porque es lo que sale al copiar del
+       homebanking. */
+    const cbu = form.cbu.replace(/[\s-]/g, '');
+    if (cbu && !/^\d{22}$/.test(cbu)) e.cbu = 'El CBU/CVU son 22 dígitos';
+    if (form.cuit_cuenta && !/^\d{2}-\d{8}-\d$/.test(form.cuit_cuenta.trim())) {
+      e.cuit_cuenta = 'Formato XX-XXXXXXXX-X';
+    }
+    if (form.notas_pago.length > 300) e.notas_pago = 'Máximo 300 caracteres';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -89,6 +120,14 @@ function CompanySettingsModal({ onClose, onSuccess }) {
         telefono:      form.telefono.trim(),
         email:         form.email.trim(),
         notas:         form.notas.trim(),
+        banco:          form.banco.trim(),
+        /* Se guarda sin espacios ni guiones: es lo que el cliente va a
+           copiar de un toque y pegar en el homebanking. */
+        cbu:            form.cbu.replace(/[\s-]/g, ''),
+        alias_cbu:      form.alias_cbu.trim(),
+        titular_cuenta: form.titular_cuenta.trim(),
+        cuit_cuenta:    form.cuit_cuenta.trim(),
+        notas_pago:     form.notas_pago.trim(),
       };
       await A.updateCompanySettings(payload);
       toast.success('Configuración de empresa guardada');
@@ -193,6 +232,74 @@ function CompanySettingsModal({ onClose, onSuccess }) {
                    onChange={e => set('email', e.target.value)}
                    onBlur={validate}/>
             {errors.email && <div className="field-error">{errors.email}</div>}
+          </div>
+
+          {/* ── Cobro ──────────────────────────────────────────────────
+              Esto lo VE EL CLIENTE. Va separado y avisado para que nadie
+              escriba acá una nota para el contador. */}
+          <div className="field-sep">
+            <h4>Datos para que te transfieran</h4>
+            <p>
+              Se los mostramos al mayorista apenas manda el pedido y también
+              van impresos en el PDF del presupuesto. Si dejás el CBU y el
+              alias vacíos, no se muestra nada.
+            </p>
+          </div>
+
+          <div className="supplier-modal-grid">
+            <div className="field-group">
+              <label className="field-label">Banco</label>
+              <input className="field-input" value={form.banco} maxLength={80}
+                     placeholder="Ej: Banco Galicia"
+                     onChange={e => set('banco', e.target.value)}/>
+            </div>
+            <div className="field-group">
+              <label className="field-label">Titular de la cuenta</label>
+              <input className="field-input" value={form.titular_cuenta} maxLength={120}
+                     placeholder="Si es distinto de la razón social"
+                     onChange={e => set('titular_cuenta', e.target.value)}/>
+            </div>
+          </div>
+
+          <div className="field-group">
+            <label className="field-label">CBU / CVU</label>
+            <input className={`field-input ${errors.cbu ? 'has-error' : ''}`}
+                   value={form.cbu} inputMode="numeric" maxLength={30}
+                   placeholder="22 dígitos"
+                   onChange={e => set('cbu', e.target.value)}
+                   onBlur={validate}/>
+            {errors.cbu
+              ? <div className="field-error">{errors.cbu}</div>
+              : <div className="field-help">Podés pegarlo con espacios o guiones: los sacamos al guardar.</div>}
+          </div>
+
+          <div className="supplier-modal-grid">
+            <div className="field-group">
+              <label className="field-label">Alias</label>
+              <input className="field-input" value={form.alias_cbu} maxLength={40}
+                     placeholder="mi.alias.cbu"
+                     onChange={e => set('alias_cbu', e.target.value)}/>
+            </div>
+            <div className="field-group">
+              <label className="field-label">CUIT de la cuenta</label>
+              <input className={`field-input ${errors.cuit_cuenta ? 'has-error' : ''}`}
+                     value={form.cuit_cuenta} placeholder="Si es distinto del de arriba"
+                     onChange={e => set('cuit_cuenta', e.target.value)}
+                     onBlur={validate}/>
+              {errors.cuit_cuenta && <div className="field-error">{errors.cuit_cuenta}</div>}
+            </div>
+          </div>
+
+          <div className="field-group">
+            <label className="field-label">Aclaración de pago</label>
+            <textarea className={`field-input ${errors.notas_pago ? 'has-error' : ''}`}
+                      value={form.notas_pago} rows={2} maxLength={300}
+                      placeholder="Ej: Mandanos el comprobante por acá mismo. Anticipo del 50%."
+                      onChange={e => set('notas_pago', e.target.value)}
+                      onBlur={validate}/>
+            {errors.notas_pago
+              ? <div className="field-error">{errors.notas_pago}</div>
+              : <div className="field-help">{form.notas_pago.length} / 300 · La lee el cliente</div>}
           </div>
 
           <div className="field-group">

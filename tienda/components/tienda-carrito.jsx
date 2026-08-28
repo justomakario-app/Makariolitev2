@@ -299,24 +299,70 @@ const PantallaCarrito = ({ carrito, onSetCantidad, onGuardarDatos, onEnviar, onS
    Se muestra apenas el puente crea el pedido en el sistema interno. El
    número que ve el cliente es el suyo (numero_b2b); el MAY-xxxx interno no
    se le muestra, es el que usa el equipo adentro.                        */
-const PedidoEnviado = ({ resultado, onVerPedidos, onSeguirComprando }) => (
-  <div className="t-enviado">
-    <div className="t-enviado-icono"><Icon n="check-circle" s={34} c="var(--green)"/></div>
-    <h2>Recibimos tu pedido</h2>
-    <p className="t-enviado-num">{resultado.numero}</p>
-    <p className="t-enviado-txt">
-      Ya está en nuestro sistema y el equipo recibió el aviso. Te contactamos para
-      confirmarte disponibilidad y fecha de entrega.
-    </p>
-    <div className="t-enviado-datos">
-      <div><span>Unidades</span><b>{num(resultado.unidades)}</b></div>
-      <div><span>Neto</span><b>{money(resultado.total_neto)}</b></div>
+/* Lo que el cliente pidio en el punto 5: "una vez generado el presupuesto,
+   brindar informacion para transferencia". Este es exactamente ese momento —
+   el pedido ya tiene numero y total, y el mayorista todavia esta mirando la
+   pantalla. Hacerlo buscar el CBU en otro lado seria perder al que iba a
+   pagar en el acto. */
+const PedidoEnviado = ({ resultado, onVerPedidos, onSeguirComprando, emisor, cliente }) => {
+  const [pdf, setPdf] = useState(false);
+  const toast = useToast();
+
+  const iva = resultado.total_iva != null
+    ? Number(resultado.total_iva)
+    : (resultado.total_con_iva != null
+        ? Number(resultado.total_con_iva) - Number(resultado.total_neto || 0)
+        : null);
+
+  /* enviarPedido devuelve totales pero no las lineas, asi que el PDF se arma
+     con el pedido tal como quedo guardado. Es un viaje mas, solo en el click,
+     y a cambio el papel dice exactamente lo que hay en la base. */
+  const bajarPdf = async () => {
+    setPdf(true);
+    try {
+      const pedidos = await window.B2B_DATA.misPedidos({});
+      const p = (pedidos || []).find(x => x.pedido_id === resultado.pedido_id);
+      if (!p) throw new Error('No encontramos el pedido para armar el presupuesto.');
+      await window.B2B_PDF.presupuesto(p, { emisor, cliente });
+    } catch (e) {
+      toast.error(e.message || 'No pudimos generar el presupuesto.');
+    } finally { setPdf(false); }
+  };
+
+  return (
+    <div className="t-enviado">
+      <div className="t-enviado-icono"><Icon n="check-circle" s={34} c="var(--green)"/></div>
+      <h2>Recibimos tu pedido</h2>
+      <p className="t-enviado-num">{resultado.numero}</p>
+      <p className="t-enviado-txt">
+        Ya está en nuestro sistema y el equipo recibió el aviso. Te contactamos para
+        confirmarte disponibilidad y fecha de entrega.
+      </p>
+      <div className="t-enviado-datos">
+        <div><span>Unidades</span><b>{num(resultado.unidades)}</b></div>
+        <div><span>Neto</span><b>{money(resultado.total_neto)}</b></div>
+        {iva != null && <div><span>IVA</span><b>{money(iva)}</b></div>}
+        {resultado.total_con_iva != null && (
+          <div className="es-total"><span>Total con IVA</span><b>{money(resultado.total_con_iva)}</b></div>
+        )}
+      </div>
+
+      <div className="t-enviado-acciones">
+        <button className="t-btn t-btn-primary" onClick={bajarPdf} disabled={pdf}>
+          <Icon n="download" s={15}/> {pdf ? 'Preparando…' : 'Descargar presupuesto'}
+        </button>
+        <button className="t-btn t-btn-ghost" onClick={onVerPedidos}>Ver mis pedidos</button>
+        <button className="t-btn t-btn-ghost" onClick={onSeguirComprando}>Seguir comprando</button>
+      </div>
+
+      <DatosTransferencia emisor={emisor}/>
+
+      <p className="t-help t-enviado-pie">
+        Cuando transfieras, subí el comprobante desde <b>Mis pedidos</b>: le llega
+        derecho al equipo.
+      </p>
     </div>
-    <div className="t-enviado-acciones">
-      <button className="t-btn t-btn-primary" onClick={onVerPedidos}>Ver mis pedidos</button>
-      <button className="t-btn t-btn-ghost" onClick={onSeguirComprando}>Seguir comprando</button>
-    </div>
-  </div>
-);
+  );
+};
 
 window.TiendaCarrito = { PantallaCarrito, PedidoEnviado, FilaCarrito, Minimo };

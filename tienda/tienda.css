@@ -75,6 +75,9 @@ button { font: inherit; color: inherit; }
 .t-btn-peligro { background: var(--red); color: #fff; }
 .t-btn-peligro:not(:disabled):hover { background: #B91C1C; }
 .t-btn-block { width: 100%; }
+/* Para acciones que viven adentro de una fila de lista y no tienen que
+   competir con el botón principal de la pantalla. */
+.t-btn-mini { padding: 5px 11px; font-size: 12.5px; }
 
 .t-icon-btn {
   display: inline-flex; align-items: center; justify-content: center;
@@ -464,6 +467,112 @@ button { font: inherit; color: inherit; }
 .t-tabla tfoot td { border-bottom: none; padding-top: 10px; }
 .t-tabla tfoot tr.t-fila-suave td { color: var(--ink-muted); padding-top: 2px; }
 
+/* ── Pagar el pedido ───────────────────────────────────────────────────
+   Tres piezas que salieron del pedido del cliente (puntos 4 y 5): la caja
+   con los datos para transferir, el botón de copiar, y la lista de
+   comprobantes ya adjuntados con su selector de archivo.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Los datos bancarios. Fondo apenas distinto y borde completo: el cliente
+   tiene que poder encontrarlos de un vistazo cuando vuelve a la pestaña con
+   el homebanking abierto al lado. */
+.t-transfer {
+  border: 1px solid var(--border-md); border-radius: 10px;
+  background: var(--paper-off); padding: 14px 16px; margin: 18px 0 4px;
+  width: 100%; text-align: left;
+}
+.t-transfer.es-compacto { margin: 12px 0; padding: 12px 14px; }
+.t-transfer-head {
+  display: flex; align-items: center; gap: 8px; font-size: 13px;
+  padding-bottom: 10px; margin-bottom: 2px; border-bottom: 1px solid var(--border);
+}
+.t-transfer-datos { display: flex; flex-direction: column; }
+.t-transfer-fila {
+  display: flex; align-items: center; gap: 12px;
+  padding: 7px 0; border-bottom: 1px solid var(--border);
+}
+.t-transfer-fila:last-child { border-bottom: none; }
+.t-transfer-fila dt {
+  flex: 0 0 92px; font-size: 11px; color: var(--ink-muted);
+  text-transform: uppercase; letter-spacing: .06em;
+}
+.t-transfer-fila dd {
+  flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px;
+  font-size: 13.5px; font-weight: 600;
+}
+/* Un CBU son 22 dígitos: si no puede cortarse, en un celular empuja la caja
+   entera y aparece la barra horizontal. */
+.t-transfer-fila dd > span { overflow-wrap: anywhere; }
+.t-transfer-nota {
+  font-size: 12px; color: var(--ink-soft); line-height: 1.5;
+  margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--border);
+}
+
+/* Copiar: se queda quieto en verde 1,8 s para que el cliente vea que pasó
+   algo. Sin animación, que acá no aporta nada. */
+.t-copiar {
+  display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto;
+  padding: 3px 9px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border-md); background: var(--paper);
+  color: var(--ink-soft); font: inherit; font-size: 11.5px; font-weight: 600;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.t-copiar:hover { background: var(--paper-dim); color: var(--ink); }
+.t-copiar.es-listo {
+  background: var(--green-bg); border-color: var(--green); color: var(--green);
+}
+
+/* Comprobantes adjuntados. */
+.t-pedido-pagos { margin-top: 14px; }
+.t-label-mini {
+  display: block; font-size: 11px; color: var(--ink-muted);
+  text-transform: uppercase; letter-spacing: .06em; margin-bottom: 7px;
+}
+.t-comprobantes { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.t-comprobante {
+  display: flex; align-items: center; gap: 10px; padding: 8px 11px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--paper-off);
+}
+.t-comprobante-ico { display: inline-flex; flex: 0 0 auto; }
+.t-comprobante-txt {
+  display: flex; flex-direction: column; line-height: 1.35;
+  flex: 1 1 auto; min-width: 0;
+}
+.t-comprobante-txt b {
+  font-size: 13px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.t-comprobante-txt span { font-size: 11.5px; color: var(--ink-muted); }
+
+/* El selector de archivo. El <input type=file> nativo no se puede maquillar,
+   así que se esconde adentro del <label> y lo que se ve es la caja. */
+.t-drop {
+  display: flex; align-items: center; gap: 12px; margin-top: 14px;
+  padding: 16px; cursor: pointer; text-align: left;
+  border: 1px dashed var(--border-md); border-radius: 10px;
+  background: var(--paper-off);
+  transition: border-color .12s, background .12s;
+}
+.t-drop:hover { border-color: var(--ink-faint); background: var(--paper-dim); }
+.t-drop.es-listo { border-style: solid; border-color: var(--green); background: var(--green-bg); }
+.t-drop input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; }
+/* El foco del teclado se ve en la caja, porque el input real es invisible. */
+.t-drop:focus-within { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(0,0,0,.05); }
+.t-drop-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.t-drop-txt b {
+  font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.t-drop-txt > span { font-size: 12px; color: var(--ink-muted); line-height: 1.45; }
+
+/* Dos campos cortos que entran al lado; en el celular se apilan solos. */
+.t-fila-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+
+/* El total con IVA del "pedido enviado" pesa más que el neto: es la cifra
+   que el cliente va a transferir. */
+.t-enviado-datos .es-total b { font-weight: 800; }
+.t-enviado-pie { max-width: 340px; line-height: 1.5; margin-top: 14px; }
+
 /* ── Modal ─────────────────────────────────────────────────────────────── */
 .t-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,.42); z-index: 100;
@@ -567,6 +676,22 @@ button { font: inherit; color: inherit; }
   .t-pedido-pie { flex-wrap: wrap; gap: 10px; }
   .t-pedido-pie .t-help { flex: 1 1 100%; margin-top: 0; }
   .t-pedido-pie .t-btn { flex: 1 1 auto; }
+
+  /* En 360px la etiqueta de 92px se come la mitad del ancho y el CBU queda
+     en una columna de tres dígitos. Etiqueta arriba, dato abajo. */
+  .t-transfer-fila { flex-direction: column; align-items: flex-start; gap: 3px; }
+  .t-transfer-fila dt { flex: none; }
+  .t-transfer-fila dd { width: 100%; }
+
+  /* "Ver" y el tacho tienen que seguir siendo tocables, así que la fila se
+     parte: nombre arriba, acciones abajo a la derecha. */
+  .t-comprobante { flex-wrap: wrap; }
+  .t-comprobante-txt { flex: 1 1 100%; order: 1; }
+  .t-comprobante-ico { order: 0; }
+  .t-comprobante .t-btn-mini { order: 2; margin-left: auto; }
+  .t-comprobante .t-icon-btn { order: 3; }
+
+  .t-fila-2 { grid-template-columns: 1fr; }
 }
 
 /* ══ ACCESO PREMIUM · alta abierta y elección de catálogo ═════════════════

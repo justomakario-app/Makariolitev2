@@ -348,11 +348,66 @@ window.B2B_DATA = window.B2B_DATA || (function () {
        congelado protege un pedido ya enviado, no habilita a comprar para
        siempre a la lista del año pasado.
        Devuelve { ok, origen, agregados,
-                  omitidos:  [{sku, motivo}],                   ← ya no se venden
-                  ajustados: [{sku, pedida, cargada, motivo}] } ← cambio el multiplo
+                  omitidos:  [{sku, motivo}],            ← ya no se venden
+                  ajustados: [{sku, pedida, cargada, motivo}] }  ← cambio el multiplo
        Las dos listas hay que MOSTRARLAS: si se ignoran, el cliente cree que
        repitio el pedido entero y se entera cuando le llega distinto. */
     repetirPedido: (p) => rpc('b2b_rpc_repetir_pedido', p, 'No se pudo repetir el pedido'),
+
+    /* ── Comprobantes de pago (0167) ──────────────────────────────────
+       El cliente saca la foto de la transferencia y la adjunta al pedido
+       que ya envio. Son DOS pasos y tienen que ir en ese orden:
+         1. subirComprobante()  → sube el archivo al bucket privado
+         2. adjuntarComprobante() → lo registra contra el pedido y avisa
+       El bucket es privado y la policy solo deja escribir adentro de
+       <cliente_id>/..., asi que el paso 1 ya es seguro por si solo; el paso
+       2 vuelve a validar que la carpeta del medio sea la del pedido.
+       Si el paso 2 falla queda un archivo huerfano en el bucket y ninguna
+       fila: molesta, pero es el lado sano de romperse. Al reves (fila sin
+       archivo) el equipo abre un comprobante que no existe. */
+    COMPROBANTE_MIMES: ['image/jpeg', 'image/png', 'application/pdf'],
+    COMPROBANTE_MAX_BYTES: 10 * 1024 * 1024,
+
+    subirComprobante: async ({ cliente_id, pedido_id, file }) => {
+      if (!cliente_id || !pedido_id || !file) throw new Error('Falta el archivo.');
+      const mimes = ['image/jpeg', 'image/png', 'application/pdf'];
+      if (mimes.indexOf(file.type) < 0) throw new Error('Solo aceptamos JPG, PNG o PDF.');
+      if (file.size > 10 * 1024 * 1024) throw new Error('El archivo no puede pesar mas de 10 MB.');
+      const ext = file.type === 'application/pdf' ? 'pdf'
+                : file.type === 'image/png' ? 'png' : 'jpg';
+      /* crypto.randomUUID no esta en Safari viejo ni fuera de https; el
+         fallback no necesita ser criptografico, solo distinto por archivo. */
+      const id = (window.crypto && window.crypto.randomUUID)
+        ? window.crypto.randomUUID()
+        : (Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
+      const path = cliente_id + '/' + pedido_id + '/' + id + '.' + ext;
+      const { error } = await sb().storage.from('b2b_comprobantes')
+        .upload(path, file, { upsert: false, contentType: file.type });
+      if (error) throw wrap(error, 'No se pudo subir el comprobante');
+      return { path, mime: file.type, size_bytes: file.size, nombre: file.name };
+    },
+
+    /* payload: { pedido_id, path, mime, size_bytes, nombre?, monto?, nota? } */
+    adjuntarComprobante: (p) => rpc('b2b_rpc_adjuntar_comprobante', p, 'No se pudo adjuntar el comprobante'),
+
+    /* Borrado LOGICO: sale de la pantalla del cliente, el equipo lo sigue
+       teniendo. Un comprobante de pago que ya se miro no puede evaporarse.
+       payload: { comprobante_id } */
+    borrarComprobante: (p) => rpc('b2b_rpc_borrar_comprobante', p, 'No se pudo quitar el comprobante'),
+
+    /* El bucket es privado: para ver el archivo hay que pedir una URL
+       firmada, que vence. 10 minutos alcanza para mirarlo o bajarlo y es
+       poco para que quede dando vueltas pegada en un chat. */
+    comprobanteUrl: async (path, segundos) => {
+      const ttl = Number(segundos) > 0 ? Number(segundos) : 600;
+      const { data, error } = await sb().storage.from('b2b_comprobantes')
+        .createSignedUrl(path, ttl);
+      if (error) throw wrap(error, 'No se pudo abrir el comprobante');
+      return data && data.signedUrl;
+    },
+
+    /* Lo que ve el equipo. payload: { pedido_id? } — sin pedido_id trae todos. */
+    adminComprobantes: (p) => lista('b2b_rpc_admin_comprobantes', p, 'No se pudieron cargar los comprobantes'),
 
     /* ── Formato ─────────────────────────────────────────────────────── */
     money: (n) => {

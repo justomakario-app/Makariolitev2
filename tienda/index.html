@@ -16,7 +16,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="icon" href="/favicon.ico" sizes="any">
-  <link rel="stylesheet" href="tienda.css?v=10">
+  <link rel="stylesheet" href="tienda.css?v=11">
 </head>
 <body>
   <noscript>
@@ -30,8 +30,12 @@
   <!-- React + Babel + Supabase JS (UMD).
        Mismo stack que el sistema interno: sin build, Babel compila el JSX en
        el browser. La tienda carga MUCHO menos que /: no trae xlsx, jspdf,
-       pdfmake, chart.js ni qrcode — el mayorista no necesita nada de eso y
-       son megabytes que no tiene por qué bajar desde el celular. -->
+       chart.js ni qrcode — el mayorista no necesita nada de eso y son
+       megabytes que no tiene por qué bajar desde el celular.
+
+       pdfmake tampoco viene acá: b2b-presupuesto-pdf.js lo baja del CDN
+       recién cuando el cliente aprieta "Descargar presupuesto", y una sola
+       vez por pestaña. El que solo mira el catálogo no lo paga nunca. -->
   <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
@@ -49,21 +53,27 @@
        backend, justo del lado que ve el cliente. Es el único archivo del
        sistema interno que la tienda toca: no carga shared.jsx, ni data.js, ni
        nada de administración. -->
-  <script src="/components/b2b-data.js?v=8"></script>
+  <script src="/components/b2b-data.js?v=9"></script>
+
+  <!-- ⚠ También COMPARTIDO, por la misma razón: el presupuesto que se baja el
+       mayorista y el que imprime el equipo desde el panel tienen que ser el
+       mismo papel. Es liviano y no depende de nada (ni de data.js ni de
+       pdfmake): se trae pdfmake solo cuando hay un click. -->
+  <script src="/components/b2b-presupuesto-pdf.js?v=1"></script>
 
   <!-- Componentes de la tienda, en orden de dependencia.
        tienda-ui.jsx declara los globales (Icon, useToast, hooks) que usan
        todos los demás, igual que shared.jsx en el sistema interno. -->
-  <script type="text/babel" src="components/tienda-ui.jsx?v=4"></script>
+  <script type="text/babel" src="components/tienda-ui.jsx?v=5"></script>
   <script type="text/babel" src="components/tienda-acceso.jsx?v=6"></script>
   <script type="text/babel" src="components/tienda-canal.jsx?v=1"></script>
   <script type="text/babel" src="components/tienda-catalogo.jsx?v=3"></script>
-  <script type="text/babel" src="components/tienda-carrito.jsx?v=2"></script>
-  <script type="text/babel" src="components/tienda-pedidos.jsx?v=3"></script>
+  <script type="text/babel" src="components/tienda-carrito.jsx?v=3"></script>
+  <script type="text/babel" src="components/tienda-pedidos.jsx?v=4"></script>
   <!-- El resumen va DESPUES de pedidos y catalogo: reusa ESTADO_CLIENTE y
        urlFoto, que se declaran ahi. Antes de app.jsx, que es quien lo monta. -->
   <script type="text/babel" src="components/tienda-resumen.jsx?v=1"></script>
-  <script type="text/babel" src="components/tienda-app.jsx?v=8"></script>
+  <script type="text/babel" src="components/tienda-app.jsx?v=9"></script>
 
   <!-- Boot ------------------------------------------------------------------
        Babel compila los .jsx de forma asíncrona, así que se espera a que los

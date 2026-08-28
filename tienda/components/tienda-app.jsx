@@ -434,6 +434,7 @@ const TiendaApp = () => {
       <main className="t-main">
         {enviado ? (
           <PedidoEnviado resultado={enviado}
+                         emisor={cuenta.emisor} cliente={cuenta.cliente}
                          onVerPedidos={() => { setEnviado(null); setTab('pedidos'); }}
                          onSeguirComprando={() => { setEnviado(null); setTab('catalogo'); }}/>
         ) : tab === 'catalogo' ? (
@@ -450,6 +451,7 @@ const TiendaApp = () => {
                            onVerPedidos={() => setTab('pedidos')}/>
         ) : (
           <PantallaPedidos recargarSenal={senalPedidos}
+                           cuenta={cuenta}
                            onIrCatalogo={() => setTab('catalogo')}
                            onIrCarrito={() => setTab('carrito')}
                            carritoUnidades={unidades}

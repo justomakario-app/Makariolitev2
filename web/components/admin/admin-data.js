@@ -1456,6 +1456,43 @@
     return window.normalizeCompanySettings ? window.normalizeCompanySettings(data) : data;
   }
 
+  /* ── Avisos por mail (0167) ────────────────────────────────────────────
+     La clave del proveedor vive en app_mail_config, que tiene RLS prendida
+     y CERO policies: PostgREST no la puede leer ni con la sesión del owner.
+     Se toca solo por estas cuatro RPC, y get NUNCA devuelve la clave — solo
+     tiene_key: true/false. Por eso el formulario muestra el campo vacío con
+     un cartelito de "hay una guardada" en vez de precargarla.
+
+     Va acá y no en b2b-data.js a propósito: b2b-data.js lo carga también la
+     tienda del cliente. Esto es administración. */
+  async function getMailConfig() {
+    const { data, error } = await supa.rpc('rpc_admin_get_mail_config');
+    if (error) throw new Error(error.message || 'No se pudo cargar la configuración de avisos');
+    return data;
+  }
+
+  async function setMailConfig(payload) {
+    const { data, error } = await supa.rpc('rpc_admin_set_mail_config', { p_payload: payload });
+    if (error) throw new Error(error.message || 'No se pudo guardar la configuración de avisos');
+    return data;
+  }
+
+  /* Manda un mail de verdad. Devuelve { ok, enviados } — enviados 0 significa
+     que no salió, y ahí sirve mailEstado() para saber por qué. */
+  async function probarMail(payload) {
+    const { data, error } = await supa.rpc('rpc_admin_probar_mail', { p_payload: payload || {} });
+    if (error) throw new Error(error.message || 'No se pudo mandar el mail de prueba');
+    return data;
+  }
+
+  /* Los últimos intentos que registró pg_net, para poder decir "el proveedor
+     lo rechazó con 401" en vez del inútil "no llegó". */
+  async function mailEstado(payload) {
+    const { data, error } = await supa.rpc('rpc_admin_mail_estado', { p_payload: payload || {} });
+    if (error) throw new Error(error.message || 'No se pudo leer el estado de los avisos');
+    return data;
+  }
+
   /* loadRecibos: SELECT directo (RLS owner/admin only). Incluye anulados
      si opts.includeAnulados=true. */
   async function loadRecibos(opts) {
@@ -2243,6 +2280,10 @@
     RECIBO_ESTADO_OPTIONS,
     getCompanySettings,
     updateCompanySettings,
+    getMailConfig,
+    setMailConfig,
+    probarMail,
+    mailEstado,
     loadRecibos,
     getRecibo,
     createRecibo,

@@ -50,6 +50,12 @@ const Icon = ({ n, s = 16, c = 'currentColor' }) => {
     case 'calendar':   return <svg {...p}><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>;
     case 'key':        return <svg {...p}><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3L21 2"/><path d="M17 6l3 3"/></svg>;
     case 'eye':        return <svg {...p}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>;
+    case 'download':   return <svg {...p}><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>;
+    case 'upload':     return <svg {...p}><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>;
+    case 'clip':       return <svg {...p}><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>;
+    case 'file':       return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>;
+    case 'copy':       return <svg {...p}><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>;
+    case 'bank':       return <svg {...p}><path d="M3 21h18"/><path d="M5 21V10M9.5 21V10M14.5 21V10M19 21V10"/><path d="M12 3L2.5 8h19L12 3z"/></svg>;
     case 'eye-off':    return <svg {...p}><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><path d="M1 1l22 22"/></svg>;
     default:           return <svg {...p}><circle cx="12" cy="12" r="9"/></svg>;
   }
@@ -148,6 +154,104 @@ const Modal = ({ open, title, onClose, children, footer, ancho }) => {
   );
 };
 
+/* ── Copiar un dato de una ─────────────────────────────────────────────
+   Un CBU son 22 digitos. Que el cliente los tipee a mano mirando la
+   pantalla del celular es la forma mas facil de que una transferencia
+   termine en la cuenta de otro.
+
+   navigator.clipboard solo existe en https (o localhost) y el usuario
+   puede haberlo bloqueado, asi que hay fallback al truco viejo del
+   textarea + execCommand. Si tampoco anda, se avisa en vez de fingir que
+   se copio: el cliente tiene que saber que el dato NO esta en su
+   portapapeles antes de irse al homebanking a pegarlo. */
+const Copiar = ({ valor, que }) => {
+  const [listo, setListo] = useState(false);
+  const toast = useToast();
+  if (!valor) return null;
+
+  const copiar = async () => {
+    const texto = String(valor);
+    let ok = false;
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(texto);
+        ok = true;
+      }
+    } catch (e) { ok = false; }
+    if (!ok) {
+      try {
+        const t = document.createElement('textarea');
+        t.value = texto;
+        t.setAttribute('readonly', '');
+        t.style.position = 'fixed';
+        t.style.opacity = '0';
+        document.body.appendChild(t);
+        t.select();
+        ok = document.execCommand('copy');
+        document.body.removeChild(t);
+      } catch (e) { ok = false; }
+    }
+    if (ok) {
+      setListo(true);
+      setTimeout(() => setListo(false), 1800);
+    } else {
+      toast.error('Tu navegador no nos deja copiar. Seleccionalo y copialo a mano.');
+    }
+  };
+
+  return (
+    <button type="button" className={'t-copiar' + (listo ? ' es-listo' : '')} onClick={copiar}
+            aria-label={'Copiar ' + (que || 'el dato')}>
+      <Icon n={listo ? 'check' : 'copy'} s={13}/>
+      <span>{listo ? 'Copiado' : 'Copiar'}</span>
+    </button>
+  );
+};
+
+/* ── Datos para transferir ─────────────────────────────────────────────
+   Lo que el cliente pidio en el punto 5: apenas se genera el presupuesto,
+   como pagarlo. Se muestra en tres lugares (recien enviado el pedido, en
+   el detalle de cada pedido y adentro del PDF) y siempre con los mismos
+   datos, que vienen de cuenta.emisor.pago.
+
+   Si el dueño todavia no cargo el CBU en Ajustes > Empresa, esto NO se
+   dibuja. Una caja de datos bancarios vacia es peor que ninguna: el
+   cliente cree que el sistema se rompio, o peor, que la empresa no tiene
+   donde cobrar. `emisor.pago.hay` lo decide en el backend. */
+const DatosTransferencia = ({ emisor, compacto }) => {
+  const pago = (emisor && emisor.pago) || {};
+  if (!pago.hay) return null;
+
+  const filas = [
+    ['Banco', pago.banco, false],
+    ['Titular', pago.titular, false],
+    ['CUIT', pago.cuit, true],
+    ['CBU / CVU', pago.cbu, true],
+    ['Alias', pago.alias, true],
+  ].filter(f => f[1]);
+
+  return (
+    <div className={'t-transfer' + (compacto ? ' es-compacto' : '')}>
+      <div className="t-transfer-head">
+        <Icon n="bank" s={16} c="var(--ink)"/>
+        <b>Datos para transferir</b>
+      </div>
+      <dl className="t-transfer-datos">
+        {filas.map(([k, v, copiable]) => (
+          <div key={k} className="t-transfer-fila">
+            <dt>{k}</dt>
+            <dd>
+              <span className={copiable ? 't-mono' : ''}>{v}</span>
+              {copiable && <Copiar valor={v} que={k}/>}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      {pago.notas && <p className="t-transfer-nota">{pago.notas}</p>}
+    </div>
+  );
+};
+
 /* ── Formato ───────────────────────────────────────────────────────────
    Reutiliza los formateadores de B2B_DATA para que la tienda y el panel
    interno muestren la plata exactamente igual.                          */
@@ -196,4 +300,5 @@ const textoRegla = (prod) => {
 };
 
 window.TiendaUI = { Icon, ToastProvider, useToast, Spinner, Vacio, Aviso, Modal,
+                    Copiar, DatosTransferencia,
                     money, fecha, fechaHora, num, reglaSku, ajustarCantidad, textoRegla };

@@ -53,6 +53,8 @@ const Icon = ({ n, s = 16, c = 'currentColor' }) => {
     case 'flame':      return <svg {...props}><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 002.5 2.5z"/></svg>;
     case 'briefcase':  return <svg {...props}><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>;
     case 'store':      return <svg {...props}><path d="M3 9l1-5h16l1 5"/><path d="M3 9a2 2 0 002 2h14a2 2 0 002-2"/><path d="M5 11v9h14v-9"/><path d="M9 21v-6h6v6"/></svg>;
+    case 'clip':       return <svg {...props}><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>;
+    case 'file':       return <svg {...props}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>;
     case 'megaphone':  return <svg {...props}><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>;
     default: return null;
   }

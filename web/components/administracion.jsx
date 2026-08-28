@@ -21,6 +21,7 @@ function AdministracionPage() {
   ];
   const [tab, setTab] = useState('proveedores');
   const [showCompanyModal, setShowCompanyModal] = useState(false);
+  const [showMailModal, setShowMailModal] = useState(false);
   const active = TABS.find(t => t.id === tab) || TABS[0];
 
   /* Bus ADMIN_NAV (heredado de AdminPage). Si algún tab interno
@@ -49,12 +50,22 @@ function AdministracionPage() {
           <div className="page-title">Administración</div>
           <div className="page-sub">{subtituloMap[tab] || titulo}</div>
         </div>
-        <button className="btn-ghost admin-config-btn"
-                title="Configuración de la empresa (datos para PDFs)"
-                onClick={() => setShowCompanyModal(true)}>
-          <Icon n="settings" s={14}/>
-          <span className="admin-config-btn-label">Empresa</span>
-        </button>
+        <div className="admin-config-botones">
+          <button className="btn-ghost admin-config-btn"
+                  title="Configuración de la empresa (datos para PDFs y para que te transfieran)"
+                  onClick={() => setShowCompanyModal(true)}>
+            <Icon n="settings" s={14}/>
+            <span className="admin-config-btn-label">Empresa</span>
+          </button>
+          {/* Los avisos por mail viven acá y no en Ventas porque la clave del
+              proveedor es configuración de la empresa, no de un pedido. */}
+          <button className="btn-ghost admin-config-btn"
+                  title="Avisos por mail cuando entra un pedido de la tienda mayorista"
+                  onClick={() => setShowMailModal(true)}>
+            <Icon n="bell" s={14}/>
+            <span className="admin-config-btn-label">Avisos</span>
+          </button>
+        </div>
       </div>
 
       <div className="tabs" role="tablist">
@@ -87,6 +98,10 @@ function AdministracionPage() {
         <window.CompanySettingsModal
           onClose={() => setShowCompanyModal(false)}
           onSuccess={() => { /* sin reload de tab actual */ }}/>
+      )}
+
+      {showMailModal && window.MailConfigModal && (
+        <window.MailConfigModal onClose={() => setShowMailModal(false)}/>
       )}
     </div>
   );

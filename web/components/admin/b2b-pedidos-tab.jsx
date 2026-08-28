@@ -33,7 +33,30 @@
    del taller es al revés — y se puede volver a llamar sobre uno ya
    facturado, que es como se corrige un número mal tipeado. Desde 0161,
    mover el estado del admin hacia atrás ya no lo desfactura.
+
+   ── Lo que se abre al desplegar un pedido ──
+   B2BDetallePedido, al final del archivo: los renglones, los comprobantes
+   de pago que subió el cliente y los dos PDF (presupuesto para el cliente,
+   hoja sin precios para el taller). Los comprobantes se piden recién ahí;
+   en la fila alcanza con el clip, que sale del contador que ya trae
+   b2b_v_pedidos_admin.
    ══ */
+
+/* El membrete de los PDF y los datos para transferir salen de
+   company_settings. Se piden UNA sola vez por sesión y no una vez por
+   pedido: son los mismos para todos y no cambian mientras alguien mira la
+   tabla. Se guarda la promesa, no el resultado, para que dos clicks
+   seguidos esperen la misma llamada en vez de disparar dos. Si falla se
+   borra, así el próximo intento vuelve a probar. */
+let b2bEmisorPromesa = null;
+function b2bEmisor() {
+  if (!b2bEmisorPromesa) {
+    b2bEmisorPromesa = window.ADMIN_DATA.getCompanySettings()
+      .then(cs => window.B2B_PDF.emisorDeSettings(cs))
+      .catch(e => { b2bEmisorPromesa = null; throw e; });
+  }
+  return b2bEmisorPromesa;
+}
 
 /* Estado interno → cómo se llama acá y qué ve el cliente en la tienda
    (b2b_fn_map_estado). Mostrar las dos caras evita el malentendido de
@@ -313,15 +336,28 @@ function B2BPedidosTab({ buscarInicial }) {
                   <React.Fragment key={p.b2b_pedido_id}>
                     <tr>
                       <td style={{width:28}}>
-                        {items && items.length > 0 && (
-                          <button className="btn-ghost-sm" title={expandido ? 'Cerrar' : 'Ver el detalle'}
-                                  onClick={() => setAbierto(expandido ? null : p.b2b_pedido_id)}>
-                            <Icon n={expandido ? 'chev-down' : 'chev-right'} s={13}/>
-                          </button>
-                        )}
+                        {/* Antes esta flecha salía solo si había renglones. Ahora el panel
+                            de abajo también trae los comprobantes de pago, la dirección de
+                            entrega y los PDF, así que se abre siempre: hasta 'ventas', que
+                            no ve el detalle, tiene por qué entrar. */}
+                        <button className="btn-ghost-sm" title={expandido ? 'Cerrar' : 'Ver el detalle'}
+                                onClick={() => setAbierto(expandido ? null : p.b2b_pedido_id)}>
+                          <Icon n={expandido ? 'chev-down' : 'chev-right'} s={13}/>
+                        </button>
                       </td>
                       <td>
-                        <div><span className="order-num" style={{fontWeight:700}}>{p.numero_b2b || '—'}</span></div>
+                        <div style={{display:'flex', alignItems:'center', gap:6}}>
+                          <span className="order-num" style={{fontWeight:700}}>{p.numero_b2b || '—'}</span>
+                          {/* El clip se ve desde la fila, sin abrir nada: si el cliente
+                              ya subió el comprobante, el que cobra lo tiene que ver de
+                              un vistazo mientras baja la lista. */}
+                          {Number(p.comprobantes) > 0 && (
+                            <span className="b2b-clip"
+                                  title={`${p.comprobantes} comprobante${p.comprobantes === 1 ? '' : 's'} de pago`}>
+                              <Icon n="clip" s={11}/>{p.comprobantes}
+                            </span>
+                          )}
+                        </div>
                         {p.numero_pedido && (
                           <div style={{fontSize:11, color:'var(--ink-muted)'}}>interno {p.numero_pedido}</div>
                         )}
@@ -393,36 +429,10 @@ function B2BPedidosTab({ buscarInicial }) {
                       )}
                     </tr>
 
-                    {expandido && items && (
+                    {expandido && (
                       <tr>
-                        <td colSpan={nCols} style={{background:'#fafafa', padding:'10px 16px'}}>
-                          <table className="data-table" style={{margin:0}}>
-                            <thead>
-                              <tr>
-                                <th>SKU</th><th>Producto</th>
-                                <th style={{textAlign:'right'}}>Cantidad</th>
-                                <th style={{textAlign:'right'}}>Precio unitario</th>
-                                <th style={{textAlign:'right'}}>Subtotal</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {items.map((it, i) => (
-                                <tr key={`${it.sku}-${i}`}>
-                                  <td><span className="order-num">{it.sku}</span></td>
-                                  <td>{[it.modelo, it.color].filter(Boolean).join(' · ') || '—'}</td>
-                                  <td style={{textAlign:'right'}}>{it.cantidad}</td>
-                                  <td style={{textAlign:'right'}}>{window.B2B_DATA.money(it.precio_unitario)}</td>
-                                  <td style={{textAlign:'right', fontWeight:600}}>
-                                    {window.B2B_DATA.money(Number(it.cantidad) * Number(it.precio_unitario))}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                          <div style={{fontSize:11, color:'var(--ink-muted)', marginTop:8}}>
-                            El precio de cada renglón quedó congelado cuando el cliente mandó el
-                            pedido. Cambiar el coeficiente del canal después no lo toca.
-                          </div>
+                        <td colSpan={nCols} style={{background:'#fafafa', padding:'12px 16px'}}>
+                          <B2BDetallePedido pedido={p} items={items} sinDetalle={sinDetalle}/>
                         </td>
                       </tr>
                     )}
@@ -446,6 +456,226 @@ function B2BPedidosTab({ buscarInicial }) {
           : `${filtrados.length} de ${pedidos.length}`}
         {isAdmin && !isOwner && ' · el avance de estado lo hace el dueño'}
       </div>
+    </div>
+  );
+}
+
+/* ── El panel que se abre debajo de un pedido ──────────────────────────
+   Junta las tres cosas que antes obligaban a salir del sistema:
+
+     · los renglones con el precio congelado,
+     · los comprobantes de pago que subió el cliente (punto 4 de la lista),
+     · y los dos PDF (punto 2): el presupuesto que se le manda al cliente y
+       la hoja que se imprime y baja a producción.
+
+   Los comprobantes se piden recién acá, cuando alguien abre el pedido. La
+   tabla puede tener doscientas filas y pedir los adjuntos de todas para
+   mostrar un clip sería tirar el ancho de banda a la basura: el clip ya
+   viene contado en la vista (b2b_v_pedidos_admin.comprobantes).
+
+   Y el panel se desmonta al cerrar, así que al volver a abrirlo se piden
+   de nuevo. Es a propósito: entre que se abrió la tabla y que el que cobra
+   entra a mirar, el cliente pudo haber subido la transferencia. ── */
+function B2BDetallePedido({ pedido, items, sinDetalle }) {
+  const toast = useToast();
+  const cuantos = Number(pedido.comprobantes) || 0;
+  const renglones = Array.isArray(items) ? items : [];
+
+  const [comps, setComps] = useState([]);
+  const [cargandoComps, setCargandoComps] = useState(false);
+  const [errComps, setErrComps] = useState('');
+  const [abriendo, setAbriendo] = useState('');
+  const [pdf, setPdf] = useState('');   // '' | 'presupuesto' | 'produccion'
+
+  useEffect(() => {
+    if (cuantos === 0) { setComps([]); return; }
+    let vivo = true;
+    setCargandoComps(true); setErrComps('');
+    window.B2B_DATA.adminComprobantes({ pedido_id: pedido.b2b_pedido_id })
+      .then(r => { if (vivo) setComps(r || []); })
+      .catch(e => { if (vivo) setErrComps(e?.message || 'No se pudieron cargar los comprobantes'); })
+      .then(() => { if (vivo) setCargandoComps(false); });
+    return () => { vivo = false; };
+  }, [pedido.b2b_pedido_id, cuantos]);
+
+  /* El bucket es privado: la URL se pide al hacer click y vence en 10
+     minutos. Y se abre con un <a> de mentira en vez de window.open porque
+     después de un await el navegador ya no lo considera un click del
+     usuario y lo bloquea como si fuera un pop-up. */
+  const abrirComprobante = async (c) => {
+    if (abriendo) return;
+    setAbriendo(c.id);
+    try {
+      const url = await window.B2B_DATA.comprobanteUrl(c.path);
+      if (!url) throw new Error('No pudimos abrir el archivo.');
+      const a = document.createElement('a');
+      a.href = url; a.target = '_blank'; a.rel = 'noopener';
+      document.body.appendChild(a); a.click(); a.remove();
+    } catch (e) {
+      toast.error(e?.message || 'No pudimos abrir el comprobante');
+    } finally {
+      setAbriendo('');
+    }
+  };
+
+  /* La vista del panel y b2b_rpc_mis_pedidos no traen las mismas claves, así
+     que acá se traduce una fila del panel a lo que espera el generador. El
+     subtotal se recalcula con el precio congelado del renglón: es la misma
+     cuenta que muestra la tabla de arriba, no un precio de hoy. */
+  const paraPdf = () => ({
+    numero: pedido.numero_b2b,
+    enviado_at: pedido.enviado_at,
+    fecha_entrega_deseada: pedido.fecha_entrega_estimada,
+    direccion_entrega: pedido.direccion_entrega,
+    notas: pedido.notas_cliente,
+    condicion_pago: pedido.condicion_pago,
+    canal: pedido.canal,
+    total_neto: pedido.total_neto,
+    total_con_iva: pedido.total_con_iva,
+    unidades: pedido.unidades,
+    items: renglones.map(it => ({
+      sku: it.sku, modelo: it.modelo, color: it.color,
+      cantidad: Number(it.cantidad) || 0,
+      precio_unitario: Number(it.precio_unitario) || 0,
+      subtotal: (Number(it.cantidad) || 0) * (Number(it.precio_unitario) || 0),
+    })),
+  });
+
+  const bajarPdf = async (cual) => {
+    if (pdf) return;
+    setPdf(cual);
+    try {
+      const emisor = await b2bEmisor();
+      const cliente = { nombre: pedido.cliente, cuit: pedido.cliente_cuit };
+      if (cual === 'produccion') await window.B2B_PDF.produccion(paraPdf(), { emisor, cliente });
+      else                       await window.B2B_PDF.presupuesto(paraPdf(), { emisor, cliente });
+    } catch (e) {
+      toast.error(e?.message || 'No pudimos generar el PDF. Probá de nuevo.');
+    } finally {
+      setPdf('');
+    }
+  };
+
+  const ficha = [
+    ['Dirección de entrega', pedido.direccion_entrega],
+    ['Condición de pago',    pedido.condicion_pago],
+    ['CUIT del cliente',     pedido.cliente_cuit],
+    ['Total con IVA',        pedido.total_con_iva != null
+                               ? window.B2B_DATA.money(pedido.total_con_iva) : ''],
+  ].filter(f => f[1]);
+
+  return (
+    <div className="b2b-det">
+      {ficha.length > 0 && (
+        <div className="b2b-det-ficha">
+          {ficha.map(f => (
+            <div key={f[0]}><span>{f[0]}</span><b>{f[1]}</b></div>
+          ))}
+        </div>
+      )}
+
+      {pedido.notas_cliente && (
+        <div className="b2b-det-notas">
+          <b>Notas del cliente:</b> {pedido.notas_cliente}
+        </div>
+      )}
+
+      {renglones.length > 0 ? (
+        <>
+          <table className="data-table" style={{margin:0}}>
+            <thead>
+              <tr>
+                <th>SKU</th><th>Producto</th>
+                <th style={{textAlign:'right'}}>Cantidad</th>
+                <th style={{textAlign:'right'}}>Precio unitario</th>
+                <th style={{textAlign:'right'}}>Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>
+              {renglones.map((it, i) => (
+                <tr key={`${it.sku}-${i}`}>
+                  <td><span className="order-num">{it.sku}</span></td>
+                  <td>{[it.modelo, it.color].filter(Boolean).join(' · ') || '—'}</td>
+                  <td style={{textAlign:'right'}}>{it.cantidad}</td>
+                  <td style={{textAlign:'right'}}>{window.B2B_DATA.money(it.precio_unitario)}</td>
+                  <td style={{textAlign:'right', fontWeight:600}}>
+                    {window.B2B_DATA.money(Number(it.cantidad) * Number(it.precio_unitario))}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div style={{fontSize:11, color:'var(--ink-muted)', marginTop:8}}>
+            El precio de cada renglón quedó congelado cuando el cliente mandó el
+            pedido. Cambiar el coeficiente del canal después no lo toca.
+          </div>
+        </>
+      ) : (
+        <div className="b2b-det-vacio">
+          {sinDetalle
+            ? 'Tu rol no ve los renglones de este pedido, así que tampoco se pueden armar los PDF.'
+            : 'Este pedido no tiene renglones cargados.'}
+        </div>
+      )}
+
+      {/* ── Comprobantes de pago ── */}
+      <div className="b2b-det-tit">
+        <Icon n="clip" s={13}/> Comprobantes de pago
+        {cuantos > 0 && <span className="b2b-det-tit-n">{cuantos}</span>}
+      </div>
+      {cargandoComps ? (
+        <div className="b2b-det-vacio">Buscando los comprobantes…</div>
+      ) : errComps ? (
+        <div className="b2b-det-vacio" style={{color:'var(--red)'}}>{errComps}</div>
+      ) : comps.length === 0 ? (
+        <div className="b2b-det-vacio">
+          El cliente todavía no subió ninguno. Los sube él desde “Mis pedidos”
+          en la tienda y aparecen acá al instante.
+        </div>
+      ) : (
+        <ul className="b2b-comps">
+          {comps.map(c => (
+            <li key={c.id} className="b2b-comp">
+              <Icon n="file" s={15} c="var(--ink-muted)"/>
+              <div className="b2b-comp-txt">
+                <div className="b2b-comp-nom">{c.nombre || 'comprobante'}</div>
+                <div className="b2b-comp-sub">
+                  {window.B2B_DATA.fechaHora(c.created_at)}
+                  {c.subio ? ` · ${c.subio}` : ''}
+                  {c.monto != null ? ` · ${window.B2B_DATA.money(c.monto)}` : ''}
+                </div>
+                {c.nota && <div className="b2b-comp-nota">{c.nota}</div>}
+              </div>
+              <button className="btn-ghost-sm" style={{marginLeft:0}}
+                      disabled={abriendo === c.id}
+                      onClick={() => abrirComprobante(c)}>
+                <Icon n="eye" s={12}/> {abriendo === c.id ? 'Abriendo…' : 'Ver'}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* ── Los dos PDF ──
+          Distintos a propósito: el presupuesto lleva precios, IVA y los datos
+          para transferir; la hoja de producción no lleva un solo número de
+          plata, porque termina arriba de una mesa en el taller. */}
+      {renglones.length > 0 && (
+        <div className="b2b-det-acciones">
+          <button className="btn-ghost" disabled={!!pdf}
+                  title="El presupuesto que se le manda al cliente: neto, IVA y datos para transferir"
+                  onClick={() => bajarPdf('presupuesto')}>
+            <Icon n="download" s={13}/>
+            {pdf === 'presupuesto' ? 'Armando…' : 'Presupuesto (PDF)'}
+          </button>
+          <button className="btn-ghost" disabled={!!pdf}
+                  title="La hoja para el taller: SKU, modelo, color y cantidad. Sin precios."
+                  onClick={() => bajarPdf('produccion')}>
+            <Icon n="tools" s={13}/>
+            {pdf === 'produccion' ? 'Armando…' : 'Hoja de producción (PDF)'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
