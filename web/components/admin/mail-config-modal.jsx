@@ -41,6 +41,7 @@ function MailConfigModal({ onClose }) {
     destinatarios: '',
     base_url:      'https://justomakario.lat',
     activo:        false,
+    avisar_cliente: true,
   });
 
   const aplicar = (cfg) => {
@@ -54,6 +55,10 @@ function MailConfigModal({ onClose }) {
       destinatarios: cfg.destinatarios || '',
       base_url:      cfg.base_url      || 'https://justomakario.lat',
       activo:        !!cfg.activo,
+      /* Si la config es vieja y no trae el campo, el default del backend es
+         avisar. Con !! un undefined quedaria en false y le apagariamos los
+         mails al cliente sin que nadie lo haya pedido. */
+      avisar_cliente: cfg.avisar_cliente !== false,
     });
   };
 
@@ -99,6 +104,7 @@ function MailConfigModal({ onClose }) {
     destinatarios: mails().join(', '),
     base_url:      form.base_url.trim(),
     activo:        form.activo,
+    avisar_cliente: form.avisar_cliente,
   }, extra || {});
 
   const guardar = async () => {
@@ -197,9 +203,9 @@ function MailConfigModal({ onClose }) {
       ) : (
         <>
           <div className="field-help" style={{marginBottom:12}}>
-            Cuando entra un pedido nuevo de la tienda mayorista, sale un mail
-            a las direcciones de acá abajo. Lo manda la base de datos sola:
-            no hace falta tener la app abierta.
+            Sale un mail cuando se registra una cuenta nueva, cuando entra
+            un pedido y cada vez que el pedido cambia de estado. Lo manda la
+            base de datos sola: no hace falta tener la app abierta.
           </div>
 
           <label className="admin-toggle-inactive" style={{marginBottom:14}}>
@@ -207,6 +213,24 @@ function MailConfigModal({ onClose }) {
                    onChange={e => set('activo', e.target.checked)}/>
             Mandar los avisos
           </label>
+
+          {/* Cuelga del general: con los avisos apagados no sale ninguno de
+              los dos, asi que este se muestra deshabilitado en vez de dar a
+              entender que anda por su cuenta. */}
+          <label className="admin-toggle-inactive"
+                 style={{marginBottom:6, marginLeft:22,
+                         opacity: form.activo ? 1 : 0.45}}>
+            <input type="checkbox" checked={form.avisar_cliente}
+                   disabled={!form.activo}
+                   onChange={e => set('avisar_cliente', e.target.checked)}/>
+            Avisarle también al cliente
+          </label>
+          <div className="field-help" style={{marginBottom:14, marginLeft:22}}>
+            Al cliente le llega la bienvenida cuando crea la cuenta, el
+            «recibimos tu pedido» cuando lo manda, y un aviso cada vez que el
+            pedido avanza. Si esto está apagado, los avisos salen solo para
+            adentro.
+          </div>
 
           <div className="supplier-modal-grid">
             <div className="field-group">
