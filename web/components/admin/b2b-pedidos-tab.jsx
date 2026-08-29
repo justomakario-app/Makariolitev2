@@ -200,6 +200,9 @@ function B2BPedidosTab({ buscarInicial }) {
         'Email':          p.comprador_email || '',
         'Unidades':       window.B2B_DATA.numeroCSV(p.unidades),
         'Total neto':     window.B2B_DATA.numeroCSV(p.total_neto),
+        'IVA':            p.con_iva === false ? 'SIN IVA' : 'Con IVA',
+        'Total a cobrar': window.B2B_DATA.numeroCSV(
+                            p.total_a_pagar != null ? p.total_a_pagar : p.total_neto),
         'Estado interno': est(p.estado_admin, 'label'),
         'Ve el cliente':  p.estado_tienda === 'facturado' ? 'Facturado' : est(p.estado_admin, 'cliente'),
         'Factura':        p.factura_nro || '',
@@ -319,7 +322,7 @@ function B2BPedidosTab({ buscarInicial }) {
                 <th>Pedido</th><th>Cliente</th><th>Canal</th><th>Comprador</th>
                 <th>Entró</th>
                 <th style={{textAlign:'right'}}>Unid.</th>
-                <th style={{textAlign:'right'}}>Total</th>
+                <th style={{textAlign:'right'}}>A cobrar</th>
                 <th>Estado</th>
                 {isAdmin && <th>Factura</th>}
                 {isOwner && <th>Avanzar</th>}
@@ -378,8 +381,16 @@ function B2BPedidosTab({ buscarInicial }) {
                       </td>
                       <td style={{whiteSpace:'nowrap'}}>{window.B2B_DATA.fechaHora(p.enviado_at)}</td>
                       <td style={{textAlign:'right'}}>{p.unidades ?? '—'}</td>
+                      {/* Lo que este pedido cobra de verdad: con IVA es el
+                          total con IVA, sin IVA es el neto. Es el mismo
+                          número que ve el cliente, que dice el mail y que
+                          sale en el PDF — si acá dijera otra cosa, el que
+                          cobra y el que paga estarían mirando dos cifras
+                          distintas del mismo pedido. */}
                       <td style={{textAlign:'right', fontWeight:700, whiteSpace:'nowrap'}}>
-                        {window.B2B_DATA.money(p.total_neto)}
+                        {window.B2B_DATA.money(
+                          p.total_a_pagar != null ? p.total_a_pagar : p.total_neto)}
+                        {p.con_iva === false && <div className="b2b-sin-iva">sin IVA</div>}
                       </td>
                       <td>
                         {badge(p.estado_admin)}
@@ -441,6 +452,7 @@ function B2BPedidosTab({ buscarInicial }) {
                       <tr>
                         <td colSpan={nCols} style={{background:'#fafafa', padding:'12px 16px'}}>
                           <B2BDetallePedido pedido={p} items={items} sinDetalle={sinDetalle}
+                                            puedeIva={isAdmin} onRecargar={reload}
                                             onFacturas={reload}/>
                         </td>
                       </tr>
@@ -485,16 +497,24 @@ function B2BPedidosTab({ buscarInicial }) {
    Y el panel se desmonta al cerrar, así que al volver a abrirlo se piden
    de nuevo. Es a propósito: entre que se abrió la tabla y que el que cobra
    entra a mirar, el cliente pudo haber subido la transferencia. ── */
-function B2BDetallePedido({ pedido, items, sinDetalle, onFacturas }) {
+function B2BDetallePedido({ pedido, items, sinDetalle, puedeIva, onRecargar, onFacturas }) {
   const toast = useToast();
   const cuantos = Number(pedido.comprobantes) || 0;
   const renglones = Array.isArray(items) ? items : [];
+  /* `!== false` y no `=== true`: un pedido de antes de 0170 llega sin la
+     clave, y todos esos se facturaron. */
+  const conIva = pedido.con_iva !== false;
+  const aPagar = pedido.total_a_pagar != null
+                   ? Number(pedido.total_a_pagar)
+                   : (conIva ? pedido.total_con_iva : pedido.total_neto);
 
   const [comps, setComps] = useState([]);
   const [cargandoComps, setCargandoComps] = useState(false);
   const [errComps, setErrComps] = useState('');
   const [abriendo, setAbriendo] = useState('');
   const [pdf, setPdf] = useState('');   // '' | 'presupuesto' | 'produccion'
+  const [ivaGuardando, setIvaGuardando] = useState(false);
+  const [confirmarIva, setConfirmarIva] = useState(false);
 
   useEffect(() => {
     if (cuantos === 0) { setComps([]); return; }
@@ -541,6 +561,7 @@ function B2BDetallePedido({ pedido, items, sinDetalle, onFacturas }) {
     canal: pedido.canal,
     total_neto: pedido.total_neto,
     total_con_iva: pedido.total_con_iva,
+    con_iva: pedido.con_iva,
     unidades: pedido.unidades,
     items: renglones.map(it => ({
       sku: it.sku, modelo: it.modelo, color: it.color,
@@ -565,16 +586,77 @@ function B2BDetallePedido({ pedido, items, sinDetalle, onFacturas }) {
     }
   };
 
+  /* Corregir la decisión del cliente. No manda ningún mail: el trigger de
+     avisos dispara por cambio de estado, y esto no toca el estado. */
+  const aplicarIva = async () => {
+    if (ivaGuardando) return;
+    setIvaGuardando(true);
+    try {
+      await window.ADMIN_DATA.setPedidoIva(pedido.b2b_pedido_id, !conIva);
+      toast.success(conIva
+        ? pedido.numero_b2b + ' quedó SIN IVA: no se le emite factura.'
+        : pedido.numero_b2b + ' quedó CON IVA: se le emite factura.');
+      setConfirmarIva(false);
+      onRecargar?.();
+    } catch (e) {
+      toast.error(e?.message || 'No se pudo cambiar el IVA del pedido');
+    } finally {
+      setIvaGuardando(false);
+    }
+  };
+
   const ficha = [
     ['Dirección de entrega', pedido.direccion_entrega],
     ['Condición de pago',    pedido.condicion_pago],
     ['CUIT del cliente',     pedido.cliente_cuit],
-    ['Total con IVA',        pedido.total_con_iva != null
-                               ? window.B2B_DATA.money(pedido.total_con_iva) : ''],
+    [conIva ? 'Total con IVA' : 'Total sin IVA',
+     aPagar != null ? window.B2B_DATA.money(aPagar) : ''],
   ].filter(f => f[1]);
 
   return (
     <div className="b2b-det">
+      {/* Lo primero que se lee del pedido. Define si esto va a contabilidad
+          o queda como presupuesto, y es lo único del pedido que el cliente
+          decidió sobre nuestra forma de trabajar y no sobre su compra. */}
+      <div className={'b2b-det-iva' + (conIva ? '' : ' off')}>
+        <Icon n={conIva ? 'check-circle' : 'alert'} s={15}/>
+        <div className="b2b-det-iva-txt">
+          <b>{conIva ? 'Con IVA · se factura' : 'Sin IVA · presupuesto, no se factura'}</b>
+          <span>
+            Cobra <b>{aPagar != null ? window.B2B_DATA.money(aPagar) : '—'}</b>
+            {conIva
+              ? (pedido.cliente_cuit
+                  ? ' y se le factura al CUIT ' + pedido.cliente_cuit + '.'
+                  : '. Ojo: este cliente no tiene CUIT cargado.')
+              : '. El cliente lo pidió sin IVA, así que no lleva factura.'}
+          </span>
+        </div>
+        {puedeIva && (
+          <button className="btn-ghost-sm" style={{marginLeft:'auto'}}
+                  disabled={ivaGuardando}
+                  title="Se corrige acá cuando el cliente lo pide después por teléfono"
+                  onClick={() => setConfirmarIva(true)}>
+            {ivaGuardando ? 'Guardando…' : (conIva ? 'Pasar a sin IVA' : 'Pasar a con IVA')}
+          </button>
+        )}
+      </div>
+
+      {confirmarIva && window.ConfirmModal && (
+        <window.ConfirmModal
+          open={true}
+          title={conIva ? 'Pasar el pedido a SIN IVA' : 'Pasar el pedido a CON IVA'}
+          message={conIva
+            ? pedido.numero_b2b + ' pasa a cobrarse ' + window.B2B_DATA.money(pedido.total_neto)
+              + ' y deja de llevar factura: queda como presupuesto. El cliente no recibe ningún aviso por esto.'
+            : pedido.numero_b2b + ' pasa a cobrarse ' + window.B2B_DATA.money(pedido.total_con_iva)
+              + ' con IVA y se le emite factura'
+              + (pedido.cliente_cuit ? ' al CUIT ' + pedido.cliente_cuit : ' (ojo: no tiene CUIT cargado)')
+              + '. El cliente no recibe ningún aviso por esto.'}
+          confirmText={ivaGuardando ? 'Guardando…' : 'Sí, cambiar'}
+          onClose={() => !ivaGuardando && setConfirmarIva(false)}
+          onConfirm={aplicarIva}/>
+      )}
+
       {ficha.length > 0 && (
         <div className="b2b-det-ficha">
           {ficha.map(f => (
@@ -681,6 +763,7 @@ function B2BDetallePedido({ pedido, items, sinDetalle, onFacturas }) {
                         pedidoId={pedido.b2b_pedido_id}
                         pedidoNumero={pedido.numero_b2b}
                         totalSugerido={pedido.total_con_iva}
+                        sinIva={!conIva}
                         formPlegado={true}
                         onCambio={onFacturas}/>
 
@@ -728,6 +811,10 @@ function B2BFacturarModal({ pedido, onClose, onHecho }) {
   const [file, setFile] = useState(null);
   const [sobre, setSobre] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  /* Avisar y dejar seguir: el pedido puede estar marcado sin IVA y aun así
+     haber que facturarlo (lo pidió después). Se tilda el aviso y se sigue. */
+  const sinIva = pedido.con_iva === false;
+  const [okSinIva, setOkSinIva] = useState(false);
   const inputRef = useRef(null);
 
   const tomarArchivo = (f) => {
@@ -757,6 +844,10 @@ function B2BFacturarModal({ pedido, onClose, onHecho }) {
      reintentar el número repetido no dejaría pasar. */
   const confirmar = async () => {
     if (enviando) return;
+    if (sinIva && !okSinIva) {
+      toast.error('Este pedido está marcado sin IVA: confirmá el aviso antes de facturarlo.');
+      return;
+    }
     setEnviando(true);
     try {
       await window.B2B_DATA.facturarPedido({
@@ -804,7 +895,8 @@ function B2BFacturarModal({ pedido, onClose, onHecho }) {
          footer={
            <>
              <button className="btn-ghost" onClick={onClose} disabled={enviando}>Cancelar</button>
-             <button className="btn-primary" onClick={confirmar} disabled={enviando}>
+             <button className="btn-primary" onClick={confirmar}
+                     disabled={enviando || (sinIva && !okSinIva)}>
                {enviando
                  ? (file ? 'Subiendo…' : 'Guardando…')
                  : (<><Icon n="check" s={14}/>{' '}
@@ -821,6 +913,19 @@ function B2BFacturarModal({ pedido, onClose, onHecho }) {
           interno del pedido no se mueve — sigue en Despachado.
         </div>
       </div>
+
+      {sinIva && (
+        <label className="b2b-aviso-iva">
+          <input type="checkbox" checked={okSinIva}
+                 onChange={e => setOkSinIva(e.target.checked)}/>
+          <span>
+            <b>Este pedido está marcado SIN IVA.</b> El cliente lo pidió como
+            presupuesto y no está esperando factura. Se puede facturar igual —
+            tildá para confirmar. Si además querés que deje de figurar como
+            presupuesto, cambiálo desde el detalle del pedido.
+          </span>
+        </label>
+      )}
 
       <div className="field-group">
         <label className="field-label">Número de factura</label>

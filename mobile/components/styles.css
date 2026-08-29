@@ -1362,6 +1362,43 @@ tr.row-inactive td { font-style: italic; }
 .b2b-det-ficha span { font-size: 10px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: .04em; }
 .b2b-det-ficha b { font-size: 12.5px; overflow-wrap: anywhere; }
 
+/* -- Con IVA / sin IVA (0170) --------------------------------------------
+   Lo elige el cliente en su carrito y decide si el pedido se factura o
+   queda como presupuesto. En la tabla se marca SOLO la excepcion: con IVA
+   es lo normal y un cartel en cada fila seria ruido. */
+.b2b-sin-iva {
+  display: inline-block; margin-top: 3px;
+  padding: 1px 7px; border-radius: 999px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: .03em;
+  color: var(--amber); background: var(--amber-bg);
+  border: 1px solid rgba(217, 119, 6, 0.28);
+}
+
+.b2b-det-iva {
+  display: flex; align-items: flex-start; gap: 9px;
+  margin-bottom: 12px; padding: 9px 11px;
+  border-radius: 6px; font-size: 12px; line-height: 1.5;
+  background: var(--green-bg); border: 1px solid rgba(22, 163, 74, 0.22);
+  color: #15603A;
+}
+.b2b-det-iva.off { background: var(--amber-bg); border-color: rgba(217, 119, 6, 0.25); color: #8A4B08; }
+.b2b-det-iva > svg { flex-shrink: 0; margin-top: 1px; }
+.b2b-det-iva-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.b2b-det-iva-txt > b { font-size: 12px; font-weight: 700; }
+.b2b-det-iva .btn-ghost-sm { flex-shrink: 0; margin-left: auto; }
+
+/* El aviso que hay que tildar antes de facturar un pedido que el cliente
+   pidio sin IVA. No bloquea: avisa y deja seguir. */
+.b2b-aviso-iva {
+  display: flex; align-items: flex-start; gap: 9px;
+  margin: 0 0 12px; padding: 9px 11px;
+  border-radius: 6px; font-size: 11.5px; line-height: 1.55; cursor: pointer;
+  background: var(--amber-bg); border: 1px solid rgba(217, 119, 6, 0.28);
+  color: #8A4B08;
+}
+.b2b-aviso-iva input { margin-top: 2px; flex-shrink: 0; accent-color: #B45309; }
+.b2b-aviso-iva b { font-weight: 700; }
+
 .b2b-det-notas {
   margin-bottom: 12px;
   padding: 8px 10px;

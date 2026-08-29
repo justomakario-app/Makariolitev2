@@ -374,6 +374,55 @@ button { font: inherit; color: inherit; }
 .t-resumen .t-btn { margin-top: 14px; }
 .t-resumen-nota, .t-resumen-pie { font-size: 11.5px; color: var(--ink-muted); margin-top: 10px; }
 
+/* ── Tilde "con IVA" ─────────────────────────────────────────────────────
+   Es la unica decision del carrito que no es un numero: cambia lo que se
+   cobra Y si sale factura. Por eso tiene tarjeta propia, pegada al total, y
+   la leyenda esta siempre a la vista en vez de esconderse en un tooltip. */
+.t-iva {
+  margin-top: 12px; padding: 11px 12px;
+  background: var(--paper-off); border: 1px solid var(--border);
+  border-radius: 10px;
+  transition: background .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+.t-iva-on { background: var(--paper); border-color: var(--border-md); box-shadow: var(--shadow-xs); }
+
+.t-iva-check {
+  display: flex; align-items: center; gap: 9px;
+  cursor: pointer; -webkit-user-select: none; user-select: none;
+}
+/* El checkbox nativo se esconde pero sigue existiendo: recibe el foco del
+   teclado, el clic del label y los lectores de pantalla. El cuadrado que se
+   ve es .t-iva-box. */
+.t-iva-check input[type="checkbox"] { position: absolute; width: 1px; height: 1px; opacity: 0; margin: 0; }
+.t-iva-box {
+  flex: none; width: 19px; height: 19px; border-radius: 6px;
+  display: grid; place-items: center;
+  background: var(--paper); border: 1.5px solid var(--border-str);
+  color: transparent;                      /* el tilde hereda este color */
+  transition: background .16s ease, border-color .16s ease, color .16s ease;
+}
+.t-iva-on .t-iva-box { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.t-iva-check:hover .t-iva-box { border-color: var(--ink-muted); }
+.t-iva-on .t-iva-check:hover .t-iva-box { border-color: var(--ink); }
+.t-iva-check input:focus-visible + .t-iva-box { box-shadow: 0 0 0 3px rgba(0,0,0,.13); }
+
+.t-iva-lbl { font-size: 13px; line-height: 1.35; color: var(--ink-soft); }
+.t-iva-lbl b { font-weight: 700; color: var(--ink); }
+.t-iva-leyenda {
+  font-size: 11.5px; line-height: 1.5; color: var(--ink-muted);
+  margin-top: 7px; padding-left: 28px;
+}
+.t-iva-leyenda b { font-weight: 700; color: var(--ink-soft); }
+/* Sin tildar, la frase que importa es "no podemos emitir factura": va en
+   ambar, que en toda la tienda significa "ojo con esto", no "error". */
+.t-iva:not(.t-iva-on) .t-iva-leyenda b { color: var(--amber); }
+/* Mientras se guarda la eleccion queda apagada pero en su lugar: nada se
+   mueve, asi el cliente no pierde de vista lo que acaba de tocar. */
+.t-iva-check input:disabled ~ .t-iva-box,
+.t-iva-check input:disabled ~ .t-iva-lbl { opacity: .5; }
+.t-iva:has(input:disabled) .t-iva-leyenda { opacity: .5; }
+.t-iva-check:has(input:disabled) { cursor: default; }
+
 .t-minimo { margin-top: 12px; }
 .t-minimo-txt { font-size: 12px; color: var(--amber); display: flex; align-items: center; gap: 5px; }
 .t-minimo-ok .t-minimo-txt { color: var(--green); }
@@ -444,10 +493,26 @@ button { font: inherit; color: inherit; }
 .t-pedido-num b { font-family: var(--mono); font-size: 13.5px; }
 .t-pedido-num span { font-size: 11.5px; color: var(--ink-muted); }
 .t-chip-estado { padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700; }
+/* Marca solo la excepcion: un pedido sin IVA no lleva factura. Va en gris
+   con borde y no en ambar como el aviso del carrito — aca ya es un hecho
+   del pedido, no una advertencia sobre algo que todavia se puede cambiar. */
+.t-chip-iva {
+  padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  letter-spacing: .02em; color: var(--ink-muted);
+  background: var(--paper-off); border: 1px solid var(--border-md);
+}
 .t-pedido-tot { margin-left: auto; display: flex; align-items: baseline; gap: 12px; font-variant-numeric: tabular-nums; }
 .t-pedido-tot span { font-size: 12px; color: var(--ink-muted); }
 .t-pedido-cuerpo { padding: 0 16px 16px; border-top: 1px solid var(--border); }
 .t-pedido-ayuda { font-size: 12.5px; color: var(--ink-soft); padding: 11px 0; }
+.t-pedido-noiva {
+  display: flex; align-items: flex-start; gap: 8px;
+  font-size: 12.5px; line-height: 1.5; color: #8A4B08;
+  background: var(--amber-bg); border: 1px solid rgba(217,119,6,.22);
+  border-radius: var(--radius); padding: 9px 11px; margin-bottom: 11px;
+}
+.t-pedido-noiva svg { flex: none; margin-top: 2px; color: var(--amber); }
+.t-pedido-noiva b { font-weight: 700; }
 .t-pedido-dato { font-size: 12.5px; color: var(--ink-soft); padding-bottom: 10px; }
 .t-pedido-factura {
   display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-soft);
@@ -577,6 +642,22 @@ button { font: inherit; color: inherit; }
 .t-enviado-datos .es-total b { font-weight: 800; }
 .t-enviado-pie { max-width: 340px; line-height: 1.5; margin-top: 14px; }
 
+/* Aviso de facturacion del pedido ya enviado. El icono va absoluto y no
+   como item de flex: el texto lleva <b> adentro, y en flex cada <b> se
+   convierte en una caja aparte y la frase se parte en pedazos. */
+.t-enviado-iva {
+  position: relative; max-width: 430px; margin: 0 0 16px;
+  padding: 11px 13px 11px 34px; border-radius: 10px;
+  font-size: 12.5px; line-height: 1.5;
+  background: var(--paper-off); color: var(--ink-soft);
+  border: 1px solid var(--border);
+}
+.t-enviado-iva svg { position: absolute; left: 12px; top: 12px; color: var(--ink-muted); }
+.t-enviado-iva b { font-weight: 700; color: var(--ink); }
+.t-enviado-iva-off { background: var(--amber-bg); color: #8A4B08; border-color: rgba(217,119,6,.22); }
+.t-enviado-iva-off svg { color: var(--amber); }
+.t-enviado-iva-off b { color: #7A4207; }
+
 /* ── Modal ─────────────────────────────────────────────────────────────── */
 .t-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,.42); z-index: 100;
@@ -594,6 +675,17 @@ button { font: inherit; color: inherit; }
 .t-modal-body { padding: 18px; overflow-y: auto; font-size: 13.5px; }
 .t-modal-body p + p { margin-top: 9px; }
 .t-modal-sec { color: var(--ink-muted); font-size: 12.5px; }
+/* Lo ultimo que se lee antes de mandar el pedido. Mismo criterio de color
+   que en la tarjeta del carrito: verde cuando hay factura, ambar cuando no. */
+.t-modal-iva {
+  position: relative; margin-top: 12px;
+  padding: 10px 12px 10px 33px; border-radius: 9px;
+  font-size: 12.5px; line-height: 1.5;
+  background: var(--green-bg); color: #15603A; border: 1px solid rgba(22,163,74,.20);
+}
+.t-modal-iva svg { position: absolute; left: 11px; top: 11px; }
+.t-modal-iva b { font-weight: 700; }
+.t-modal-iva-off { background: var(--amber-bg); color: #8A4B08; border-color: rgba(217,119,6,.22); }
 .t-modal-foot {
   display: flex; justify-content: flex-end; gap: 8px;
   padding: 13px 18px; border-top: 1px solid var(--border);
@@ -1567,6 +1659,12 @@ button { font: inherit; color: inherit; }
      el catálogo y con 38px la yema tapaba el chip de al lado. */
   .t-chip { min-height: 40px; padding: 8px 15px; font-size: 13px; }
   .t-radio { padding: 12px; }
+  /* El cuadrado crece con el resto: un tilde de 19px se falla seguido. */
+  .t-iva { padding: 12px 13px; }
+  .t-iva-check { gap: 10px; min-height: 30px; }
+  .t-iva-box { width: 21px; height: 21px; }
+  .t-iva-lbl { font-size: 13.5px; }
+  .t-iva-leyenda { padding-left: 31px; font-size: 12px; }
   .t-link { padding: 9px 0; }
   .t-pedido-head { padding: 15px 16px; }
 

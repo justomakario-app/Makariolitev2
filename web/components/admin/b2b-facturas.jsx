@@ -135,11 +135,12 @@ function B2BFacturaFila({ f, onBorrada }) {
      pedidoId       si viene, la factura queda atada a ese pedido
      pedidoNumero   para mostrarlo
      totalSugerido  precarga el importe (el total con IVA del pedido)
+     sinIva         el pedido está marcado SIN IVA: avisa antes de subir
      formPlegado    arranca con el formulario cerrado detrás de un botón
      onCambio       se llama después de subir o de quitar, para que el que
                     lo abrió refresque su contador ── */
 function B2BFacturasPanel({ clienteId, clienteNombre, pedidoId, pedidoNumero,
-                            totalSugerido, formPlegado, onCambio }) {
+                            totalSugerido, sinIva, formPlegado, onCambio }) {
   const toast = useToast();
   const D = window.ADMIN_DATA;
 
@@ -156,6 +157,11 @@ function B2BFacturasPanel({ clienteId, clienteNombre, pedidoId, pedidoNumero,
     totalSugerido != null && totalSugerido !== '' ? String(totalSugerido) : '');
   const [nota, setNota] = useState('');
   const [subiendo, setSubiendo] = useState(false);
+  /* Pedido sin IVA: el cliente pidió presupuesto y no espera factura. Se
+     avisa y se deja seguir — hay casos reales (llamó y la pidió después) y
+     bloquearlo obligaría a dar dos vueltas por el panel. El tilde es la
+     confirmación explícita de que se está haciendo a propósito. */
+  const [okSinIva, setOkSinIva] = useState(false);
   const [abrirForm, setAbrirForm] = useState(!formPlegado);
   const inputRef = useRef(null);
 
@@ -198,6 +204,10 @@ function B2BFacturasPanel({ clienteId, clienteNombre, pedidoId, pedidoNumero,
   const subir = async () => {
     if (subiendo) return;
     if (!file) { toast.error('Elegí el archivo de la factura.'); return; }
+    if (sinIva && !okSinIva) {
+      toast.error('Este pedido está marcado sin IVA: confirmá el aviso antes de subirla.');
+      return;
+    }
     setSubiendo(true);
     try {
       await D.subirFactura({
@@ -320,6 +330,18 @@ function B2BFacturasPanel({ clienteId, clienteNombre, pedidoId, pedidoNumero,
                  placeholder="Ej: incluye el flete de la entrega del 12"/>
         </div>
 
+        {sinIva && (
+          <label className="b2b-aviso-iva">
+            <input type="checkbox" checked={okSinIva}
+                   onChange={e => setOkSinIva(e.target.checked)}/>
+            <span>
+              <b>Este pedido está marcado SIN IVA.</b> El cliente lo pidió como
+              presupuesto, así que no está esperando ninguna factura. Se puede
+              subir igual — tildá para confirmar que va a propósito.
+            </span>
+          </label>
+        )}
+
         <div className="b2b-fac-pie">
           <div className="b2b-fac-nota">
             {pedidoId
@@ -327,7 +349,8 @@ function B2BFacturasPanel({ clienteId, clienteNombre, pedidoId, pedidoNumero,
               : <>Va al historial de facturas de <b>{clienteNombre || 'el cliente'}</b>, sin pedido asociado.</>}
             {' '}Le llega un mail avisándole, si tenés prendido “Avisarle también al cliente”.
           </div>
-          <button className="btn-primary" disabled={subiendo || !file} onClick={subir}>
+          <button className="btn-primary" disabled={subiendo || !file || (sinIva && !okSinIva)}
+                  onClick={subir}>
             {subiendo ? 'Subiendo…' : (<><Icon n="upload" s={13}/> Subir y avisarle</>)}
           </button>
         </div>

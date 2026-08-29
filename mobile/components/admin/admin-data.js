@@ -1593,6 +1593,26 @@
     return data;
   }
 
+  /* -- Corregir el con/sin IVA de un pedido ya enviado (0170) -------
+     El tilde lo pone el CLIENTE en su carrito. Esto es la correccion de
+     despues: llamo por telefono y ahora si quiere la factura, o al reves.
+
+     Cambia lo que se cobra (b2b_pedido.total_a_pagar es una columna
+     generada, asi que se recalcula sola) pero NO toca el estado, y el
+     trigger de mails dispara por cambio de estado: el cliente no recibe
+     ningun aviso por esto.
+
+     Va aca y no en b2b-data.js por lo mismo de siempre: b2b-data.js lo
+     carga tambien la tienda, y el cliente puede elegir en su carrito pero
+     no reescribir un pedido que ya mando. */
+  async function setPedidoIva(pedido_id, con_iva) {
+    const { data, error } = await supa.rpc('b2b_rpc_admin_set_pedido_iva', {
+      p_payload: { pedido_id: pedido_id, con_iva: !!con_iva },
+    });
+    if (error) throw new Error(error.message || 'No se pudo cambiar el IVA del pedido');
+    return data;
+  }
+
   /* loadRecibos: SELECT directo (RLS owner/admin only). Incluye anulados
      si opts.includeAnulados=true. */
   async function loadRecibos(opts) {
@@ -2393,6 +2413,7 @@
     subirFactura,
     listarFacturas,
     borrarFactura,
+    setPedidoIva,
     loadRecibos,
     getRecibo,
     createRecibo,

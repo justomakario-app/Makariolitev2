@@ -325,10 +325,14 @@ const TiendaApp = () => {
     } finally { setOcupado(false); }
   }, [recargarCarrito]);
 
-  const enviar = useCallback(async () => {
+  /* `opts` lleva el tilde de IVA que el cliente acaba de tocar. Se manda
+     aunque ya esté guardado en el borrador: si tildó y mandó en el mismo
+     movimiento, esto es lo más nuevo. La base resuelve igual sin la clave
+     (usa lo del borrador), así que un llamado viejo sin opts no rompe. */
+  const enviar = useCallback(async (opts) => {
     setOcupado(true);
     try {
-      const r = await window.B2B_DATA.enviarPedido({});
+      const r = await window.B2B_DATA.enviarPedido(opts || {});
       setEnviado(r);
       await recargarCarrito();          // el borrador quedó vacío
       setSenalPedidos(n => n + 1);      // que "Mis pedidos" se entere
@@ -449,7 +453,8 @@ const TiendaApp = () => {
                             onSetCantidad={setCantidad} ocupado={ocupado}
                             onIrCarrito={() => setTab('carrito')}/>
         ) : tab === 'carrito' ? (
-          <PantallaCarrito carrito={carrito} onSetCantidad={setCantidad}
+          <PantallaCarrito carrito={carrito} cliente={cuenta.cliente}
+                           onSetCantidad={setCantidad}
                            onGuardarDatos={guardarDatos} onEnviar={enviar}
                            onSeguirComprando={() => setTab('catalogo')} ocupado={ocupado}/>
         ) : tab === 'facturas' ? (

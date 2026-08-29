@@ -44,6 +44,22 @@ const Chip = ({ estado }) => {
   return <span className="t-chip-estado" style={{ background: e.bg, color: e.fg }}>{e.label}</span>;
 };
 
+/* ── Con IVA / sin IVA ───────────────────────────────────────────────────
+   `total_a_pagar` lo calcula la base (columna generada, 0170) y es la unica
+   cifra que no puede quedar desalineada con el mail ni con el PDF. El resto
+   del calculo es respaldo por si un pedido viejo llega sin ella. */
+const conIvaDe = (p) => p.con_iva !== false;
+const aPagarDe = (p) => (
+  p.total_a_pagar != null ? Number(p.total_a_pagar)
+  : conIvaDe(p) ? Number(p.total_con_iva != null ? p.total_con_iva : (p.total_neto || 0))
+  : Number(p.total_neto || 0)
+);
+
+/* Solo se marca la excepcion. Con IVA es lo normal y no necesita cartel;
+   sin IVA es lo que hay que reconocer de un vistazo, porque ese pedido no
+   lleva factura. */
+const ChipIva = ({ p }) => conIvaDe(p) ? null : <span className="t-chip-iva">sin IVA</span>;
+
 /* ── Los comprobantes que ya mandó ────────────────────────────────
    El bucket es privado: para ver el archivo hay que pedirle al backend una
    URL firmada que dura 10 minutos. Se pide recién en el click y no al armar
@@ -159,7 +175,7 @@ const ModalComprobante = ({ pedido, clienteId, onCerrar, onListo }) => {
     } finally { setSubiendo(false); }
   };
 
-  const total = pedido.total_con_iva != null ? pedido.total_con_iva : pedido.total_neto;
+  const total = aPagarDe(pedido);
 
   return (
     <Modal open title="Adjuntar comprobante de pago"
@@ -175,7 +191,8 @@ const ModalComprobante = ({ pedido, clienteId, onCerrar, onListo }) => {
              </>
            }>
       <p>
-        Vas a adjuntar el comprobante del pedido <b>{pedido.numero}</b> por <b>{money(total)}</b>.
+        Vas a adjuntar el comprobante del pedido <b>{pedido.numero}</b> por{' '}
+        <b>{money(total)}</b>{conIvaDe(pedido) ? '' : ' (sin IVA)'}.
         Lo recibe el equipo y lo revisa. El pedido no cambia de estado solo por esto.
       </p>
 
@@ -233,6 +250,10 @@ const Pedido = ({ p, onAnular, anulando, onRepetir, onAdjuntar,
   /* b2b_rpc_mis_pedidos ya trae las facturas de cada pedido adentro del
      pedido (migración 0169). No hay una segunda llamada. */
   const facturas = p.facturas || [];
+  /* La fila cerrada muestra lo que se cobra, no el neto: es el numero que
+     el cliente va a transferir y el que dicen el mail y el PDF. */
+  const conIva = conIvaDe(p);
+  const aPagar = aPagarDe(p);
 
   /* El PDF se arma con lo que ya está en pantalla: el mismo pedido que el
      backend devolvió, sin volver a pedir nada. Lo único que viaja en el
@@ -256,15 +277,26 @@ const Pedido = ({ p, onAnular, anulando, onRepetir, onAdjuntar,
           <span>{fechaHora(p.enviado_at)}</span>
         </div>
         <Chip estado={p.estado}/>
+        <ChipIva p={p}/>
         <div className="t-pedido-tot">
           <span>{num(p.unidades)} u.</span>
-          <b>{money(p.total_neto)}</b>
+          <b>{money(aPagar)}</b>
         </div>
       </button>
 
       {abierto && (
         <div className="t-pedido-cuerpo">
           {info && info.ayuda && <div className="t-pedido-ayuda">{info.ayuda}</div>}
+
+          {!conIva && (
+            <div className="t-pedido-noiva">
+              <Icon n="info" s={14}/>
+              <span>
+                Este pedido va <b>sin IVA</b>: se trabaja como presupuesto y no lleva
+                factura. Si la necesitas, avisanos y lo vemos.
+              </span>
+            </div>
+          )}
 
           {/* El número de factura lo escribe el equipo después de emitirla
               afuera (b2b_rpc_admin_facturar_pedido) y sirve para cruzar "mi
@@ -326,21 +358,31 @@ const Pedido = ({ p, onAnular, anulando, onRepetir, onAdjuntar,
                 </tr>
               ))}
             </tbody>
+            {/* Sin IVA no se listan el neto ni el IVA: son numeros que este
+                pedido no cobra, y al lado del que si se cobra son justo lo
+                que hace transferir de mas. */}
             <tfoot>
-              <tr>
-                <td colSpan="3">Neto</td>
-                <td className="t-num">{money(p.total_neto)}</td>
-              </tr>
-              {p.total_con_iva != null && (
-                <tr className="t-fila-suave">
-                  <td colSpan="3">IVA</td>
-                  <td className="t-num">{money(Number(p.total_con_iva) - Number(p.total_neto || 0))}</td>
-                </tr>
-              )}
-              {p.total_con_iva != null && (
+              {conIva ? (
+                <>
+                  <tr>
+                    <td colSpan="3">Neto</td>
+                    <td className="t-num">{money(p.total_neto)}</td>
+                  </tr>
+                  {p.total_con_iva != null && (
+                    <tr className="t-fila-suave">
+                      <td colSpan="3">IVA</td>
+                      <td className="t-num">{money(Number(p.total_con_iva) - Number(p.total_neto || 0))}</td>
+                    </tr>
+                  )}
+                  <tr>
+                    <td colSpan="3">Total</td>
+                    <td className="t-num"><b>{money(aPagar)}</b></td>
+                  </tr>
+                </>
+              ) : (
                 <tr>
-                  <td colSpan="3">Total</td>
-                  <td className="t-num"><b>{money(p.total_con_iva)}</b></td>
+                  <td colSpan="3">Total sin IVA</td>
+                  <td className="t-num"><b>{money(aPagar)}</b></td>
                 </tr>
               )}
             </tfoot>
@@ -545,7 +587,7 @@ const PantallaPedidos = ({ recargarSenal, onIrCatalogo, onIrCarrito,
              }>
         <p>
           Vas a dar de baja el pedido <b>{aAnular && aAnular.numero}</b> por{' '}
-          <b>{aAnular && money(aAnular.total_neto)}</b>. No se puede deshacer:
+          <b>{aAnular && money(aPagarDe(aAnular))}</b>. No se puede deshacer:
           si después lo querés, hay que cargarlo de nuevo.
         </p>
         <label className="t-label" htmlFor="an-motivo">Motivo <span className="t-opt">(opcional)</span></label>

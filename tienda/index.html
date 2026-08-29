@@ -16,7 +16,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="icon" href="/favicon.ico" sizes="any">
-  <link rel="stylesheet" href="tienda.css?v=12">
+  <link rel="stylesheet" href="tienda.css?v=13">
 </head>
 <body>
   <noscript>
@@ -59,7 +59,7 @@
        mayorista y el que imprime el equipo desde el panel tienen que ser el
        mismo papel. Es liviano y no depende de nada (ni de data.js ni de
        pdfmake): se trae pdfmake solo cuando hay un click. -->
-  <script src="/components/b2b-presupuesto-pdf.js?v=1"></script>
+  <script src="/components/b2b-presupuesto-pdf.js?v=2"></script>
 
   <!-- Componentes de la tienda, en orden de dependencia.
        tienda-ui.jsx declara los globales (Icon, useToast, hooks) que usan
@@ -68,15 +68,15 @@
   <script type="text/babel" src="components/tienda-acceso.jsx?v=6"></script>
   <script type="text/babel" src="components/tienda-canal.jsx?v=1"></script>
   <script type="text/babel" src="components/tienda-catalogo.jsx?v=3"></script>
-  <script type="text/babel" src="components/tienda-carrito.jsx?v=3"></script>
+  <script type="text/babel" src="components/tienda-carrito.jsx?v=4"></script>
   <!-- Las facturas van ANTES de pedidos: la tarjeta del pedido usa
        ListaFacturas para el botón de descarga (migración 0169). -->
   <script type="text/babel" src="components/tienda-facturas.jsx?v=1"></script>
-  <script type="text/babel" src="components/tienda-pedidos.jsx?v=5"></script>
+  <script type="text/babel" src="components/tienda-pedidos.jsx?v=6"></script>
   <!-- El resumen va DESPUES de pedidos y catalogo: reusa ESTADO_CLIENTE y
        urlFoto, que se declaran ahi. Antes de app.jsx, que es quien lo monta. -->
   <script type="text/babel" src="components/tienda-resumen.jsx?v=1"></script>
-  <script type="text/babel" src="components/tienda-app.jsx?v=10"></script>
+  <script type="text/babel" src="components/tienda-app.jsx?v=11"></script>
 
   <!-- Boot ------------------------------------------------------------------
        Babel compila los .jsx de forma asíncrona, así que se espera a que los

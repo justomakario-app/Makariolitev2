@@ -201,10 +201,17 @@ window.B2B_PDF = window.B2B_PDF || (function () {
       iva = conIva - neto;
     }
     const pcts = Object.keys(alicuotas);
+    /* El tilde del carrito (0170). Sin IVA no se emite factura y lo que se
+       cobra es el neto; el IVA se sigue calculando por si algun dia hace
+       falta, pero este papel no lo muestra. `!== false` y no `=== true`:
+       un pedido viejo llega sin la clave y esos siempre se facturaron. */
+    const gravado = pedido.con_iva !== false;
     return {
       neto: neto,
       iva: iva,
       conIva: conIva,
+      gravado: gravado,
+      aPagar: gravado ? conIva : neto,
       unidades: unidades || Number(pedido.unidades) || 0,
       /* Con una sola alicuota se puede decir "IVA 21%"; con varias, solo
          "IVA" — poner un porcentaje que no es el de todas las lineas seria
@@ -301,7 +308,7 @@ window.B2B_PDF = window.B2B_PDF || (function () {
       membrete(emisor),
       raya,
       { columns: [
-          { text: 'PRESUPUESTO', style: 'h2' },
+          { text: t.gravado ? 'PRESUPUESTO' : 'PRESUPUESTO SIN IVA', style: 'h2' },
           { stack: [
               { text: 'N° ' + numero, alignment: 'right', bold: true, fontSize: 11 },
               { text: 'Emitido el ' + hoy(), alignment: 'right', style: 'small' },
@@ -330,19 +337,24 @@ window.B2B_PDF = window.B2B_PDF || (function () {
       },
     });
 
-    /* Los dos totales que pidio el cliente: el neto para el que factura
-       aparte y el total con IVA para el que quiere el numero final. */
+    /* Con IVA van los dos totales: el neto para el que factura aparte y el
+       total con IVA para el que quiere el numero final. Sin IVA va uno solo
+       — mostrar un "total con IVA" que este pedido no cobra es exactamente
+       lo que hace que el mayorista transfiera de mas. */
+    const filasTotal = t.gravado
+      ? [[{ text: 'Subtotal (neto)', fontSize: 10 },
+           { text: money(t.neto), alignment: 'right', fontSize: 10 }],
+         [{ text: t.etiquetaIva, fontSize: 10 },
+           { text: money(t.iva), alignment: 'right', fontSize: 10 }],
+         [{ text: 'TOTAL con IVA', style: 'total' },
+           { text: money(t.conIva), alignment: 'right', style: 'total' }]]
+      : [[{ text: 'TOTAL sin IVA', style: 'total' },
+           { text: money(t.aPagar), alignment: 'right', style: 'total' }]];
+
     content.push({
       columns: [
         { width: '*', text: '' },
-        { width: 230, table: { widths: ['*', 92], body: [
-            [{ text: 'Subtotal (neto)', fontSize: 10 },
-             { text: money(t.neto), alignment: 'right', fontSize: 10 }],
-            [{ text: t.etiquetaIva, fontSize: 10 },
-             { text: money(t.iva), alignment: 'right', fontSize: 10 }],
-            [{ text: 'TOTAL con IVA', style: 'total' },
-             { text: money(t.conIva), alignment: 'right', style: 'total' }],
-          ] },
+        { width: 230, table: { widths: ['*', 92], body: filasTotal },
           layout: {
             hLineWidth: function (i, node) { return i === node.table.body.length - 1 ? 0.8 : 0; },
             vLineWidth: function () { return 0; },
@@ -356,9 +368,22 @@ window.B2B_PDF = window.B2B_PDF || (function () {
 
     content.push({
       text: t.unidades + (t.unidades === 1 ? ' unidad' : ' unidades')
-          + ' · Los precios son NETOS, sin IVA. El total con IVA se detalla arriba.',
+          + (t.gravado
+              ? ' · Los precios son NETOS, sin IVA. El total con IVA se detalla arriba.'
+              : ' · Los precios son NETOS. Este pedido no lleva IVA.'),
       style: 'small', margin: [0, 8, 0, 0],
     });
+
+    /* La leyenda va en el papel y no solo en la pantalla: este PDF es lo que
+       el mayorista le muestra a su contador, y tiene que decir solo por que
+       no va a llegar ninguna factura. */
+    if (!t.gravado) {
+      content.push({
+        text: 'SIN IVA — no se emite factura. Este pedido se trabaja unicamente '
+            + 'en formato presupuesto.',
+        bold: true, fontSize: 9.5, color: '#8A4B08', margin: [0, 8, 0, 0],
+      });
+    }
 
     if (pedido.notas && String(pedido.notas).trim()) {
       content.push({ text: [{ text: 'Notas: ', bold: true }, String(pedido.notas)],
