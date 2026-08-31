@@ -44,7 +44,7 @@ const Chip = ({ estado }) => {
   return <span className="t-chip-estado" style={{ background: e.bg, color: e.fg }}>{e.label}</span>;
 };
 
-/* ── Con IVA / sin IVA ───────────────────────────────────────────────────
+/* ── Factura o presupuesto ───────────────────────────────────────────────
    `total_a_pagar` lo calcula la base (columna generada, 0170) y es la unica
    cifra que no puede quedar desalineada con el mail ni con el PDF. El resto
    del calculo es respaldo por si un pedido viejo llega sin ella. */
@@ -55,10 +55,10 @@ const aPagarDe = (p) => (
   : Number(p.total_neto || 0)
 );
 
-/* Solo se marca la excepcion. Con IVA es lo normal y no necesita cartel;
-   sin IVA es lo que hay que reconocer de un vistazo, porque ese pedido no
-   lleva factura. */
-const ChipIva = ({ p }) => conIvaDe(p) ? null : <span className="t-chip-iva">sin IVA</span>;
+/* Solo se marca la excepcion: la factura es lo normal y no necesita cartel.
+   El chip dice que documento le corresponde a ese pedido, en gris y sin
+   alarma — es una forma de trabajar, no un problema. */
+const ChipIva = ({ p }) => conIvaDe(p) ? null : <span className="t-chip-iva">presupuesto</span>;
 
 /* ── Los comprobantes que ya mandó ────────────────────────────────
    El bucket es privado: para ver el archivo hay que pedirle al backend una
@@ -192,7 +192,7 @@ const ModalComprobante = ({ pedido, clienteId, onCerrar, onListo }) => {
            }>
       <p>
         Vas a adjuntar el comprobante del pedido <b>{pedido.numero}</b> por{' '}
-        <b>{money(total)}</b>{conIvaDe(pedido) ? '' : ' (sin IVA)'}.
+        <b>{money(total)}</b>{conIvaDe(pedido) ? '' : ' (presupuesto)'}.
         Lo recibe el equipo y lo revisa. El pedido no cambia de estado solo por esto.
       </p>
 
@@ -291,10 +291,7 @@ const Pedido = ({ p, onAnular, anulando, onRepetir, onAdjuntar,
           {!conIva && (
             <div className="t-pedido-noiva">
               <Icon n="info" s={14}/>
-              <span>
-                Este pedido va <b>sin IVA</b>: se trabaja como presupuesto y no lleva
-                factura. Si la necesitas, avisanos y lo vemos.
-              </span>
+              <span><b>Presupuesto</b> sin impuestos ni percepciones.</span>
             </div>
           )}
 
@@ -328,11 +325,10 @@ const Pedido = ({ p, onAnular, anulando, onRepetir, onAdjuntar,
             </div>
           )}
 
-          {p.fecha_entrega_deseada && (
-            <div className="t-pedido-dato">
-              Entrega pedida para <b>{fecha(p.fecha_entrega_deseada)}</b>
-            </div>
-          )}
+          {/* Acá se mostraba "Entrega pedida para <fecha>". Salió junto con el
+              campo del carrito: repetirle al cliente una fecha que él mismo
+              puso lo deja esperándola como si estuviera acordada. La entrega
+              se acuerda al responder el pedido. */}
 
           {/* La tabla va adentro de una caja que scrollea de costado. En un
               telefono de 360px las cuatro columnas con precios de siete
@@ -358,7 +354,7 @@ const Pedido = ({ p, onAnular, anulando, onRepetir, onAdjuntar,
                 </tr>
               ))}
             </tbody>
-            {/* Sin IVA no se listan el neto ni el IVA: son numeros que este
+            {/* En un presupuesto no se listan el neto ni el IVA: son numeros que este
                 pedido no cobra, y al lado del que si se cobra son justo lo
                 que hace transferir de mas. */}
             <tfoot>
@@ -381,7 +377,7 @@ const Pedido = ({ p, onAnular, anulando, onRepetir, onAdjuntar,
                 </>
               ) : (
                 <tr>
-                  <td colSpan="3">Total sin IVA</td>
+                  <td colSpan="3">Total</td>
                   <td className="t-num"><b>{money(aPagar)}</b></td>
                 </tr>
               )}

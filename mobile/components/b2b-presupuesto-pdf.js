@@ -201,10 +201,10 @@ window.B2B_PDF = window.B2B_PDF || (function () {
       iva = conIva - neto;
     }
     const pcts = Object.keys(alicuotas);
-    /* El tilde del carrito (0170). Sin IVA no se emite factura y lo que se
-       cobra es el neto; el IVA se sigue calculando por si algun dia hace
-       falta, pero este papel no lo muestra. `!== false` y no `=== true`:
-       un pedido viejo llega sin la clave y esos siempre se facturaron. */
+    /* El tilde del carrito (0170). Como presupuesto lo que se cobra es el
+       neto; el IVA se sigue calculando por si algun dia hace falta, pero
+       este papel no lo muestra. `!== false` y no `=== true`: un pedido
+       viejo llega sin la clave y esos siempre se facturaron. */
     const gravado = pedido.con_iva !== false;
     return {
       neto: neto,
@@ -308,7 +308,11 @@ window.B2B_PDF = window.B2B_PDF || (function () {
       membrete(emisor),
       raya,
       { columns: [
-          { text: t.gravado ? 'PRESUPUESTO' : 'PRESUPUESTO SIN IVA', style: 'h2' },
+          /* Un solo titulo para los dos casos. Los dos papeles SON un
+             presupuesto; lo que cambia es si abajo hay renglon de IVA. El
+             titulo describe el documento y nada mas: este PDF se reenvia
+             por mail y no tiene por que declarar nada. */
+          { text: 'PRESUPUESTO', style: 'h2' },
           { stack: [
               { text: 'N° ' + numero, alignment: 'right', bold: true, fontSize: 11 },
               { text: 'Emitido el ' + hoy(), alignment: 'right', style: 'small' },
@@ -320,7 +324,10 @@ window.B2B_PDF = window.B2B_PDF || (function () {
       ['Cliente', cliente.nombre],
       ['CUIT', cliente.cuit],
       ['Fecha del pedido', fecha(pedido.enviado_at || pedido.created_at || pedido.fecha_pedido)],
-      ['Entrega deseada', fecha(pedido.fecha_entrega_deseada)],
+      /* Sin renglon de entrega. El comprador ya no carga una fecha, y
+         imprimirla en el presupuesto la convertia en un plazo por escrito
+         que nadie del lado de aca habia aceptado. La entrega se acuerda al
+         responder el pedido. */
       ['Dirección de entrega', pedido.direccion_entrega],
       ['Condición de pago', pedido.condicion_pago],
     ]);
@@ -338,7 +345,7 @@ window.B2B_PDF = window.B2B_PDF || (function () {
     });
 
     /* Con IVA van los dos totales: el neto para el que factura aparte y el
-       total con IVA para el que quiere el numero final. Sin IVA va uno solo
+       total con IVA para el que quiere el numero final. Si no, va uno solo
        — mostrar un "total con IVA" que este pedido no cobra es exactamente
        lo que hace que el mayorista transfiera de mas. */
     const filasTotal = t.gravado
@@ -348,7 +355,7 @@ window.B2B_PDF = window.B2B_PDF || (function () {
            { text: money(t.iva), alignment: 'right', fontSize: 10 }],
          [{ text: 'TOTAL con IVA', style: 'total' },
            { text: money(t.conIva), alignment: 'right', style: 'total' }]]
-      : [[{ text: 'TOTAL sin IVA', style: 'total' },
+      : [[{ text: 'TOTAL', style: 'total' },
            { text: money(t.aPagar), alignment: 'right', style: 'total' }]];
 
     content.push({
@@ -369,21 +376,10 @@ window.B2B_PDF = window.B2B_PDF || (function () {
     content.push({
       text: t.unidades + (t.unidades === 1 ? ' unidad' : ' unidades')
           + (t.gravado
-              ? ' · Los precios son NETOS, sin IVA. El total con IVA se detalla arriba.'
-              : ' · Los precios son NETOS. Este pedido no lleva IVA.'),
+              ? ' · Los precios son NETOS. El total con IVA se detalla arriba.'
+              : ' · Presupuesto sin impuestos ni percepciones.'),
       style: 'small', margin: [0, 8, 0, 0],
     });
-
-    /* La leyenda va en el papel y no solo en la pantalla: este PDF es lo que
-       el mayorista le muestra a su contador, y tiene que decir solo por que
-       no va a llegar ninguna factura. */
-    if (!t.gravado) {
-      content.push({
-        text: 'SIN IVA — no se emite factura. Este pedido se trabaja unicamente '
-            + 'en formato presupuesto.',
-        bold: true, fontSize: 9.5, color: '#8A4B08', margin: [0, 8, 0, 0],
-      });
-    }
 
     if (pedido.notas && String(pedido.notas).trim()) {
       content.push({ text: [{ text: 'Notas: ', bold: true }, String(pedido.notas)],
@@ -449,7 +445,11 @@ window.B2B_PDF = window.B2B_PDF || (function () {
       ['Cliente', cliente.nombre],
       ['Canal', pedido.canal],
       ['Fecha del pedido', fecha(pedido.enviado_at || pedido.created_at || pedido.fecha_pedido)],
-      ['Entrega deseada', fecha(pedido.fecha_entrega_deseada)],
+      /* Este papel es interno — va al taller — y la fecha que trae es la
+         estimada por el equipo (paraPdf la mapea desde
+         fecha_entrega_estimada), no una que haya puesto el cliente. Por eso
+         se queda, con el nombre que le corresponde. */
+      ['Entrega estimada', fecha(pedido.fecha_entrega_deseada)],
       ['Dirección de entrega', pedido.direccion_entrega],
     ]);
     if (ficha) content.push(ficha);

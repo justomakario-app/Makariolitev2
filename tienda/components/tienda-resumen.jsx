@@ -12,7 +12,7 @@
    ranking. Si esa llamada falla, el resumen se muestra igual con los datos
    que ya venían en los renglones del pedido: es un adorno, no un requisito.
 
-   Plata: siempre el NETO (total_neto), sin IVA. Es la misma vara con la que
+   Plata: siempre el NETO (total_neto). Es la misma vara con la que
    se mide el mínimo de compra en el catálogo y en el carrito. Mezclar netos
    con IVA incluido en la misma pantalla es la forma más rápida de que el
    cliente crea que le estamos cobrando de más.
@@ -390,14 +390,14 @@ const PantallaResumen = ({ cuenta, recargarSenal, onIrCatalogo, onVerPedidos }) 
 
       <div className="t-res-kpis">
         <ResKpi fuerte icono="dollar" rotulo="Total comprado"
-                valor={montoCorto(r.total)} pie={money(r.total) + ' sin IVA'}/>
+                valor={montoCorto(r.total)} pie={money(r.total) + ' neto'}/>
         <ResKpi icono="history" rotulo="Pedidos"
                 valor={num(r.cant)}
                 pie={r.diasUltimo === null ? null
                      : r.diasUltimo === 0 ? 'El último, hoy'
                      : 'El último, hace ' + num(r.diasUltimo) + (r.diasUltimo === 1 ? ' día' : ' días')}/>
         <ResKpi icono="chart" rotulo="Promedio por pedido"
-                valor={montoCorto(r.promedio)} pie={money(r.promedio) + ' sin IVA'}/>
+                valor={montoCorto(r.promedio)} pie={money(r.promedio) + ' neto'}/>
         <ResKpi icono="package" rotulo="Unidades" valor={num(r.unidades)}
                 pie={r.cadaDias ? 'Comprás cada ' + num(r.cadaDias) + ' días aprox.' : 'Piezas en total'}/>
       </div>
@@ -429,7 +429,7 @@ const PantallaResumen = ({ cuenta, recargarSenal, onIrCatalogo, onVerPedidos }) 
       </div>
 
       <p className="t-res-legal">
-        Los importes son netos, sin IVA — la misma base con la que se mide el mínimo de compra.
+        Los importes son netos — la misma base con la que se mide el mínimo de compra.
         Si algo no te cierra contra tu cuenta corriente, escribinos y lo revisamos.
       </p>
     </div>

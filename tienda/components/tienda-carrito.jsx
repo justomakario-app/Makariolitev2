@@ -78,33 +78,31 @@ const FilaCarrito = ({ item, onSetCantidad, ocupado }) => {
   );
 };
 
-/* ── Con IVA o sin IVA ─────────────────────────────────────────────────
-   Muchos mayoristas compran sin IVA y transfieren; otros lo computan y
-   necesitan la factura. Eso se venía arreglando por WhatsApp y el pedido
-   llegaba al equipo sin decir cuál de las dos era. Ahora lo elige el
-   comprador acá y queda pegado al pedido (b2b_pedido.con_iva, 0170): la
-   nota interna, los mails y el presupuesto dicen todos lo mismo.
+/* ── Facturar o presupuesto ────────────────────────────────────────────
+   Unos mayoristas necesitan la factura y otros trabajan con presupuesto.
+   Eso se venía arreglando por WhatsApp y el pedido llegaba al equipo sin
+   decir cuál de las dos era. Ahora lo elige el comprador acá y queda
+   pegado al pedido (b2b_pedido.con_iva, 0170): la nota interna, los mails
+   y el presupuesto dicen todos lo mismo.
 
-   La leyenda no es adorno, es la consecuencia: sin IVA no hay factura —es
-   un presupuesto— y con IVA se factura al CUIT de la cuenta. Leerlo ANTES
-   de enviar es lo que evita el pedido rehecho. */
-const IvaTilde = ({ valor, onCambiar, ocupado, cuit }) => (
+   El tilde se lee en términos del COMPROBANTE, no del impuesto: lo que el
+   comprador decide es qué papel recibe. Cada leyenda describe el documento
+   que va a salir y nada más — nunca lo que no se emite. Esta pantalla se
+   saca de captura y se reenvía, así que lo que dice tiene que poder leerse
+   suelto, fuera de contexto, sin que signifique otra cosa. */
+const IvaTilde = ({ valor, onCambiar, ocupado, cuit, alicuota }) => (
   <div className={'t-iva' + (valor ? ' t-iva-on' : '')}>
     <label className="t-iva-check">
       <input type="checkbox" checked={valor} disabled={ocupado}
              onChange={e => onCambiar(e.target.checked)}/>
       <span className="t-iva-box" aria-hidden="true"><Icon n="check" s={12}/></span>
-      <span className="t-iva-lbl">Quiero el pedido <b>con IVA</b></span>
+      <span className="t-iva-lbl">Quiero <b>facturar</b> este pedido</span>
     </label>
     <p className="t-iva-leyenda">
       {valor
-        ? <>Emitimos factura {cuit
-            ? <>al CUIT <b>{cuit}</b></>
-            : <>a tu CUIT (todavía no lo tenemos cargado, te lo pedimos al confirmar)</>
-          } por el total de arriba.</>
-        : <>Sin IVA <b>no podemos emitir factura</b>: el pedido se trabaja como
-           presupuesto. Si la necesitás, tildá la opción y el total pasa a
-           incluir el IVA.</>}
+        ? <>Se generará una factura con el <b>{alicuota ? alicuota + '% de IVA' : 'IVA'}</b>
+           {cuit ? <> al CUIT <b>{cuit}</b></> : ' a tu CUIT'}.</>
+        : <><b>Presupuesto</b> sin impuestos ni percepciones.</>}
     </p>
   </div>
 );
@@ -130,7 +128,6 @@ const Minimo = ({ etiqueta, actual, requerido, formato }) => {
 /* ══ Pantalla del pedido en preparación ═════════════════════════════════ */
 const PantallaCarrito = ({ carrito, cliente, onSetCantidad, onGuardarDatos, onEnviar, onSeguirComprando, ocupado }) => {
   const [dir, setDir]       = useState('');
-  const [fechaE, setFechaE] = useState('');
   const [notas, setNotas]   = useState('');
   const [conIva, setConIva] = useState(true);
   const [tocandoIva, setTocandoIva] = useState(false);
@@ -145,14 +142,12 @@ const PantallaCarrito = ({ carrito, cliente, onSetCantidad, onGuardarDatos, onEn
   useEffect(() => {
     if (!carrito) return;
     setDir(carrito.direccion_entrega || '');
-    setFechaE(carrito.fecha_entrega_deseada || '');
     setNotas(carrito.notas || '');
-  }, [carrito && carrito.direccion_entrega, carrito && carrito.fecha_entrega_deseada,
-      carrito && carrito.notas]);
+  }, [carrito && carrito.direccion_entrega, carrito && carrito.notas]);
 
   /* El tilde también vive en el borrador, así que vuelve del servidor: el
-     cliente lo deja en "sin IVA", se va al catálogo y al volver sigue como
-     lo dejó. Efecto aparte de los datos de entrega porque se guarda solo,
+     cliente lo deja en presupuesto, se va al catálogo y al volver sigue
+     como lo dejó. Efecto aparte de los datos de entrega porque se guarda solo,
      apenas se toca, sin esperar el botón "Guardar datos".
      Ojo con el !== false: un carrito viejo puede no traer la clave, y en ese
      caso el pedido va con IVA, que es como venía funcionando siempre. */
@@ -183,6 +178,21 @@ const PantallaCarrito = ({ carrito, cliente, onSetCantidad, onGuardarDatos, onEn
      carrito todavía no está sellado y no tiene esa columna cargada. */
   const aPagar = conIva ? totales.total : totales.neto;
 
+  /* El porcentaje que promete la leyenda de la factura. Sale de los ítems,
+     no está escrito a mano: hoy el catálogo entero es 21%, pero un producto
+     al 10,5% convertiría ese "21%" en un número que la factura no va a
+     tener. Con más de una alícuota no se promete ninguna — igual que hace
+     el PDF con su etiqueta de IVA. */
+  const alicuota = useMemo(() => {
+    const pcts = [];
+    items.forEach(i => {
+      if (i.disponible === false) return;
+      const p = Number(i.iva_pct);
+      if (p > 0 && pcts.indexOf(p) < 0) pcts.push(p);
+    });
+    return pcts.length === 1 ? String(pcts[0]) : null;
+  }, [items]);
+
   const minMonto = Number(carrito && carrito.minimo_pedido) || 0;
   const minUnid  = Number(carrito && carrito.minimo_unidades) || 0;
   const faltaMonto = minMonto > 0 && totales.neto < minMonto;
@@ -192,7 +202,6 @@ const PantallaCarrito = ({ carrito, cliente, onSetCantidad, onGuardarDatos, onEn
 
   const hayCambios =
     dir !== (carrito?.direccion_entrega || '') ||
-    fechaE !== (carrito?.fecha_entrega_deseada || '') ||
     notas !== (carrito?.notas || '');
 
   /* Se guarda solo, en el momento. Un tilde que hay que confirmar con otro
@@ -214,7 +223,7 @@ const PantallaCarrito = ({ carrito, cliente, onSetCantidad, onGuardarDatos, onEn
   const guardar = async () => {
     setGuardando(true);
     try {
-      await onGuardarDatos({ direccion_entrega: dir, fecha_entrega_deseada: fechaE, notas });
+      await onGuardarDatos({ direccion_entrega: dir, notas });
       toast.success('Datos guardados.');
     } catch (e) {
       toast.error(e.message || 'No se pudieron guardar los datos.');
@@ -228,7 +237,7 @@ const PantallaCarrito = ({ carrito, cliente, onSetCantidad, onGuardarDatos, onEn
          dirección y apretó "Enviar" sin apretar "Guardar", el pedido tiene
          que salir con esa dirección igual. */
       if (hayCambios) {
-        await onGuardarDatos({ direccion_entrega: dir, fecha_entrega_deseada: fechaE, notas });
+        await onGuardarDatos({ direccion_entrega: dir, notas });
       }
       /* Va explícito aunque ya esté guardado: si el cliente tildó y mandó en
          el mismo movimiento, esto es más nuevo que el borrador. */
@@ -286,10 +295,13 @@ const PantallaCarrito = ({ carrito, cliente, onSetCantidad, onGuardarDatos, onEn
           <input id="ca-dir" className="t-input" value={dir} onChange={e => setDir(e.target.value)}
                  placeholder="Calle, número, localidad"/>
 
-          <label className="t-label" htmlFor="ca-fecha">¿Para cuándo lo necesitás? <span className="t-opt">(opcional)</span></label>
-          <input id="ca-fecha" className="t-input" type="date" value={fechaE}
-                 onChange={e => setFechaE(e.target.value)}/>
-          <div className="t-help">Es una preferencia, no una fecha confirmada: te la confirmamos al responderte.</div>
+          {/* Acá vivía "¿Para cuándo lo necesitás?". Lo sacó el dueño: una
+              fecha puesta por el comprador se lee después como un plazo
+              comprometido, y el equipo terminaba corriendo detrás de una
+              fecha que nunca aceptó. La entrega se acuerda al responder el
+              pedido. La columna fecha_entrega_deseada sigue en la base para
+              los pedidos viejos que ya la tienen; simplemente nadie la
+              carga más desde acá. */}
 
           <label className="t-label" htmlFor="ca-notas">Notas <span className="t-opt">(opcional)</span></label>
           <textarea id="ca-notas" className="t-input t-textarea" rows="3" value={notas}
@@ -312,22 +324,22 @@ const PantallaCarrito = ({ carrito, cliente, onSetCantidad, onGuardarDatos, onEn
           <div className="t-resumen-linea t-resumen-suave"><span>IVA</span><span>{money(totales.iva)}</span></div>
         )}
         <div className="t-resumen-total">
-          <span>{conIva ? 'Total con IVA' : 'Total sin IVA'}</span><b>{money(aPagar)}</b>
+          <span>{conIva ? 'Total con IVA' : 'Total'}</span><b>{money(aPagar)}</b>
         </div>
 
         {/* Va acá, pegado al total y no abajo con los datos de entrega, porque
             lo que cambia es el número: el cliente lo toca y ve en el acto
             cuánto tiene que transferir. Es el momento de confirmar el pedido,
             que es donde lo pidió el dueño. */}
-        <IvaTilde valor={conIva} onCambiar={cambiarIva} cuit={cuit}
+        <IvaTilde valor={conIva} onCambiar={cambiarIva} cuit={cuit} alicuota={alicuota}
                   ocupado={ocupado || tocandoIva || enviando}/>
 
-        {/* El mínimo del canal se mide SIN IVA — es lo que valida el backend
-            ("El minimo de compra es X (sin IVA)"). Se aclara siempre, tildado
-            o no: con IVA porque justo arriba hay un total más alto que el
-            mínimo, y sin IVA porque el cliente que acaba de destildar tiene
-            que saber que el mínimo no se le movió. */}
-        <Minimo etiqueta="Monto sin IVA" actual={totales.neto} requerido={minMonto} formato={money}/>
+        {/* El mínimo del canal se mide sobre el NETO — es lo que valida el
+            backend. Se aclara siempre, tildado o no: con factura porque justo
+            arriba hay un total más alto que el mínimo, y como presupuesto
+            porque el que acaba de destildar tiene que saber que el mínimo no
+            se le movió para abajo. */}
+        <Minimo etiqueta="Monto neto" actual={totales.neto} requerido={minMonto} formato={money}/>
         <Minimo etiqueta="Unidades" actual={totales.unidades} requerido={minUnid}/>
 
         <button className="t-btn t-btn-primary t-btn-block" disabled={!puedeEnviar}
@@ -342,7 +354,7 @@ const PantallaCarrito = ({ carrito, cliente, onSetCantidad, onGuardarDatos, onEn
         ) : (faltaMonto || faltaUnid) && (
           <div className="t-resumen-nota">
             Cuando llegues al mínimo de tu canal vas a poder enviarlo.
-            {faltaMonto && <> El mínimo se mide sobre el neto, sin IVA.</>}
+            {faltaMonto && <> El mínimo se mide sobre el neto.</>}
           </div>
         )}
 
@@ -365,18 +377,18 @@ const PantallaCarrito = ({ carrito, cliente, onSetCantidad, onGuardarDatos, onEn
              }>
         <p>
           Son <b>{num(comprables.length)}</b> producto{comprables.length === 1 ? '' : 's'} ·
-          {' '}<b>{num(totales.unidades)}</b> unidades · <b>{money(aPagar)}</b>
-          {' '}{conIva ? 'con IVA' : 'sin IVA'}.
+          {' '}<b>{num(totales.unidades)}</b> unidades · <b>{money(aPagar)}</b>.
         </p>
         {/* Se repite acá a propósito. Es lo último que se lee antes de que el
             pedido salga, y es la parte que no se puede deshacer solo: si el
-            cliente necesitaba factura y mandó sin IVA, hay que pedírselo al
-            equipo. */}
+            cliente necesitaba la factura y mandó el presupuesto, hay que
+            pedírselo al equipo. */}
         <p className={'t-modal-iva' + (conIva ? '' : ' t-modal-iva-off')}>
-          <Icon n={conIva ? 'check' : 'alert'} s={14}/>
+          <Icon n={conIva ? 'check' : 'info'} s={14}/>
           {conIva
-            ? <> Con IVA: emitimos factura{cuit ? <> al CUIT <b>{cuit}</b></> : ' a tu CUIT'}.</>
-            : <> Sin IVA: <b>no se emite factura</b>, el pedido queda como presupuesto.</>}
+            ? <> Se genera una <b>factura</b> con el {alicuota ? alicuota + '% de IVA' : 'IVA'}
+                {cuit ? <> al CUIT <b>{cuit}</b></> : ' a tu CUIT'}.</>
+            : <> <b>Presupuesto</b> sin impuestos ni percepciones.</>}
         </p>
         <p className="t-modal-sec">
           Los precios de este pedido quedan congelados como están ahora. Si después
@@ -442,9 +454,10 @@ const PedidoEnviado = ({ resultado, onVerPedidos, onSeguirComprando, emisor, cli
         Ya está en nuestro sistema y el equipo recibió el aviso. Te contactamos para
         confirmarte disponibilidad y fecha de entrega.
       </p>
-      {/* Sin IVA no se muestran el IVA ni el total con IVA. Son números que
-          este pedido no cobra, y ponerlos al lado del que sí se cobra es lo
-          que hace que el mayorista transfiera de más. */}
+      {/* El presupuesto muestra un solo número: el que se cobra. Abrirlo en
+          neto + IVA + total cuando no hay factura pone al lado del número
+          que se paga otro más alto que no se paga, y así es como el
+          mayorista termina transfiriendo de más. */}
       <div className="t-enviado-datos">
         <div><span>Unidades</span><b>{num(resultado.unidades)}</b></div>
         {conIva ? (
@@ -454,17 +467,16 @@ const PedidoEnviado = ({ resultado, onVerPedidos, onSeguirComprando, emisor, cli
             <div className="es-total"><span>Total con IVA</span><b>{money(aPagar)}</b></div>
           </>
         ) : (
-          <div className="es-total"><span>Total sin IVA</span><b>{money(aPagar)}</b></div>
+          <div className="es-total"><span>Total</span><b>{money(aPagar)}</b></div>
         )}
       </div>
 
       <p className={'t-enviado-iva' + (conIva ? '' : ' t-enviado-iva-off')}>
         <Icon n={conIva ? 'file' : 'info'} s={14}/>
         {conIva
-          ? <> Te emitimos la factura{cuit ? <> al CUIT <b>{cuit}</b></> : ''} por
+          ? <> Se genera la <b>factura</b>{cuit ? <> al CUIT <b>{cuit}</b></> : ''} por
               {' '}<b>{money(aPagar)}</b>.</>
-          : <> Este pedido va <b>sin IVA</b>: se trabaja como presupuesto y no
-              lleva factura. Si la necesitás, avisanos antes de que lo preparemos.</>}
+          : <> <b>Presupuesto</b> sin impuestos ni percepciones.</>}
       </p>
 
       <div className="t-enviado-acciones">

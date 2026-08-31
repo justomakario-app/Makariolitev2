@@ -413,9 +413,9 @@ button { font: inherit; color: inherit; }
   margin-top: 7px; padding-left: 28px;
 }
 .t-iva-leyenda b { font-weight: 700; color: var(--ink-soft); }
-/* Sin tildar, la frase que importa es "no podemos emitir factura": va en
-   ambar, que en toda la tienda significa "ojo con esto", no "error". */
-.t-iva:not(.t-iva-on) .t-iva-leyenda b { color: var(--amber); }
+/* Las dos leyendas se leen igual de tranquilas. Antes la de destildado iba
+   en ambar; el ambar aca queria decir "ojo con esto", y elegir presupuesto
+   no es un "ojo con esto", es la otra mitad de una eleccion normal. */
 /* Mientras se guarda la eleccion queda apagada pero en su lugar: nada se
    mueve, asi el cliente no pierde de vista lo que acaba de tocar. */
 .t-iva-check input:disabled ~ .t-iva-box,
@@ -493,9 +493,9 @@ button { font: inherit; color: inherit; }
 .t-pedido-num b { font-family: var(--mono); font-size: 13.5px; }
 .t-pedido-num span { font-size: 11.5px; color: var(--ink-muted); }
 .t-chip-estado { padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700; }
-/* Marca solo la excepcion: un pedido sin IVA no lleva factura. Va en gris
-   con borde y no en ambar como el aviso del carrito — aca ya es un hecho
-   del pedido, no una advertencia sobre algo que todavia se puede cambiar. */
+/* Marca solo la excepcion: el pedido salio como presupuesto. Va en gris
+   con borde, que es como se ve cualquier otro dato del pedido — es un
+   hecho, no una advertencia. */
 .t-chip-iva {
   padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700;
   letter-spacing: .02em; color: var(--ink-muted);
@@ -507,11 +507,11 @@ button { font: inherit; color: inherit; }
 .t-pedido-ayuda { font-size: 12.5px; color: var(--ink-soft); padding: 11px 0; }
 .t-pedido-noiva {
   display: flex; align-items: flex-start; gap: 8px;
-  font-size: 12.5px; line-height: 1.5; color: #8A4B08;
-  background: var(--amber-bg); border: 1px solid rgba(217,119,6,.22);
+  font-size: 12.5px; line-height: 1.5; color: var(--ink-soft);
+  background: var(--paper-off); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 9px 11px; margin-bottom: 11px;
 }
-.t-pedido-noiva svg { flex: none; margin-top: 2px; color: var(--amber); }
+.t-pedido-noiva svg { flex: none; margin-top: 2px; color: var(--ink-muted); }
 .t-pedido-noiva b { font-weight: 700; }
 .t-pedido-dato { font-size: 12.5px; color: var(--ink-soft); padding-bottom: 10px; }
 .t-pedido-factura {
@@ -642,21 +642,26 @@ button { font: inherit; color: inherit; }
 .t-enviado-datos .es-total b { font-weight: 800; }
 .t-enviado-pie { max-width: 340px; line-height: 1.5; margin-top: 14px; }
 
-/* Aviso de facturacion del pedido ya enviado. El icono va absoluto y no
+/* Aviso de comprobante del pedido ya enviado. El icono va absoluto y no
    como item de flex: el texto lleva <b> adentro, y en flex cada <b> se
-   convierte en una caja aparte y la frase se parte en pedazos. */
+   convierte en una caja aparte y la frase se parte en pedazos.
+
+   Mismo par de colores que el modal, para que lo ultimo que el cliente ve
+   antes de mandar y lo primero que ve despues sean la misma cosa. */
 .t-enviado-iva {
   position: relative; max-width: 430px; margin: 0 0 16px;
   padding: 11px 13px 11px 34px; border-radius: 10px;
   font-size: 12.5px; line-height: 1.5;
-  background: var(--paper-off); color: var(--ink-soft);
-  border: 1px solid var(--border);
+  background: var(--green-bg); color: #15603A;
+  border: 1px solid rgba(22,163,74,.20);
 }
-.t-enviado-iva svg { position: absolute; left: 12px; top: 12px; color: var(--ink-muted); }
-.t-enviado-iva b { font-weight: 700; color: var(--ink); }
-.t-enviado-iva-off { background: var(--amber-bg); color: #8A4B08; border-color: rgba(217,119,6,.22); }
-.t-enviado-iva-off svg { color: var(--amber); }
-.t-enviado-iva-off b { color: #7A4207; }
+.t-enviado-iva svg { position: absolute; left: 12px; top: 12px; }
+.t-enviado-iva b { font-weight: 700; }
+.t-enviado-iva-off {
+  background: var(--paper-off); color: var(--ink-soft); border-color: var(--border);
+}
+.t-enviado-iva-off svg { color: var(--ink-muted); }
+.t-enviado-iva-off b { color: var(--ink); }
 
 /* ── Modal ─────────────────────────────────────────────────────────────── */
 .t-overlay {
@@ -675,8 +680,8 @@ button { font: inherit; color: inherit; }
 .t-modal-body { padding: 18px; overflow-y: auto; font-size: 13.5px; }
 .t-modal-body p + p { margin-top: 9px; }
 .t-modal-sec { color: var(--ink-muted); font-size: 12.5px; }
-/* Lo ultimo que se lee antes de mandar el pedido. Mismo criterio de color
-   que en la tarjeta del carrito: verde cuando hay factura, ambar cuando no. */
+/* Lo ultimo que se lee antes de mandar el pedido: verde cuando se factura,
+   gris cuando es presupuesto. Ninguno de los dos es una advertencia. */
 .t-modal-iva {
   position: relative; margin-top: 12px;
   padding: 10px 12px 10px 33px; border-radius: 9px;
@@ -685,7 +690,11 @@ button { font: inherit; color: inherit; }
 }
 .t-modal-iva svg { position: absolute; left: 11px; top: 11px; }
 .t-modal-iva b { font-weight: 700; }
-.t-modal-iva-off { background: var(--amber-bg); color: #8A4B08; border-color: rgba(217,119,6,.22); }
+.t-modal-iva-off {
+  background: var(--paper-off); color: var(--ink-soft); border-color: var(--border);
+}
+.t-modal-iva-off svg { color: var(--ink-muted); }
+.t-modal-iva-off b { color: var(--ink); }
 .t-modal-foot {
   display: flex; justify-content: flex-end; gap: 8px;
   padding: 13px 18px; border-top: 1px solid var(--border);

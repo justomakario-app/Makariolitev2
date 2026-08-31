@@ -243,7 +243,7 @@ const CompraDeNuevo = ({ favoritos, enCarrito, onSetCantidad, ocupado }) => {
    productos y recién al final se enteraba de que no llegaba. Esta barra lo
    acompaña mientras compra, así la restricción no es una sorpresa al final.
 
-   Hace la MISMA cuenta que el carrito a propósito — neto sin IVA, sumando
+   Hace la MISMA cuenta que el carrito a propósito — sobre el neto, sumando
    `subtotal` — porque dos lugares mostrando números distintos del mismo
    pedido es peor que no mostrarlo. Si el canal no tiene mínimo (0 =
    desactivado, que es como estuvo hasta que el dueño pasó los montos) no se
@@ -294,7 +294,7 @@ const BarraMinimo = ({ carrito, onIrCarrito }) => {
           {vacio ? (
             <>
               <b>Mínimo de compra: {enunciado.join(' y ')}</b>
-              <span>{minMonto > 0 ? 'Se mide sobre el neto, sin IVA.' : 'Agregá productos para empezar.'}</span>
+              <span>{minMonto > 0 ? 'Se mide sobre el neto.' : 'Agregá productos para empezar.'}</span>
             </>
           ) : listo ? (
             <>

@@ -1593,7 +1593,7 @@
     return data;
   }
 
-  /* -- Corregir el con/sin IVA de un pedido ya enviado (0170) -------
+  /* -- Corregir el comprobante de un pedido ya enviado (0170) -------
      El tilde lo pone el CLIENTE en su carrito. Esto es la correccion de
      despues: llamo por telefono y ahora si quiere la factura, o al reves.
 

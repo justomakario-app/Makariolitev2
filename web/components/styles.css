@@ -2889,16 +2889,17 @@ tr.row-inactive:hover { opacity: 0.85; }
 .b2b-det-ficha span { font-size: 10px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: .04em; }
 .b2b-det-ficha b { font-size: 12.5px; overflow-wrap: anywhere; }
 
-/* -- Con IVA / sin IVA (0170) --------------------------------------------
-   Lo elige el cliente en su carrito y decide si el pedido se factura o
-   queda como presupuesto. En la tabla se marca SOLO la excepcion: con IVA
-   es lo normal y un cartel en cada fila seria ruido. */
+/* -- Comprobante del pedido (0170) ---------------------------------------
+   Lo elige el cliente en su carrito: sale factura o sale presupuesto. En la
+   tabla se marca SOLO la excepcion, porque la factura es lo normal y un
+   cartel en cada fila seria ruido. Va en gris y no en ambar: el ambar en
+   este panel quiere decir "ojo con esto", y un presupuesto no lo es. */
 .b2b-sin-iva {
   display: inline-block; margin-top: 3px;
   padding: 1px 7px; border-radius: 999px;
   font-size: 9.5px; font-weight: 700; letter-spacing: .03em;
-  color: var(--amber); background: var(--amber-bg);
-  border: 1px solid rgba(217, 119, 6, 0.28);
+  color: var(--ink-soft); background: var(--paper-off);
+  border: 1px solid rgba(0, 0, 0, 0.10);
 }
 
 .b2b-det-iva {
@@ -2908,14 +2909,15 @@ tr.row-inactive:hover { opacity: 0.85; }
   background: var(--green-bg); border: 1px solid rgba(22, 163, 74, 0.22);
   color: #15603A;
 }
-.b2b-det-iva.off { background: var(--amber-bg); border-color: rgba(217, 119, 6, 0.25); color: #8A4B08; }
+.b2b-det-iva.off { background: var(--paper-off); border-color: rgba(0, 0, 0, 0.10); color: var(--ink-soft); }
 .b2b-det-iva > svg { flex-shrink: 0; margin-top: 1px; }
 .b2b-det-iva-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .b2b-det-iva-txt > b { font-size: 12px; font-weight: 700; }
 .b2b-det-iva .btn-ghost-sm { flex-shrink: 0; margin-left: auto; }
 
-/* El aviso que hay que tildar antes de facturar un pedido que el cliente
-   pidio sin IVA. No bloquea: avisa y deja seguir. */
+/* El aviso que hay que tildar antes de facturar un pedido que salio como
+   presupuesto. Este SI va en ambar — es el unico lugar del comprobante
+   donde de verdad hay que mirar dos veces. No bloquea: avisa y deja seguir. */
 .b2b-aviso-iva {
   display: flex; align-items: flex-start; gap: 9px;
   margin: 0 0 12px; padding: 9px 11px;
