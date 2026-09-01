@@ -43,7 +43,6 @@ function ProduceModal({ open, onClose, defaultSku, defaultSubcanal }) {
   // se fueran al canal equivocado si el operario no tocaba el selector.
   const [subcanal, setSubcanal] = useState(defaultSubcanal || '');
   const [cantidad, setCantidad] = useState(1);
-  const [fecha, setFecha] = useState(new Date().toISOString().slice(0,10));
   const [nota, setNota] = useState('');
   const [scanning, setScanning] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -57,7 +56,7 @@ function ProduceModal({ open, onClose, defaultSku, defaultSubcanal }) {
       setSku(defaultSku || skus[0]);
       setSearch('');
       setSubcanal(defaultSubcanal || '');
-      setCantidad(1); setFecha(new Date().toISOString().slice(0,10));
+      setCantidad(1);
       setNota(''); setScanning(false);
       setJornadaIdOverride(null);
     }
@@ -76,10 +75,32 @@ function ProduceModal({ open, onClose, defaultSku, defaultSubcanal }) {
     }, 1500);
   };
 
-  /* faltante actual del SKU+canal seleccionados */
-  const lineaPlan = M.prod.todos.table.find(r =>
-    r.sku === sku && r.canal.toLowerCase().replace(' ','') === subcanal
-  );
+  /* ── Jornada destino ──────────────────────────────────────────────
+     Bug 2026-08-31 (video del cliente): el modal cargaba SIEMPRE a la
+     jornada ACTIVA, aunque el usuario estuviera mirando otra. Registraba
+     bien, pero el numero de la pantalla nunca se movia — y eso se lee como
+     "confirma y no guarda nada". Por defecto la carga tiene que ir a la
+     jornada que el usuario ESTA VIENDO, igual que ya hacen ImportModal y
+     ManualOrderModal. El selector sigue estando para mandarla a otra. */
+  const jAbiertas  = M.jornadas?.abiertas || [];
+  const jActivaId  = M.jornadas?.activaId || null;
+  const jVistaId   = M.jornadas?.seleccionadaId || jActivaId || jAbiertas[0]?.id || null;
+  const jDestinoId = jornadaIdOverride || jVistaId;
+  const jDestino   = jAbiertas.find(j => j.id === jDestinoId) || null;
+  const jVista     = jAbiertas.find(j => j.id === jVistaId)   || null;
+  const destinoEsOtra = !!jDestino && !!jVista && jDestino.id !== jVista.id;
+
+  /* faltante actual del SKU+canal — contra la jornada DESTINO, no contra la
+     que se ve en pantalla: si el usuario cambia el selector, el plan que
+     mostramos tiene que ser el de la jornada a la que va a cargar. */
+  const planDestino = (jDestinoId && subcanal && window.computeCarriersForJornada)
+    ? window.computeCarriersForJornada(jDestinoId)[subcanal]?.table
+    : null;
+  const lineaPlan = planDestino
+    ? planDestino.find(r => r.sku === sku)
+    : M.prod.todos.table.find(r =>
+        r.sku === sku && r.canal.toLowerCase().replace(' ','') === subcanal
+      );
   const faltanteActual = lineaPlan?.faltante || 0;
   const overflow = cantidad > faltanteActual && faltanteActual > 0;
   const sinPlan = !lineaPlan && step === 3;
@@ -89,11 +110,18 @@ function ProduceModal({ open, onClose, defaultSku, defaultSubcanal }) {
     try {
       const log = await window.MOCK_ACTIONS.registrarProduccion({
         sku, subcanal, cantidad, nota,
-        jornadaId: jornadaIdOverride || undefined,
+        jornadaId: jDestinoId || undefined,
       });
       onClose();
-      toast.success(`${cantidad} × ${sku} → ${window.CARRIERS[subcanal]?.label}`, {
-        dur: 5000,
+      /* La jornada va SIEMPRE en el toast. Si la carga fue a una jornada
+         distinta de la que se esta mirando, el total de la pantalla no se
+         mueve — sin este dato, eso se lee como que no guardo. */
+      const jTxt  = jDestino ? ` · jornada ${fmt.date(jDestino.fecha)}` : '';
+      const aviso = destinoEsOtra
+        ? ` — estás viendo ${fmt.date(jVista.fecha)}, por eso ese total no cambia`
+        : '';
+      toast.success(`${cantidad} × ${sku} → ${window.CARRIERS[subcanal]?.label}${jTxt}${aviso}`, {
+        dur: destinoEsOtra ? 9000 : 5000,
         action: log?.id ? {
           label: 'Deshacer',
           onClick: async () => {
@@ -300,30 +328,52 @@ function ProduceModal({ open, onClose, defaultSku, defaultSubcanal }) {
       {/* Paso 3: cantidad + fecha + nota + resumen */}
       {step === 3 && (
         <div>
-          {/* Selector de jornada — solo si hay 2+ abiertas globalmente.
-              Cambio 2A/2B: las jornadas son globales (no por canal). */}
+          {/* Jornada destino — SIEMPRE visible, no solo cuando hay 2+.
+              Es el dato que decide adonde suman las unidades: el operario
+              tiene que verlo ANTES de confirmar, no descubrirlo despues
+              porque el numero de la pantalla no se movio. */}
           {(() => {
-            const abiertas = M.jornadas?.abiertas || [];
-            const activaId = M.jornadas?.activaId;
-            if (abiertas.length < 2) return null;
-            const selectedId = jornadaIdOverride || activaId || abiertas[0]?.id;
-            return (
-              <div style={{marginBottom:14, padding:'10px 12px', background:'#fef3c7', border:'1px solid #fbbf24', borderRadius:6}}>
-                <div style={{fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'.08em', color:'var(--ink-muted)', marginBottom:6}}>
-                  Hay {abiertas.length} jornadas abiertas — elegí a cuál cargar
+            if (!jDestino) {
+              return (
+                <div style={{marginBottom:14, padding:'10px 12px', background:'var(--amber-bg)', border:'1px solid var(--amber)', borderRadius:6, fontSize:11, color:'var(--ink-soft)', display:'flex', gap:8, alignItems:'center'}}>
+                  <Icon n="alert" s={13} c="var(--amber)"/>
+                  <span>No hay ninguna jornada abierta — se va a abrir la de hoy automáticamente.</span>
                 </div>
-                <select
-                  className="field-input"
-                  value={selectedId || ''}
-                  onChange={e => setJornadaIdOverride(e.target.value)}
-                  style={{fontSize:12, fontWeight:600}}
-                >
-                  {abiertas.map(j => (
-                    <option key={j.id} value={j.id}>
-                      {fmt.date(j.fecha)} {j.id === activaId ? '· ACTIVA' : ''}
-                    </option>
-                  ))}
-                </select>
+              );
+            }
+            const destinoActiva = jDestino.id === jActivaId;
+            return (
+              <div style={{marginBottom:14, padding:'10px 12px',
+                           background: destinoEsOtra ? 'var(--amber-bg)' : 'var(--green-bg)',
+                           border: '1px solid ' + (destinoEsOtra ? 'var(--amber)' : 'rgba(22,163,74,.32)'),
+                           borderRadius:6}}>
+                <div style={{fontSize:9, fontWeight:700, textTransform:'uppercase', letterSpacing:'.14em', color:'var(--ink-muted)', marginBottom:6}}>
+                  Jornada destino
+                </div>
+                {jAbiertas.length < 2 ? (
+                  <div style={{fontSize:13, fontWeight:700, color: destinoEsOtra ? 'var(--ink)' : 'var(--green)'}}>
+                    {fmt.date(jDestino.fecha)} {destinoActiva ? '· activa' : '· abierta'}
+                  </div>
+                ) : (
+                  <select
+                    className="field-input"
+                    value={jDestinoId || ''}
+                    onChange={e => setJornadaIdOverride(e.target.value)}
+                    style={{fontSize:12, fontWeight:600}}
+                  >
+                    {jAbiertas.map(j => (
+                      <option key={j.id} value={j.id}>
+                        {fmt.date(j.fecha)}{j.id === jActivaId ? ' · activa' : ''}{j.id === jVistaId ? ' · la que estás viendo' : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {destinoEsOtra && (
+                  <div style={{marginTop:8, fontSize:11, color:'var(--ink-soft)', display:'flex', gap:6, alignItems:'flex-start'}}>
+                    <Icon n="alert" s={13} c="var(--amber)"/>
+                    <span>Estás mirando la jornada <strong>{fmt.date(jVista.fecha)}</strong>. Si cargás en <strong>{fmt.date(jDestino.fecha)}</strong>, los números de esta pantalla no van a cambiar.</span>
+                  </div>
+                )}
               </div>
             );
           })()}
@@ -335,15 +385,12 @@ function ProduceModal({ open, onClose, defaultSku, defaultSubcanal }) {
             <button onClick={() => setCantidad(cantidad+1)} className="btn-ghost" style={{padding:'10px 14px', fontSize:18, lineHeight:1}}>+</button>
           </div>
 
-          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginTop:14}}>
-            <div>
-              <label className="field-label">Fecha</label>
-              <input type="date" className="field-input" value={fecha} onChange={e => setFecha(e.target.value)}/>
-            </div>
-            <div>
-              <label className="field-label">Nota interna (opcional)</label>
-              <input className="field-input" placeholder="Ej: lote especial" value={nota} onChange={e => setNota(e.target.value)}/>
-            </div>
+          {/* Sin campo "Fecha": nunca se enviaba (rpc_register_production
+              escribe current_date), asi que prometía un control que no
+              existia. La fecha que manda es la de la jornada destino. */}
+          <div style={{marginTop:14}}>
+            <label className="field-label">Nota interna (opcional)</label>
+            <input className="field-input" placeholder="Ej: lote especial" value={nota} onChange={e => setNota(e.target.value)}/>
           </div>
 
           {/* Validaciones contextuales */}
@@ -366,7 +413,7 @@ function ProduceModal({ open, onClose, defaultSku, defaultSubcanal }) {
             <div style={{fontSize:12, lineHeight:1.7}}>
               <div><strong style={{fontFamily:'var(--mono)'}}>{cantidad}×</strong> {sku} — {skuInfo.modelo} {skuInfo.color && skuInfo.color!=='—' ? skuInfo.color : ''}</div>
               <div>Canal: <strong style={{textTransform:'capitalize'}}>{window.CARRIERS[subcanal]?.label}</strong></div>
-              <div>Fecha: <strong>{fecha}</strong></div>
+              <div>Jornada: <strong>{jDestino ? fmt.date(jDestino.fecha) : 'la de hoy'}</strong></div>
               {!sinPlan && lineaPlan && (
                 <div style={{marginTop:6, paddingTop:6, borderTop:'1px dashed var(--border)', fontSize:11, color:'var(--ink-muted)'}}>
                   Plan actual: {lineaPlan.producido}/{lineaPlan.pedido} · Faltante: <strong style={{color: lineaPlan.faltante>0?'var(--red)':'var(--green)'}}>{lineaPlan.faltante}</strong>

@@ -812,6 +812,9 @@ function getCancellationsForJornada(jornadaId) {
   return out;
 }
 window.getCancellationsForJornada = getCancellationsForJornada;
+/* Expuesto para ProduceModal: necesita el plan (pedido/producido/faltante)
+   de la jornada DESTINO, que no siempre es la seleccionada en pantalla. */
+window.computeCarriersForJornada = computeCarriersForJornada;
 
 /* getReprogramadasForJornada — reprogramadas (ML "demorado") por jornada.
    Espeja getCancellationsForJornada pero por el flag `reprogramadaAt` (Fase B).
