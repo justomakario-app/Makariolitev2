@@ -1,7 +1,7 @@
 /* ══ Corredor de todos los chequeos ═════════════════════════════════════
    node tests/run-all.js          (o: npm test)
 
-   Corre las 12 suites, una atrás de otra, y devuelve código 1 si falla
+   Corre las 15 suites, una atrás de otra, y devuelve código 1 si falla
    cualquiera. Cada suite se banca correr sola:
 
      node tests/checkjsx.js
@@ -30,6 +30,7 @@ const SUITES = [
   ['catálogo por cliente en Ventas — mobile',     'clientes-canal-test.js', ['mobile']],
   ['jornada destino — web',                       'jornada-test.js',      ['web']],
   ['jornada destino — mobile',                    'jornada-test.js',      ['mobile']],
+  ['buscador — tildes, plural y género',          'buscador-test.js',     []],
 ];
 
 let fallaron = 0, checksOK = 0, checksFail = 0;

@@ -71,10 +71,7 @@ function RecibosTab() {
         const fp = String(it.fecha_pago || '').slice(0, 7);
         if (fp !== mesYear) return false;
       }
-      if (q) {
-        const blob = `${it.empleado_nombre || ''} ${it.empleado_dni || ''}`.toLowerCase();
-        if (!blob.includes(q)) return false;
-      }
+      if (q && !window.buscaEn(q, it.empleado_nombre, it.empleado_dni)) return false;
       return true;
     });
   }, [items, searchQuery, tipoFilter, employeeFilter, mes]);

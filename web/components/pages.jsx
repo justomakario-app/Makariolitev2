@@ -407,10 +407,8 @@ function CatalogoPage() {
   const filtered = skus.filter(s => {
     const c = window.SKU_DB[s];
     if (cat !== 'todas' && c.categoria !== cat) return false;
-    if (filter) {
-      const q = filter.toLowerCase();
-      if (!c.modelo.toLowerCase().includes(q) && !s.toLowerCase().includes(q) && !(c.color||'').toLowerCase().includes(q)) return false;
-    }
+    /* buscaEn (data.js): sin tildes y palabra por palabra. */
+    if (!window.buscaEn(filter, c.modelo, s, c.color)) return false;
     return true;
   });
 
@@ -735,10 +733,8 @@ function EquipoPage() {
 
   const filtered = M.users.filter(u => {
     if (roleFilter !== 'todos' && u.role !== roleFilter) return false;
-    if (filter) {
-      const q = filter.toLowerCase();
-      if (!u.name.toLowerCase().includes(q) && !u.username.toLowerCase().includes(q) && !(u.area||'').toLowerCase().includes(q)) return false;
-    }
+    /* buscaEn (data.js): "martin" tiene que encontrar a "Martín". */
+    if (!window.buscaEn(filter, u.name, u.username, u.area)) return false;
     return true;
   });
 

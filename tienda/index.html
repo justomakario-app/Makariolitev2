@@ -64,14 +64,14 @@
   <!-- Componentes de la tienda, en orden de dependencia.
        tienda-ui.jsx declara los globales (Icon, useToast, hooks) que usan
        todos los demás, igual que shared.jsx en el sistema interno. -->
-  <script type="text/babel" src="components/tienda-ui.jsx?v=5"></script>
+  <script type="text/babel" src="components/tienda-ui.jsx?v=6"></script>
   <script type="text/babel" src="components/tienda-acceso.jsx?v=6"></script>
   <script type="text/babel" src="components/tienda-canal.jsx?v=1"></script>
-  <script type="text/babel" src="components/tienda-catalogo.jsx?v=4"></script>
+  <script type="text/babel" src="components/tienda-catalogo.jsx?v=5"></script>
   <script type="text/babel" src="components/tienda-carrito.jsx?v=5"></script>
   <!-- Las facturas van ANTES de pedidos: la tarjeta del pedido usa
        ListaFacturas para el botón de descarga (migración 0169). -->
-  <script type="text/babel" src="components/tienda-facturas.jsx?v=1"></script>
+  <script type="text/babel" src="components/tienda-facturas.jsx?v=2"></script>
   <script type="text/babel" src="components/tienda-pedidos.jsx?v=7"></script>
   <!-- El resumen va DESPUES de pedidos y catalogo: reusa ESTADO_CLIENTE y
        urlFoto, que se declaran ahi. Antes de app.jsx, que es quien lo monta. -->

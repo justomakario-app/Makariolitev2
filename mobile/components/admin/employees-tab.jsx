@@ -50,9 +50,7 @@ function EmployeesTab() {
       if (modalidadFilter !== 'todas' && it.modalidad !== modalidadFilter) return false;
       if (categoriaFilter !== 'todas' && it.categoria !== categoriaFilter) return false;
       if (!q) return true;
-      return (it.nombre || '').toLowerCase().includes(q)
-          || (it.dni    || '').toLowerCase().includes(q)
-          || (it.email  || '').toLowerCase().includes(q);
+      return window.buscaEn(q, it.nombre, it.dni, it.email);
     });
   }, [items, searchQuery, modalidadFilter, categoriaFilter]);
 

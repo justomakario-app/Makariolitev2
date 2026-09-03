@@ -31,6 +31,18 @@ global.navigator = dom.window.navigator;
 global.MouseEvent = dom.window.MouseEvent;
 global.IS_REACT_ACT_ENVIRONMENT = true;
 
+/* ── Helpers reales del bundle ─────────────────────────────────────────
+   `sinTildes` y `buscaEn` se sacan de data.js tal cual y se evalúan; NO se
+   copian acá. Una copia en el arnés puede quedar bien mientras la de
+   verdad se rompe, y justo esa decide si el cliente encuentra o no lo que
+   quiere comprar. Si data.js deja de exportarlas, el arnés se planta. */
+const dataSrcReal = fs.readFileSync(path.join(BASE, 'data.js'), 'utf8');
+for (const nombre of ['sinTildes', 'buscaEn']) {
+  const m = dataSrcReal.match(new RegExp('window\\.' + nombre + ' = function[\\s\\S]*?\\n};'));
+  if (!m) { console.error('data.js ya no exporta window.' + nombre); process.exit(2); }
+  new Function('window', m[0])(dom.window);
+}
+
 const ReactDOMClient = require('react-dom/client');
 const { act } = require('react');
 

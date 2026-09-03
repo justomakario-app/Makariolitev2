@@ -207,10 +207,7 @@ function ExpenseModal({ suppliers, mode, initial, onClose, onSuccess }) {
   const filteredSuppliers = useMemo(() => {
     const q = supplierSearch.trim().toLowerCase();
     if (!q) return suppliers;
-    return suppliers.filter(s =>
-      (s.nombre || '').toLowerCase().includes(q) ||
-      (s.cuit   || '').toLowerCase().includes(q)
-    );
+    return suppliers.filter(s => window.buscaEn(q, s.nombre, s.cuit));
   }, [suppliers, supplierSearch]);
 
   const validate = () => {

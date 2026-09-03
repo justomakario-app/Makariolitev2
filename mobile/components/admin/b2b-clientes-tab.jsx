@@ -82,8 +82,8 @@ function B2BClientesTab({ isOwner } = {}) {
     if (soloHab && !c.habilitado) return false;
     const t = q.trim().toLowerCase();
     if (!t) return true;
-    return (c.nombre || '').toLowerCase().includes(t) ||
-           (c.cuit   || '').toLowerCase().includes(t);
+    /* buscaEn (data.js): "corralon" tiene que encontrar a "Corralón Sur". */
+    return window.buscaEn(t, c.nombre, c.cuit);
   });
 
   const nombreCanal = (codigo) => {

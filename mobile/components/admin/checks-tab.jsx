@@ -59,10 +59,7 @@ function ChecksTab() {
       const entity = isIssued ? c.suppliers : c.customers_b2b;
       const partyTexto = isIssued ? c.beneficiario_texto : c.emisor_texto;
       const partyName = (entity && entity.nombre) || partyTexto || '';
-      return (c.numero || '').toLowerCase().includes(q)
-          || (c.banco || '').toLowerCase().includes(q)
-          || partyName.toLowerCase().includes(q)
-          || (c.notas || '').toLowerCase().includes(q);
+      return window.buscaEn(q, c.numero, c.banco, partyName, c.notas);
     });
   }, [items, filters, isIssued]);
 

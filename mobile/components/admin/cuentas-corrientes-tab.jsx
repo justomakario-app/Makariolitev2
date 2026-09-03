@@ -44,10 +44,7 @@ function CuentasCorrientesTab() {
     return list.filter(acc => {
       const entity = isSupplier ? acc.suppliers : acc.customers_b2b;
       if (!entity) return false;
-      const nombre = (entity.nombre || '').toLowerCase();
-      const cuit = (entity.cuit || '').toLowerCase();
-      const email = (entity.email || '').toLowerCase();
-      return nombre.includes(q) || cuit.includes(q) || email.includes(q);
+      return window.buscaEn(q, entity.nombre, entity.cuit, entity.email);
     });
   }, [list, search, isSupplier]);
 

@@ -383,13 +383,13 @@ const PantallaCatalogo = ({ carrito, onSetCantidad, ocupado, onIrCarrito }) => {
     return Array.from(s).sort();
   }, [items]);
 
+  /* La búsqueda pasa por buscaEn (tienda-ui.jsx): sin tildes, palabra por
+     palabra y aguantando plural y género. Antes era un includes() contra un
+     campo a la vez y "lampara" no encontraba "Lámpara De Pie Nórdica". */
   const visibles = useMemo(() => {
-    const t = q.trim().toLowerCase();
     return (items || []).filter(i => {
       if (cat && i.categoria !== cat) return false;
-      if (!t) return true;
-      return [i.sku, i.modelo, i.color, i.categoria, i.descripcion]
-        .some(v => String(v || '').toLowerCase().includes(t));
+      return window.buscaEn(q, i.sku, i.modelo, i.color, i.categoria, i.descripcion);
     });
   }, [items, q, cat]);
 
@@ -457,7 +457,8 @@ const PantallaCatalogo = ({ carrito, onSetCantidad, ocupado, onIrCarrito }) => {
 
       {!visibles.length ? (
         <Vacio icono="search" titulo="No encontramos nada con eso">
-          Probá con otra palabra o mirá todas las categorías.
+          Probá con otra palabra o mirá todas las categorías. Si sabés que lo
+          tenemos y no te aparece, escribinos y te lo cargamos al pedido.
         </Vacio>
       ) : (
         <>

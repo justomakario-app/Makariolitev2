@@ -35,11 +35,7 @@ function SuppliersTab() {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return items;
     return items.filter(it =>
-      (it.nombre   || '').toLowerCase().includes(q) ||
-      (it.cuit     || '').toLowerCase().includes(q) ||
-      (it.email    || '').toLowerCase().includes(q) ||
-      (it.telefono || '').toLowerCase().includes(q)
-    );
+      window.buscaEn(q, it.nombre, it.cuit, it.email, it.telefono));
   }, [items, searchQuery]);
 
   const onDeleteClick = (s) => setDeleteState({ target: s });

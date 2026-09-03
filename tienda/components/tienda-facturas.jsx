@@ -159,8 +159,7 @@ const PantallaFacturas = ({ recargarSenal, onIrPedidos }) => {
     const t = q.trim().toLowerCase();
     if (!t) return facturas || [];
     return (facturas || []).filter(f =>
-      [f.numero, f.pedido_numero, FACTURA_TIPO_TXT[f.tipo], f.nota]
-        .filter(Boolean).some(v => String(v).toLowerCase().indexOf(t) >= 0));
+      window.buscaEn(t, f.numero, f.pedido_numero, FACTURA_TIPO_TXT[f.tipo], f.nota));
   }, [facturas, q]);
 
   /* Agrupado por año, y solo si hay más de uno: con un año solo el título

@@ -209,12 +209,7 @@ function MayoristasTab({ focusClienteId, onClearFocus } = {}) {
     const q = search.trim().toLowerCase();
     if (!q) return items;
     return items.filter(m =>
-      (m.nombre || '').toLowerCase().includes(q) ||
-      (m.localidad || '').toLowerCase().includes(q) ||
-      (m.provincia || '').toLowerCase().includes(q) ||
-      (m.email || '').toLowerCase().includes(q) ||
-      (m.telefono || '').toLowerCase().includes(q)
-    );
+      window.buscaEn(q, m.nombre, m.localidad, m.provincia, m.email, m.telefono));
   }, [items, search]);
 
   const doDelete = async () => {
@@ -856,8 +851,7 @@ function ClientesB2BTab({ onVerCtaCte }) {
       if (prov && c.provincia !== prov) return false;
       if (soloMay && !c.es_mayorista) return false;
       if (!q) return true;
-      return [c.nombre, c.cuit, c.email, c.telefono, c.localidad]
-        .some(v => (v || '').toLowerCase().includes(q));
+      return window.buscaEn(q, c.nombre, c.cuit, c.email, c.telefono, c.localidad);
     });
   }, [items, search, prov, soloMay]);
 
@@ -1113,7 +1107,7 @@ function CtaCteClientesTab({ focusClienteId, onClearFocus }) {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return accounts;
-    return accounts.filter(a => accNombre(a).toLowerCase().includes(q));
+    return accounts.filter(a => window.buscaEn(q, accNombre(a)));
   }, [accounts, search]);
 
   const kCuentas = accounts.length;
@@ -1279,7 +1273,9 @@ function BaseProductosTab() {
       if (soloAct && r.activo === false) return false;
       if (showInc && !r.incompleto) return false;
       if (!q) return true;
-      return [r.sku, r.modelo, r.color, r.categoria].some(v => (v || '').toLowerCase().includes(q));
+      /* buscaEn (data.js): el catalogo esta escrito con tildes, y sin esto
+         "lampara" no encuentra "Lámpara De Pie Nórdica". */
+      return window.buscaEn(q, r.sku, r.modelo, r.color, r.categoria);
     });
   }, [rows, search, cat, soloAct, showInc, verInternos]);
   const kInternos = rows.filter(r => r.es_insumo_interno).length;
@@ -1526,7 +1522,7 @@ function PresupuestosTab({ onVerPedido }) {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return list;
-    return list.filter(p => (p.numero || '').toLowerCase().includes(q) || (p.cliente_nombre || '').toLowerCase().includes(q));
+    return list.filter(p => window.buscaEn(q, p.numero, p.cliente_nombre));
   }, [list, search]);
 
   const now = new Date();
@@ -2003,7 +1999,7 @@ function RemitosTab({ onVerPedido }) {
     return list.filter(r => {
       if (soloPed && !r.pedido_id) return false;
       if (!q) return true;
-      return (r.numero || '').toLowerCase().includes(q) || (r.cliente_nombre || '').toLowerCase().includes(q);
+      return window.buscaEn(q, r.numero, r.cliente_nombre);
     });
   }, [list, search, soloPed]);
 

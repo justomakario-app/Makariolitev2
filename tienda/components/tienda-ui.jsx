@@ -12,6 +12,57 @@
 
 const { useState, useEffect, useRef, useMemo, useCallback, createContext, useContext } = React;
 
+/* ── Buscar como escribe la gente ──────────────────────────────────────
+   Un mayorista escribió "lampara de pie" y la tienda le contestó que no
+   había nada. El producto estaba publicado, con precio y con foto: se
+   llama "Lámpara De Pie Nórdica". `toLowerCase()` no toca los acentos,
+   así que la palabra sin tilde nunca entra en la palabra con tilde. El
+   catálogo está bien escrito — y por eso mismo no lo encontraba nadie que
+   escriba rápido. Se cayó un pedido de 25 unidades (feedback 2026-09-01).
+
+   Tres cosas se arreglan acá, y las tres las reportó ese mismo cliente:
+
+   1. Tildes y ñ — "lampara" tiene que encontrar "Lámpara", "nordico" a
+      "Nórdica", "corralon" a "Corralón".
+   2. Un solo campo — antes se exigía que TODA la frase estuviera adentro
+      de un mismo campo. "lampara yute" no daba nada: "lámpara" vive en el
+      modelo y "yute" en el color, nunca están los dos juntos. Ahora cada
+      palabra se busca por su cuenta y puede caer en un campo distinto.
+   3. Número y género — "recibidoras" no está adentro de "Mesa Recibidora…",
+      ni "nordico" adentro de "Nórdica". Nadie escribe el mismo plural ni
+      el mismo género que el catálogo, así que si la palabra entera no
+      aparece se prueba con la raíz.
+
+   Lo que NO hace, a propósito: no adivina errores de tipeo ni sinónimos.
+   Si escribe "belador" no aparece nada, y está bien — un buscador que
+   adivina de más devuelve cosas que el cliente no pidió y confunde más
+   de lo que ayuda.                                                      */
+window.sinTildes = function (v) {
+  const s = String(v == null ? '' : v);
+  return (s.normalize ? s.normalize('NFD') : s)
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase();
+};
+
+/* buscaEn(consulta, ...campos) — true si TODAS las palabras de la consulta
+   aparecen en alguno de los campos. Consulta vacía no filtra nada.       */
+window.buscaEn = function (consulta, ...campos) {
+  const palabras = window.sinTildes(consulta).split(/\s+/).filter(Boolean);
+  if (!palabras.length) return true;
+  const heno = window.sinTildes(campos.join(' '));
+  return palabras.every(p => {
+    if (heno.includes(p)) return true;
+    /* Se recorta de a poco y siempre exigiendo 4 letras o más: con menos,
+       "mes" empieza a encontrar cualquier cosa y el buscador deja de ser
+       útil. Primero el plural ("mesas" → "mesa"), después el género
+       ("nordico" → "nordic"). */
+    const sinPlural = p.replace(/(?:es|s)$/, '');
+    if (sinPlural.length >= 4 && heno.includes(sinPlural)) return true;
+    const raiz = sinPlural.replace(/[oa]$/, '');
+    return raiz.length >= 4 && heno.includes(raiz);
+  });
+};
+
 /* ── Iconos ────────────────────────────────────────────────────────────
    Subconjunto de los de shared.jsx, con los mismos parametros de trazo
    para que la tienda se vea de la misma familia que el sistema.        */

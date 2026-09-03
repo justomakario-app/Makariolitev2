@@ -54,6 +54,15 @@ const CATALOGO = [
     categoria:'Sillas', descripcion:'Silla apilable', foto_path:null,
     unidad_venta:'unidad', bulto_cantidad:6, multiplo_venta:6, minimo_sku:12,
     moneda:'ARS', iva_pct:21, precio:9000, precio_con_iva:10890, orden:2 },
+  /* Con tilde a propósito: en la base se llama exactamente así. Un cliente
+     escribió "lampara" el 2026-09-01, la tienda le contestó que no había
+     nada y el pedido de 25 unidades no entró. El catálogo estaba bien —
+     el buscador no. Este producto está acá para que eso no se pueda
+     volver a romper sin que el arnés se ponga rojo. */
+  { sku:'MAD133', modelo:'Lámpara De Pie Nórdica', color:'Yute', color_hex:'#C8A97E',
+    categoria:'Luz', descripcion:'Lámpara de pie tejida', foto_path:null,
+    unidad_venta:'unidad', bulto_cantidad:1, multiplo_venta:1, minimo_sku:0,
+    moneda:'ARS', iva_pct:21, precio:33613, precio_con_iva:40672, orden:3 },
 ];
 
 const MIS_PEDIDOS = [
@@ -413,7 +422,7 @@ const SIN_ELEGIR = Object.assign({}, APROBADO, { canal_elegido:false });
   console.log('\n— El catálogo y el precio del canal —');
   await montar(APROBADO);
   check('aprobado y habilitado: entra al catálogo', !!container.querySelector('.t-grilla'));
-  check('muestra los 2 productos', container.querySelectorAll('.t-prod').length === 2);
+  check('muestra los 3 productos', container.querySelectorAll('.t-prod').length === 3);
   check('muestra el precio que devolvió el servidor', /\$\s?70\.000,00/.test(cuerpo()));
   check('muestra el precio con IVA del servidor', /84\.700,00/.test(cuerpo()));
 
@@ -430,6 +439,29 @@ const SIN_ELEGIR = Object.assign({}, APROBADO, { canal_elegido:false });
   check('buscar deja un solo producto', container.querySelectorAll('.t-prod').length === 1);
   check('buscar NO dispara un request por tecla',
         RPC_LOG.filter(r => r.nombre === 'b2b_rpc_catalogo').length === antesDeBuscar);
+
+  /* ── Buscar como escribe el cliente ──────────────────────────────────
+     Nadie escribe los acentos, ni acierta el género, ni pone las palabras
+     en el mismo campo en que están guardadas. Todo esto daba cero
+     resultados antes del 2026-09-01, y cero resultados en una tienda se
+     lee como "no lo tienen": el cliente no vuelve a intentar, se va. */
+  const buscar = async (q) => {
+    await tipear(container.querySelector('.t-buscador-input'), q);
+    return Array.from(container.querySelectorAll('.t-prod')).map(txt).join(' | ');
+  };
+
+  check('★ sin acento encuentra lo que está con acento ("lampara" → "Lámpara")',
+        /Lámpara/.test(await buscar('lampara')));
+  check('★ las palabras pueden estar en campos distintos ("lampara yute")',
+        /Lámpara/.test(await buscar('lampara yute')));
+  check('★ el género no tiene que coincidir ("nordico" → "Nórdica")',
+        /Lámpara/.test(await buscar('nordico')));
+  check('★ el plural tampoco ("lamparas" → "Lámpara")',
+        /Lámpara/.test(await buscar('lamparas')));
+  check('lo que de verdad no está sigue sin aparecer',
+        (await buscar('belador')) === '', await buscar('belador'));
+  check('el código de SKU sigue encontrando', /Lámpara/.test(await buscar('MAD133')));
+
   await tipear(container.querySelector('.t-buscador-input'), '');
 
   /* (3) Agregar respeta múltiplo y mínimo del SKU ------------------------ */

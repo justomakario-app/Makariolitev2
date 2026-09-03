@@ -51,10 +51,7 @@ function CheckModal({ checkType, mode, parties, initial, onClose, onSuccess }) {
   const filteredParties = useMemo(() => {
     const q = partySearch.trim().toLowerCase();
     if (!q) return partyList;
-    return partyList.filter(p =>
-      (p.nombre || '').toLowerCase().includes(q) ||
-      (p.cuit || '').toLowerCase().includes(q)
-    );
+    return partyList.filter(p => window.buscaEn(q, p.nombre, p.cuit));
   }, [partyList, partySearch]);
 
   const set = (k, v) => setForm(s => ({ ...s, [k]: v }));

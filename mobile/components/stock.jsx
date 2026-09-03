@@ -14,11 +14,8 @@ function StockPage({ onBack }) {
   const stockRows = window.MOCK_ACTIONS.getStockAgregado();
   const totalStock = window.MOCK_ACTIONS.getStockTotal();
 
-  const filtered = stockRows.filter(r => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return r.sku.toLowerCase().includes(q) || (r.modelo || '').toLowerCase().includes(q);
-  });
+  /* buscaEn (data.js): sin tildes y palabra por palabra. */
+  const filtered = stockRows.filter(r => window.buscaEn(search, r.sku, r.modelo));
 
   const openMoverFromRow = (sku) => {
     setMoverContext({ source: 'stock', sku });

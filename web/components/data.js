@@ -13,6 +13,57 @@ const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 window.SUPA = supa;
 
+/* ── Buscar como escribe la gente ──────────────────────────────────────
+   Un mayorista escribió "lampara de pie" en la tienda y le contestó que no
+   había nada. El producto estaba publicado, con precio y con foto: se
+   llama "Lámpara De Pie Nórdica". `toLowerCase()` no toca los acentos, así
+   que la palabra sin tilde nunca entra en la palabra con tilde. El
+   catálogo está bien escrito — y por eso mismo no lo encontraba nadie que
+   escriba rápido. Se cayó un pedido de 25 unidades (feedback 2026-09-01).
+
+   Adentro pasaba lo mismo, con otra ropa: buscar "corralon" no encontraba
+   a "Corralón Sur", ni "martin" a "Martín". Nadie lo reportó porque el que
+   busca acá conoce el dato y prueba de nuevo hasta que sale. El cliente no
+   prueba de nuevo: se va.
+
+   Tres cosas se arreglan acá:
+
+   1. Tildes y ñ — "lampara" encuentra "Lámpara", "corralon" a "Corralón".
+   2. Un solo campo — antes se exigía que TODA la frase estuviera adentro
+      de un mismo campo. "lampara yute" no daba nada: "lámpara" vive en el
+      modelo y "yute" en el color. Ahora cada palabra se busca por su
+      cuenta y puede caer en un campo distinto.
+   3. Número y género — "recibidoras" no está adentro de "Mesa Recibidora…",
+      ni "nordico" adentro de "Nórdica".
+
+   Lo que NO hace, a propósito: no adivina errores de tipeo ni sinónimos.
+   Un buscador que adivina de más devuelve cosas que nadie pidió.        */
+window.sinTildes = function (v) {
+  const s = String(v == null ? '' : v);
+  return (s.normalize ? s.normalize('NFD') : s)
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase();
+};
+
+/* buscaEn(consulta, ...campos) — true si TODAS las palabras de la consulta
+   aparecen en alguno de los campos. Consulta vacía no filtra nada.       */
+window.buscaEn = function (consulta, ...campos) {
+  const palabras = window.sinTildes(consulta).split(/\s+/).filter(Boolean);
+  if (!palabras.length) return true;
+  const heno = window.sinTildes(campos.join(' '));
+  return palabras.every(p => {
+    if (heno.includes(p)) return true;
+    /* Se recorta de a poco y siempre exigiendo 4 letras o más: con menos,
+       "mes" empieza a encontrar cualquier cosa y el buscador deja de ser
+       útil. Primero el plural ("mesas" → "mesa"), después el género
+       ("nordico" → "nordic"). */
+    const sinPlural = p.replace(/(?:es|s)$/, '');
+    if (sinPlural.length >= 4 && heno.includes(sinPlural)) return true;
+    const raiz = sinPlural.replace(/[oa]$/, '');
+    return raiz.length >= 4 && heno.includes(raiz);
+  });
+};
+
 const MAKARIO_BRAND_NAME = 'Justo Makario';
 const MAKARIO_LOGO_LINES = ['JUSTO', 'MAKARIO', 'Home'];
 window.MAKARIO_BRAND_NAME = MAKARIO_BRAND_NAME;

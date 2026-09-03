@@ -149,12 +149,7 @@ function ExpensesTab({ pendingExpenseId, clearPending }) {
     return items.filter(it => {
       if (filters.categoria !== 'todas' && it.categoria !== filters.categoria) return false;
       if (filters.medio_pago !== 'todos' && it.medio_pago !== filters.medio_pago) return false;
-      if (q) {
-        const suppName = (it.suppliers?.nombre || '').toLowerCase();
-        const c = (it.concepto || '').toLowerCase();
-        const n = (it.notas || '').toLowerCase();
-        if (!c.includes(q) && !n.includes(q) && !suppName.includes(q)) return false;
-      }
+      if (q && !window.buscaEn(q, it.suppliers?.nombre, it.concepto, it.notas)) return false;
       return true;
     });
   }, [items, filters]);

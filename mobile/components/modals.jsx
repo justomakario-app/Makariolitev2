@@ -143,9 +143,11 @@ function ProduceModal({ open, onClose, defaultSku, defaultSubcanal }) {
 
   const filtrados = skus.filter(s => {
     if (!search) return true;
-    const q = search.toLowerCase();
     const info = window.SKU_DB[s];
-    return s.toLowerCase().includes(q) || info.modelo.toLowerCase().includes(q) || (info.color||'').toLowerCase().includes(q);
+    /* buscaEn (data.js): el catalogo esta escrito con tildes. Sin esto,
+       buscar "lampara" no encuentra "Lámpara De Pie Nórdica" y el que
+       carga produccion cree que el SKU no existe. */
+    return window.buscaEn(search, s, info.modelo, info.color);
   });
 
   const skuInfo = window.SKU_DB[sku] || {};

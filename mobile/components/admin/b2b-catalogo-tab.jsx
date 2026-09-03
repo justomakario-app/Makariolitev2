@@ -205,10 +205,10 @@ function B2BCatalogoTab({ isOwner } = {}) {
     return (items || []).filter(it => {
       if (soloPub && !val(it, 'publicado')) return false;
       if (!t) return true;
-      return (it.sku || '').toLowerCase().includes(t)
-          || (it.modelo || '').toLowerCase().includes(t)
-          || (it.categoria || '').toLowerCase().includes(t)
-          || (it.color || '').toLowerCase().includes(t);
+      /* buscaEn (data.js): sin tildes y palabra por palabra. Buscar
+         "lampara" tiene que encontrar "Lámpara De Pie Nórdica" — es el
+         mismo catálogo que ve el cliente, y ahí ya costó un pedido. */
+      return window.buscaEn(t, it.sku, it.modelo, it.categoria, it.color);
     });
     /* eslint-disable-next-line */
   }, [items, q, soloPub, edits]);

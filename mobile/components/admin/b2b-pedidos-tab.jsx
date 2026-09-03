@@ -155,11 +155,9 @@ function B2BPedidosTab({ buscarInicial }) {
         return false;
       }
       if (!t) return true;
-      return (p.numero_b2b || '').toLowerCase().includes(t)
-          || (p.numero_pedido || '').toLowerCase().includes(t)
-          || (p.cliente || '').toLowerCase().includes(t)
-          || (p.comprador || '').toLowerCase().includes(t)
-          || (p.comprador_email || '').toLowerCase().includes(t);
+      /* buscaEn (data.js): sin tildes y palabra por palabra. */
+      return window.buscaEn(t, p.numero_b2b, p.numero_pedido, p.cliente,
+                            p.comprador, p.comprador_email);
     });
   }, [pedidos, filtro, q]);
 
