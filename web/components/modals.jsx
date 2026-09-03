@@ -88,7 +88,7 @@ function ProduceModal({ open, onClose, defaultSku, defaultSubcanal }) {
      ManualOrderModal. El selector sigue estando para mandarla a otra. */
   const jAbiertas  = M.jornadas?.abiertas || [];
   const jActivaId  = M.jornadas?.activaId || null;
-  const jVistaId   = M.jornadas?.seleccionadaId || jActivaId || jAbiertas[0]?.id || null;
+  const jVistaId   = window.jornadaDestinoId();   // la que se está VIENDO (data.js)
   const jDestinoId = jornadaIdOverride || jVistaId;
   const jDestino   = jAbiertas.find(j => j.id === jDestinoId) || null;
   const jVista     = jAbiertas.find(j => j.id === jVistaId)   || null;
@@ -1585,7 +1585,13 @@ function StockMovementModal({ open, onClose, context, onMoved }) {
       if (source !== 'stock' && target === 'stock') {
         await window.MOCK_ACTIONS.enviarAStock({ sku, cantidad, sourceChannelId: source, motivo });
       } else if (source === 'stock' && target !== 'stock') {
-        await window.MOCK_ACTIONS.assignFreeStock({ sku, cantidad, channelId: target, motivo });
+        /* La jornada VA explícita: sin ella el RPC la cuelga de la activa, y
+           si el usuario está mirando otra el "producido" de la pantalla no se
+           mueve — el mismo bug que el de registrar produccion. */
+        await window.MOCK_ACTIONS.assignFreeStock({
+          sku, cantidad, channelId: target, motivo,
+          jornadaId: window.jornadaDestinoId(),
+        });
       } else if (source !== 'stock' && target !== 'stock') {
         await window.MOCK_ACTIONS.transferirEntreCanales({ sku, cantidad, sourceChannelId: source, targetChannelId: target, motivo });
       }

@@ -28,6 +28,8 @@ const SUITES = [
   ["rol 'ventas' en Ventas — mobile",             'rol-ventas-test.js',   ['mobile']],
   ['catálogo por cliente en Ventas — web',        'clientes-canal-test.js', ['web']],
   ['catálogo por cliente en Ventas — mobile',     'clientes-canal-test.js', ['mobile']],
+  ['jornada destino — web',                       'jornada-test.js',      ['web']],
+  ['jornada destino — mobile',                    'jornada-test.js',      ['mobile']],
 ];
 
 let fallaron = 0, checksOK = 0, checksFail = 0;

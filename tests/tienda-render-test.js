@@ -226,7 +226,8 @@ dom.window.SUPA = SUPA;
 new Function('window', 'navigator', fs.readFileSync(DATA, 'utf8'))(dom.window, dom.window.navigator);
 
 const ORDEN = ['tienda-ui.jsx', 'tienda-acceso.jsx', 'tienda-canal.jsx', 'tienda-catalogo.jsx',
-               'tienda-carrito.jsx', 'tienda-pedidos.jsx', 'tienda-app.jsx'];
+               'tienda-carrito.jsx', 'tienda-facturas.jsx', 'tienda-pedidos.jsx',
+               'tienda-resumen.jsx', 'tienda-app.jsx'];
 
 /* El orden de arriba tiene que ser EL MISMO que sirve nginx. Si no, el test
    monta una tienda que no existe: un archivo nuevo puede compilar y renderizar
@@ -498,7 +499,7 @@ const SIN_ELEGIR = Object.assign({}, APROBADO, { canal_elegido:false });
   /* (5) Mis pedidos ------------------------------------------------------ */
   console.log('\n— Mis pedidos —');
   await montar(APROBADO);
-  await clickTexto('.t-tab', 'Mis pedidos');
+  await clickTexto('.t-tab', 'Pedidos');
   check('lista los 3 pedidos', container.querySelectorAll('.t-pedido').length === 3);
   check('rótulo "Enviado" tal cual lo ve el equipo', /Enviado/.test(cuerpo()));
   check('rótulo "En producción" tal cual lo ve el equipo', /En producción/.test(cuerpo()));
@@ -524,8 +525,14 @@ const SIN_ELEGIR = Object.assign({}, APROBADO, { canal_elegido:false });
   check('el facturado muestra neto, IVA y total',
         /IVA/.test(txt(pedFact)) && /121\.000/.test(txt(pedFact)) && /21\.000/.test(txt(pedFact)),
         txt(pedFact).slice(0, 300));
+  /* Ojo con lo que se afirma acá: la palabra "comprobante" SÍ aparece desde
+     0170 — es el botón "Adjuntar comprobante de pago", que es una función, no
+     un IVA inventado. Lo que se comprueba es lo único que importaba: que sin
+     total_con_iva no salga un renglón de IVA y que el Total no se infle. */
+  const tEnviado = txt(pedEnviado).replace(/\s+/g, ' ');
   check('★ un pedido sin total_con_iva (anterior a 0158) no inventa un IVA',
-        !/IVA/.test(txt(pedEnviado)) && !/comprobante/i.test(txt(pedEnviado)));
+        !/IVA/.test(tEnviado) && /Total\$210\.000,00/.test(tEnviado),
+        tEnviado.slice(0, 400));
 
   await clickTexto('button', 'Dar de baja', pedEnviado);
   check('la baja pide confirmación', /No se puede deshacer/i.test(cuerpo()));
@@ -653,10 +660,17 @@ const SIN_ELEGIR = Object.assign({}, APROBADO, { canal_elegido:false });
   await montar(null, { sinSesion:true, signup: () => ({
     data:{ ok:true, estado:'pendiente', cliente:'Corralon Sur', empresa_nueva:false }, error:null }) });
   await completarAlta({});
-  check('★ CUIT ajeno: explica que queda a confirmar y de qué empresa se trata',
-        /confirmar|revis/i.test(cuerpo()) && /Corralon Sur/.test(cuerpo()));
-  check('CUIT ajeno: le ofrece el código de invitación como atajo',
-        /código de invitación/i.test(cuerpo()));
+  /* Desde 0166 esto YA NO es una espera: entra en el momento y se lo suma a la
+     empresa que ya existía. Lo que hay que garantizar es que se lo digan — es
+     el único momento en que puede darse cuenta de que puso mal el CUIT, antes
+     de estar mirando los pedidos de otra empresa. */
+  check('★ CUIT ajeno: entra en el momento, no queda esperando aprobación',
+        /ya podés comprar/i.test(cuerpo()) && !/esperando|aprobación pendiente/i.test(cuerpo()),
+        cuerpo().replace(/\s+/g, ' ').slice(0, 300));
+  check('★ CUIT ajeno: le dice a qué empresa lo sumaron',
+        /Corralon Sur/.test(cuerpo()), cuerpo().replace(/\s+/g, ' ').slice(0, 300));
+  check('★ CUIT ajeno: le da la salida si se equivocó de CUIT',
+        /¿No es tu empresa\?/i.test(cuerpo()) && /escribinos/i.test(cuerpo()));
 
   /* Correo que ya tiene cuenta: no es un error del alta, es alguien que ya
      está. Se lo manda a entrar, con el mail puesto. */

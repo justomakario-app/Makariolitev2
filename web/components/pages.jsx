@@ -351,7 +351,9 @@ function CatalogoPage() {
         });
         toast.success(`${cantidad} × ${sku} consumidas (walk-in)`);
       } else {
-        await window.MOCK_ACTIONS.assignFreeStock({ sku, cantidad, channelId });
+        await window.MOCK_ACTIONS.assignFreeStock({
+          sku, cantidad, channelId, jornadaId: window.jornadaDestinoId(),
+        });
         toast.success(`${cantidad} × ${sku} → ${channelId}`);
       }
     } catch (e) {

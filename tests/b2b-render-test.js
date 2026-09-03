@@ -193,6 +193,22 @@ dom.window.SUPA = SUPA;
    owner/admin en el backend, así que para 'ventas' se simula el 42501. */
 let ROL = 'owner';
 const ADMIN_LOG = [];
+
+/* Facturas: el panel las pide al montarse y las vuelve a pedir después de
+   subir una. El fake guarda de verdad en FACTURAS para que "subir" y "listar"
+   estén conectados — si estuvieran desconectados (subir OK, listar devuelve
+   siempre lo mismo) el test no podría ver el bug de "confirma y no aparece". */
+const FACTURAS = [
+  { id:'f1', pedido_id:'pm1', cliente_id:'c1', tipo:'factura', numero:'0001-00000123',
+    fecha:'2026-08-20', total:210000, path:'c1/f1.pdf', size_bytes:120000,
+    subio:'Justo', pedido_numero:'B2B-0001' },
+];
+const FACTURA_TIPO_OPTIONS = [
+  { value:'factura', label:'Factura' }, { value:'nota_credito', label:'Nota de crédito' },
+  { value:'recibo', label:'Recibo' },  { value:'remito', label:'Remito' },
+  { value:'otro', label:'Otro comprobante' },
+];
+
 dom.window.ADMIN_DATA = {
   loadCustomersB2B: async () => [{ id:'c1', nombre:'Corralon Sur', cuit:'30-111-1' }],
   listPedidosMayoristas: async () => {
@@ -200,6 +216,26 @@ dom.window.ADMIN_DATA = {
     return PEDIDOS_MAY;
   },
   updateEstadoPedidoMayorista: async (p) => { ADMIN_LOG.push(p); return { ok:true }; },
+
+  FACTURA_MIMES: ['application/pdf', 'image/jpeg', 'image/png'],
+  FACTURA_MAX_BYTES: 10 * 1024 * 1024,
+  FACTURA_TIPO_OPTIONS,
+  FACTURA_TIPO_LABELS: FACTURA_TIPO_OPTIONS.reduce((a, o) => { a[o.value] = o.label; return a; }, {}),
+  listarFacturas: async (p) => FACTURAS.filter(f =>
+    (p && p.pedido_id) ? f.pedido_id === p.pedido_id : f.cliente_id === (p && p.cliente_id)),
+  subirFactura: async (p) => {
+    const f = Object.assign({ id:'f' + (FACTURAS.length + 1), path:'c1/nueva.pdf',
+                              size_bytes:1000, subio:'Justo' }, p);
+    delete f.file;
+    FACTURAS.push(f);
+    ADMIN_LOG.push({ subirFactura: f });
+    return f;
+  },
+  borrarFactura: async (id) => {
+    const i = FACTURAS.findIndex(f => f.id === id);
+    if (i >= 0) FACTURAS.splice(i, 1);
+    return { ok:true };
+  },
 };
 
 /* ── Cargar la capa de datos y los componentes reales ──────────────────── */
@@ -227,14 +263,39 @@ dom.window.ConfirmModal = ({ open, title, message, onConfirm }) =>
 new Function('window', 'navigator', fs.readFileSync(path.join(BASE, 'b2b-data.js'), 'utf8'))
   (dom.window, dom.window.navigator);
 
-for (const f of ['admin/b2b-solicitudes-tab.jsx', 'admin/b2b-catalogo-tab.jsx',
-                 'admin/b2b-pedidos-tab.jsx', 'admin/b2b-clientes-tab.jsx',
-                 'admin/b2b-tienda-tab.jsx']) {
-  const file = path.join(BASE, f);
-  const code = Babel.transform(preamble + fs.readFileSync(file, 'utf8'),
-                               { presets:['react'], filename:file }).code;
-  new Function('React', 'window', 'document', code)(React, dom.window, dom.window.document);
+/* Igual que en tienda-render-test.js: esta lista tiene que tener los MISMOS
+   archivos que carga el HTML. Si no, el test monta un panel que no existe —
+   un componente nuevo puede compilar y renderizar perfecto acá y no estar en
+   el <script> del HTML, o sea no llegar nunca al browser.
+   Al revés también importa, y fue lo que pasó de verdad: b2b-facturas.jsx
+   entró al HTML y nadie lo agregó acá, así que la suite quedó en rojo desde
+   el commit de facturas y dejó de avisar de cualquier otra cosa. Un arnés
+   roto no protege: hay que enterarse el día que se desfasa, no meses después. */
+const COMPONENTES = ['admin/b2b-facturas.jsx', 'admin/b2b-solicitudes-tab.jsx',
+                     'admin/b2b-catalogo-tab.jsx', 'admin/b2b-pedidos-tab.jsx',
+                     'admin/b2b-clientes-tab.jsx', 'admin/b2b-tienda-tab.jsx'];
+
+const HTML_PANEL = fs.readFileSync(
+  path.join(ROOT, VARIANT === 'web' ? 'web/Macario Lite.html' : 'mobile/index.html'), 'utf8');
+const EN_HTML = [...HTML_PANEL.matchAll(/src="components\/(admin\/b2b-[a-z0-9-]+\.jsx)/g)].map(m => m[1]);
+if ([...EN_HTML].sort().join('|') !== [...COMPONENTES].sort().join('|')) {
+  console.error('Los componentes B2B del test NO coinciden con los del HTML');
+  console.error('  test: ' + COMPONENTES.join(', '));
+  console.error('  html: ' + EN_HTML.join(', '));
+  process.exit(1);
 }
+
+/* UN SOLO scope para todos, igual que en el browser: los <script> son
+   clasicos y comparten un unico scope lexico, asi que b2b-pedidos-tab.jsx
+   puede nombrar <B2BFacturasPanel/> pelado y resolverlo. Cargarlos de a uno
+   en su propio `new Function` no reproduce eso: cada archivo quedaba aislado
+   y una referencia entre archivos explotaba aca aunque en produccion ande.
+   Eso es un falso NEGATIVO — el test rompe por como esta armado el test, no
+   por el producto — y es lo que tuvo la suite en rojo desde el commit de
+   facturas. El preambulo va una sola vez, adelante de todo. */
+const FUENTE = COMPONENTES.map(f => fs.readFileSync(path.join(BASE, f), 'utf8')).join('\n;\n');
+const CODIGO = Babel.transform(preamble + FUENTE, { presets:['react'], filename:'b2b-panel.jsx' }).code;
+new Function('React', 'window', 'document', CODIGO)(React, dom.window, dom.window.document);
 
 /* ── Utilidades de montaje ─────────────────────────────────────────────── */
 const container = dom.window.document.getElementById('root');
@@ -443,7 +504,21 @@ function check(nombre, cond, extra) {
   await montar('owner', true);
   await clickTab('Accesos');
   check('lista a los que esperan aprobación', cuerpo().includes('Ana Perez') && cuerpo().includes('Beto Diaz'));
-  check('no mezcla a los ya aprobados', !cuerpo().includes('Caro Lopez'));
+  /* La pestaña arranca mostrando a TODOS (verTodos = true): es la lista de
+     usuarios de la tienda, no una bandeja de pendientes. Destildando queda
+     solo lo frenado. Se comprueban las dos vistas, no una sola. */
+  check('arranca mostrando también a los ya aprobados', cuerpo().includes('Caro Lopez'));
+  const tgVerTodos = Array.from(container.querySelectorAll('input[type="checkbox"]'))
+    .find(i => txt(i.closest('label') || i).includes('Ver todos'));
+  check('hay un filtro para ver solo a los frenados', !!tgVerTodos);
+  if (tgVerTodos) {
+    await act(async () => { tgVerTodos.click(); });   // jsdom togglea y dispara el change de React
+    await flush();
+    check('★ destildado deja solo a los frenados (el aprobado desaparece)',
+          !cuerpo().includes('Caro Lopez') && cuerpo().includes('Ana Perez'));
+    await act(async () => { tgVerTodos.click(); });
+    await flush();
+  }
   check('muestra de qué cliente y canal es cada uno',
         cuerpo().includes('Corralon Sur') && cuerpo().includes('mayorista'));
   check('lista las invitaciones emitidas', cuerpo().includes('nuevo@cliente.com'));
@@ -659,10 +734,20 @@ function check(nombre, cond, extra) {
           && !!inv[0].payload.canal && inv[0].payload.cliente_nombre === 'Nuevo Corralon SA',
           JSON.stringify(inv[0] && inv[0].payload));
     /* El token va en un <input readOnly> (se selecciona al hacer foco y hay
-       botón Copiar) — o sea que NO está en textContent, hay que leer .value. */
-    const inputTok = Array.from(container.querySelectorAll('input')).find(i => i.readOnly);
+       botón Copiar) — o sea que NO está en textContent, hay que leer .value.
+       Ojo: readOnly hay más de uno — en la pestaña también está el link de
+       alta abierta (?alta=1). Se busca por contenido, no por posición. */
+    const readOnlys = Array.from(container.querySelectorAll('input')).filter(i => i.readOnly);
+    const inputTok = readOnlys.find(i => i.value === 'TOKENSECRETO123');
     check('el token queda en un campo listo para copiar',
-          !!inputTok && inputTok.value === 'TOKENSECRETO123', inputTok && inputTok.value);
+          !!inputTok, readOnlys.map(i => i.value).join(' | '));
+    /* El link que el dueño realmente copia y manda. Si el token no viaja
+       adentro, el mayorista abre la tienda y no le sirve de nada — y eso no
+       se ve mirando la pantalla, que muestra un link con buena pinta. */
+    const inputLink = readOnlys.find(i => /\/tienda\/\?codigo=/.test(i.value || ''));
+    check('★ el link que se le manda lleva el token adentro',
+          !!inputLink && inputLink.value.includes('TOKENSECRETO123'),
+          readOnlys.map(i => i.value).join(' | '));
     check('hay botón de copiar al lado',
           Array.from(container.querySelectorAll('button')).some(b => txt(b).includes('Copiar')));
     check('avisa fuerte que el código no se vuelve a ver', /una sola vez/i.test(cuerpo()));
@@ -674,6 +759,11 @@ function check(nombre, cond, extra) {
   console.log('\n— Clientes · catálogos habilitados —');
 
   const filaCli = (nombre) => filas().find(tr => txt(tr).includes(nombre));
+  /* Por etiqueta, NO por posición: la fila del cliente tiene varias acciones
+     ("Facturas", "Editar") y el orden cambia cada vez que se suma una. Un
+     querySelector('button') a secas apretaba la que estuviera primera. */
+  const btnFila = (nombre, etiqueta) =>
+    Array.from(filaCli(nombre).querySelectorAll('button')).find(b => txt(b).includes(etiqueta));
   const enModal = (sel) => Array.from(container.querySelectorAll('[data-modal] ' + sel));
   const chkCanal = (nombre) => {
     const l = enModal('.b2b-cli-canal').find(x => txt(x).includes(nombre));
@@ -694,7 +784,7 @@ function check(nombre, cond, extra) {
         !/\+/.test(txt(filaCli('Corralon Sur'))), txt(filaCli('Corralon Sur')));
 
   /* Un catálogo → dos. Es el alta del "mismo usuario, dos listas". */
-  await click(filaCli('Corralon Sur').querySelector('button'));
+  await click(btnFila('Corralon Sur', 'Editar'));
   check('el modal ofrece solo los catálogos activos',
         enModal('.b2b-cli-canal').length === CANALES_VISIBLES.length,
         `ofrece ${enModal('.b2b-cli-canal').length}`);
@@ -725,7 +815,7 @@ function check(nombre, cond, extra) {
 
   /* Sacarle el catálogo que además era el de arranque. */
   await clickTab('Clientes');
-  await click(filaCli('Distribuidora Norte').querySelector('button'));
+  await click(btnFila('Distribuidora Norte', 'Editar'));
   check('el cliente con dos viene con los dos tildados',
         enModal('.b2b-cli-canal input:checked').length === 2);
 
@@ -744,7 +834,7 @@ function check(nombre, cond, extra) {
 
   /* Ninguno: el backend lo rechaza, así que acá ni se ofrece. */
   await clickTab('Clientes');
-  await click(filaCli('Corralon Sur').querySelector('button'));
+  await click(btnFila('Corralon Sur', 'Editar'));
   const antesCli = RPC_LOG.filter(r => r.nombre === 'b2b_rpc_admin_set_cliente').length;
   await tildar(chkCanal('Mayorista'), false);
   check('★ sin ningún catálogo no deja guardar', !!btnGuardarCli() && btnGuardarCli().disabled);

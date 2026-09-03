@@ -835,6 +835,25 @@ window.getCancellationsForJornada = getCancellationsForJornada;
    de la jornada DESTINO, que no siempre es la seleccionada en pantalla. */
 window.computeCarriersForJornada = computeCarriersForJornada;
 
+/* ── A qué jornada va lo que se escribe ────────────────────────────
+   La que el usuario está VIENDO. No la activa.
+
+   `activaId` es la marcada en la base (una sola, global). `seleccionadaId`
+   es la pestaña que tiene abierta adelante. Son distintas todo el tiempo, y
+   ahí está la trampa: la pantalla solo cuenta lo que cuelga de la jornada que
+   muestra, así que una carga que se fue a otra es **indistinguible de una
+   carga que no ocurrió**. El usuario ve el cartel verde, mira el número, no
+   se movió, y reporta "confirma y no guarda nada" (2026-08-31).
+
+   Por eso la decisión vive acá y en un solo lugar: cualquier escritura que
+   salga de una pantalla resuelve su destino con esta función. Si mañana se
+   agrega otra acción que escribe, hereda la respuesta correcta sin tener que
+   acordarse de nada. */
+window.jornadaDestinoId = function () {
+  const j = (window.MOCK && window.MOCK.jornadas) || {};
+  return j.seleccionadaId || j.activaId || (j.abiertas && j.abiertas[0] && j.abiertas[0].id) || null;
+};
+
 /* ─────────────────────────────────────────────────────────────────
    getReprogramadasForJornada(jornadaId) — reprogramadas (ML "demorado")
    REGISTRADAS en la jornada. Espeja getCancellationsForJornada pero por
