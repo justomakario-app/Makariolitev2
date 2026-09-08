@@ -2275,10 +2275,37 @@
     return 'ok';
   }
 
+  /* ── Base de productos, en crudo (para el alta del catálogo B2B) ──────
+     La grilla de "Catálogo y precios" arranca de b2b_producto, así que un
+     SKU que existe en el maestro pero todavía no tiene fila comercial no
+     aparece en ninguna parte de esa pantalla. Al dar de alta hace falta
+     saberlo: si el código ya existe, no se crea de nuevo, se le carga el
+     precio y listo.
+
+     Va acá y no en b2b-data.js por la misma razón que los avisos por mail y
+     las facturas: b2b-data.js lo carga también la tienda del cliente, y el
+     maestro de productos es administración. El cliente no tiene por qué
+     recibir la lista de todo lo que la fábrica sabe hacer, incluido lo que
+     está sin publicar o dado de baja.
+
+     Se leen las columnas reales, no window.SKU_DB: ese mapa aplica los
+     nombres de display de SKU_DISPLAY_NAMES y no trae `incompleto`. Guardar
+     con esos datos renombraría el producto y le borraría la marca de "faltan
+     datos" que se pone desde Ventas → Base de productos. */
+  const COLS_SKU = 'sku, modelo, color, color_hex, categoria, es_fabricado, activo, incompleto';
+
+  async function baseProductos() {
+    const { data, error } = await supa
+      .from('sku_catalog').select(COLS_SKU).order('sku', { ascending: true });
+    if (error) throw new Error(error.message || 'No se pudo cargar la base de productos');
+    return data || [];
+  }
+
   window.ADMIN_DATA = {
     // B.2
     loadSuppliers,
     loadCustomersB2B,
+    baseProductos,
     createSupplier,
     createCustomerB2B,
     // S2.23 mayoristas

@@ -67,9 +67,31 @@ const CANALES = [
 const CANALES_VISIBLES = CANALES.filter(c => c.activo !== false);
 
 const CATALOGO = [
-  { sku:'MAD100', modelo:'Mesa Nordica', color:'Blanco', categoria:'Mesas', publicado:true,  precio_base:100000, moneda:'ARS' },
-  { sku:'MAD200', modelo:'Silla Viena',  color:'Negro',  categoria:'Sillas', publicado:false, precio_base:50000,  moneda:'ARS' },
-  { sku:'MAD300', modelo:'Banco Pino',   color:'Natural',categoria:'Bancos', publicado:false, precio_base:null,   moneda:'ARS' },
+  { sku:'MAD100', modelo:'Mesa Nordica', color:'Blanco', categoria:'Mesas', publicado:true,  precio_base:100000, moneda:'ARS', orden:3 },
+  { sku:'MAD200', modelo:'Silla Viena',  color:'Negro',  categoria:'Sillas', publicado:false, precio_base:50000,  moneda:'ARS', orden:7 },
+  { sku:'MAD300', modelo:'Banco Pino',   color:'Natural',categoria:'Bancos', publicado:false, precio_base:null,   moneda:'ARS', orden:5 },
+];
+
+/* El maestro (sku_catalog) NO es el catálogo de la tienda: tiene cosas que
+   todavía no están a la venta. Esa diferencia es todo el punto del alta.
+
+     · MAD400 existe en el maestro y NO en la tienda — el caso que antes no
+       tenía pantalla: el producto era invisible y no había forma de ponerle
+       precio ni de publicarlo.
+     · MAD100 está publicado pero DADO DE BAJA en el maestro. La tienda del
+       cliente pide las dos (publicado y activo), el panel mostraba solo la
+       primera: el tilde puesto y nadie lo ve.
+     · MAD200 tiene `incompleto` en true, que se marca desde Base de
+       productos. Guardar desde acá no puede borrárselo. */
+const BASE_SKUS = [
+  { sku:'MAD100', modelo:'Mesa Nordica', color:'Blanco',  color_hex:'#ffffff', categoria:'Mesas',
+    es_fabricado:true, activo:false, incompleto:false },
+  { sku:'MAD200', modelo:'Silla Viena',  color:'Negro',   color_hex:'#1a1a1a', categoria:'Sillas',
+    es_fabricado:true, activo:true,  incompleto:true },
+  { sku:'MAD300', modelo:'Banco Pino',   color:'Natural', color_hex:'#d4a574', categoria:'Bancos',
+    es_fabricado:true, activo:true,  incompleto:false },
+  { sku:'MAD400', modelo:'Repisa Roble', color:'Roble',   color_hex:'#8b6f47', categoria:'Estantes',
+    es_fabricado:false, activo:true, incompleto:false },
 ];
 
 const USUARIOS = [
@@ -141,6 +163,7 @@ function tablaFixture(tabla, filtros) {
   return { data: [] };
 }
 
+const STORAGE_LOG = [];
 const SUPA = {
   from(tabla) {
     const q = { tabla, filtros:{}, count:null, head:false };
@@ -186,6 +209,22 @@ const SUPA = {
       default: return Promise.resolve({ data:null, error:{ message:'RPC no fixturada: ' + nombre, code:'P0002' } });
     }
   },
+  /* El fake no tenía `storage`, así que cualquier click en "Subir foto"
+     moría con TypeError antes de llegar a ninguna verificación. Guarda lo
+     subido para poder mirar QUÉ se subió y con qué ruta. */
+  storage: {
+    from(bucket) {
+      return {
+        upload(ruta, file, opts) {
+          STORAGE_LOG.push({ bucket, ruta, tipo: file && file.type, opts });
+          return Promise.resolve({ data:{ path: ruta }, error:null });
+        },
+        getPublicUrl(ruta) {
+          return { data:{ publicUrl: 'https://fake.supabase/' + bucket + '/' + ruta } };
+        },
+      };
+    },
+  },
 };
 dom.window.SUPA = SUPA;
 
@@ -209,8 +248,17 @@ const FACTURA_TIPO_OPTIONS = [
   { value:'otro', label:'Otro comprobante' },
 ];
 
+let BASE_ROMPE = false;
+
 dom.window.ADMIN_DATA = {
   loadCustomersB2B: async () => [{ id:'c1', nombre:'Corralon Sur', cuit:'30-111-1' }],
+  /* El maestro se lee acá y no en b2b-data.js: la tienda del cliente carga
+     ese archivo y no tiene por qué recibir la lista de todo lo que la fábrica
+     sabe hacer. Puede fallar sin voltear la pantalla de precios. */
+  baseProductos: async () => {
+    if (BASE_ROMPE) throw new Error('No se pudo cargar la base de productos');
+    return BASE_SKUS.map(r => Object.assign({}, r));
+  },
   listPedidosMayoristas: async () => {
     if (ROL === 'ventas') { const e = new Error('Sin permiso.'); e.code = '42501'; throw e; }
     return PEDIDOS_MAY;
@@ -235,6 +283,22 @@ dom.window.ADMIN_DATA = {
     const i = FACTURAS.findIndex(f => f.id === id);
     if (i >= 0) FACTURAS.splice(i, 1);
     return { ok:true };
+  },
+};
+
+/* MOCK_ACTIONS vive en data.js (el panel entero, no solo B2B). El alta lo usa
+   para escribir en sku_catalog: es el ÚNICO escritor del maestro que hay en la
+   app, y pasar por él es lo que mantiene una sola forma de crear un producto.
+   El log deja ver qué se mandó, que es donde estaba el riesgo: guardar con
+   datos de display renombraría el producto y le borraría `incompleto`. */
+const SKU_LOG = [];
+dom.window.MOCK_ACTIONS = {
+  crearOActualizarSku: async (sku, payload, isNew) => {
+    SKU_LOG.push({ sku, payload, isNew });
+    if (isNew && BASE_SKUS.some(r => r.sku === sku)) {
+      throw new Error('duplicate key value violates unique constraint "sku_catalog_pkey"');
+    }
+    return { sku };
   },
 };
 
@@ -304,9 +368,10 @@ const flush = async () => { await act(async () => { for (let i = 0; i < 6; i++) 
 
 async function montar(rol, flag, rompe) {
   ROL = rol; FLAG = flag !== false; FLAG_ROMPE = !!rompe;
-  dom.window.MOCK = { user: { role: rol } };
+  dom.window.MOCK = { user: { role: rol }, categories: ['Mesas', 'Sillas', 'Bancos'] };
   dom.window.__TOASTS = [];
   RPC_LOG.length = 0; ADMIN_LOG.length = 0;
+  SKU_LOG.length = 0; STORAGE_LOG.length = 0;
   if (root) await act(async () => root.unmount());
   root = ReactDOMClient.createRoot(container);
   await act(async () => { root.render(React.createElement(dom.window.B2BTiendaTab)); });
@@ -671,6 +736,192 @@ function check(nombre, cond, extra) {
         && loteCanal[0].payload.items[0].precios_canal.distribuidor === 61000
         && !('precio_base' in loteCanal[0].payload.items[0]),
         JSON.stringify(loteCanal[0] && loteCanal[0].payload.items));
+
+  /* (5c) Alta y ficha del producto ─────────────────────────────────────
+     Hasta acá el panel sabía poner precios, no productos. El dueño tenía que
+     crear el SKU en Ventas → Base de productos y después no aparecía nunca en
+     esta pantalla, porque la grilla arranca de b2b_producto: quedaba invisible
+     y sin forma de ponerle precio. Lo que se prueba es esa cadena entera, que
+     cruza DOS tablas y por eso puede fallar a la mitad diciendo que anduvo. */
+  console.log('\n— Alta y ficha del producto —');
+  await montar('owner', true);
+  await clickTab('Catálogo');
+
+  check('★ avisa que un publicado dado de baja no lo ve el mayorista',
+        /Inactivo: no se ve/i.test(cuerpo()), cuerpo().slice(0, 300));
+
+  await clickTexto('button', 'Agregar producto');
+  const ficha = () => container.querySelector('[data-modal]');
+  const fNum  = () => Array.from(ficha().querySelectorAll('input[type="number"]'));
+  const fChk  = () => Array.from(ficha().querySelectorAll('input[type="checkbox"]'));
+  const fPh   = (ph) => Array.from(ficha().querySelectorAll('input'))
+                          .find(i => (i.getAttribute('placeholder') || '').includes(ph));
+  const btnFicha = () => Array.from(ficha().querySelectorAll('button'))
+                          .find(b => /Agregar al catálogo|^Guardar$/.test(txt(b)));
+  check('la ficha en blanco abre desde el botón', !!ficha());
+  check('pide el código antes que nada', !!fPh('MAD500'));
+  check('no deja guardar una ficha vacía', !!btnFicha() && btnFicha().disabled);
+
+  /* Un código mal escrito moría con "violates check constraint
+     sku_catalog_sku_check". El CHECK de la base está replicado del lado del
+     panel para que el error se pueda leer y corregir. */
+  await tipear(fPh('MAD500'), 'MAD-500');
+  check('★ el código mal escrito se explica en castellano, no con el CHECK crudo',
+        /2 a 4 letras/i.test(txt(ficha())) && !/check constraint/i.test(txt(ficha())),
+        txt(ficha()).slice(0, 200));
+  check('y no deja guardar', btnFicha().disabled);
+
+  /* Duplicar un SKU que ya está en la tienda daba error 23505 crudo. */
+  await tipear(fPh('MAD500'), 'MAD100');
+  check('★ avisa que ese producto ya está en la tienda, sin ir a la base',
+        /ya está en el catálogo/i.test(txt(ficha())) && btnFicha().disabled,
+        txt(ficha()).slice(0, 200));
+
+  /* El caso que no tenía pantalla: existe en el maestro, no en la tienda. */
+  await tipear(fPh('MAD500'), 'mad400');
+  check('★ reconoce el código en minúscula (nadie escribe en mayúscula)',
+        /ya existe en tu base/i.test(txt(ficha())), txt(ficha()).slice(0, 220));
+  const nombreInput = Array.from(ficha().querySelectorAll('input'))
+    .find(i => i.value === 'Repisa Roble');
+  check('trae los datos del maestro en vez de pedirlos de nuevo', !!nombreInput);
+  check('no deja publicar sin precio tampoco desde la ficha',
+        (await (async () => { await tildar(fChk()[2], true); return /precio de lista/i.test(txt(ficha())); })())
+        && btnFicha().disabled, txt(ficha()).slice(0, 260));
+
+  await tipear(fNum()[0], '80000');
+  check('con precio ya se puede publicar', !btnFicha().disabled);
+  await click(btnFicha());
+  check('★ adoptar un SKU existente NO lo crea de nuevo',
+        SKU_LOG.length === 0, JSON.stringify(SKU_LOG));
+  const alta = RPC_LOG.filter(r => r.nombre === 'b2b_rpc_admin_set_producto');
+  check('lo suma a la tienda con su precio y publicado',
+        alta.length === 1 && alta[0].payload.items[0].sku === 'MAD400'
+        && alta[0].payload.items[0].precio_base === 80000
+        && alta[0].payload.items[0].publicado === true,
+        JSON.stringify(alta[0] && alta[0].payload.items));
+  check('★ el producto nuevo va al final de la tienda, no al principio',
+        alta[0].payload.items[0].orden === 8,
+        String(alta[0] && alta[0].payload.items[0].orden));
+
+  /* Alta de un producto que no existe en ningún lado: dos tablas, en orden. */
+  await montar('owner', true);
+  await clickTab('Catálogo');
+  await clickTexto('button', 'Agregar producto');
+  await tipear(fPh('MAD500'), 'MAD900');
+  await tipear(fPh('Mesa Nórdica Petiribí'), 'Mesa Gota XS');
+  await tipear(fNum()[0], '120000');
+  await tipear(fNum()[2], '95000');           // precio propio de mayorista
+  await tildar(fChk()[2], true);              // publicado
+  await click(btnFicha());
+  check('★ el SKU se crea en el maestro ANTES de la fila comercial',
+        SKU_LOG.length === 1 && SKU_LOG[0].sku === 'MAD900' && SKU_LOG[0].isNew === true
+        && SKU_LOG[0].payload.modelo === 'Mesa Gota XS',
+        JSON.stringify(SKU_LOG));
+  const alta2 = RPC_LOG.filter(r => r.nombre === 'b2b_rpc_admin_set_producto');
+  check('y después nace en la tienda, publicado y con precio, en UNA sola llamada',
+        alta2.length === 1 && alta2[0].payload.items[0].sku === 'MAD900'
+        && alta2[0].payload.items[0].publicado === true
+        && alta2[0].payload.items[0].precio_base === 120000,
+        JSON.stringify(alta2[0] && alta2[0].payload.items));
+  check('el precio propio de canal viaja aparte del precio de lista',
+        alta2[0].payload.items[0].precios_canal.mayorista === 95000
+        && alta2[0].payload.items[0].precios_canal.distribuidor === null,
+        JSON.stringify(alta2[0].payload.items[0].precios_canal));
+
+  /* La ficha de un producto que ya está: edita TODO, no solo las reglas. */
+  await montar('owner', true);
+  await clickTab('Catálogo');
+  /* El lápiz de la grilla no tiene texto, solo el ícono: se busca por su
+     título, que es lo mismo que ve el dueño al pasar el mouse. */
+  const lapizDe = (i) => Array.from(container.querySelectorAll('tbody button'))
+    .filter(b => /Editar la ficha/.test(b.getAttribute('title') || ''))[i];
+  check('el lápiz de la grilla dice que abre la ficha entera, no solo las reglas',
+        !!lapizDe(0) && /nombre, color, categoría, precio, foto/.test(lapizDe(0).getAttribute('title')),
+        lapizDe(0) && lapizDe(0).getAttribute('title'));
+  await click(lapizDe(0));
+  check('la ficha de un producto existente abre con su nombre',
+        !!Array.from(ficha().querySelectorAll('input')).find(i => i.value === 'Mesa Nordica'));
+  check('★ y avisa ahí mismo que está dado de baja y no se ve',
+        /el mayorista no lo ve/i.test(txt(ficha())), txt(ficha()).slice(0, 300));
+
+  /* Cambiar el nombre de MAD200 (fila 1). `incompleto` está en true y se pone
+     desde otra pantalla: guardar desde acá no puede borrárselo. */
+  await montar('owner', true);
+  await clickTab('Catálogo');
+  await click(lapizDe(1));
+  const nom = Array.from(ficha().querySelectorAll('input')).find(i => i.value === 'Silla Viena');
+  await tipear(nom, 'Silla Viena Reforzada');
+  await click(btnFicha());
+  check('★ editar el nombre no le borra la marca de "faltan datos"',
+        SKU_LOG.length === 1 && SKU_LOG[0].payload.incompleto === true
+        && SKU_LOG[0].isNew === false,
+        JSON.stringify(SKU_LOG));
+  check('y el nombre viaja como se escribió',
+        SKU_LOG[0].payload.modelo === 'Silla Viena Reforzada', JSON.stringify(SKU_LOG[0].payload));
+
+  /* Guardar desde la ficha recargaba todo y vaciaba el borrador de la grilla:
+     el que venía pegando precios los perdía sin que nada se lo avisara. */
+  await montar('owner', true);
+  await clickTab('Catálogo');
+  await tipear(camposDe(0)[0], '333000');
+  check('hay un precio en el borrador antes de abrir la ficha',
+        /1 producto sin guardar/i.test(cuerpo()));
+  await click(lapizDe(2));
+  await tipear(fNum()[3], '4');               // múltiplo de MAD300
+  await click(btnFicha());
+  check('★ guardar una ficha no se lleva puesto el borrador de los otros',
+        /1 producto sin guardar/i.test(cuerpo()) && camposDe(0)[0].value === '333000',
+        camposDe(0)[0].value);
+
+  /* La foto no se sube al elegirla: viaja al guardar. Antes, cancelar el alta
+     después de elegir la foto dejaba el archivo colgado en el bucket. */
+  await montar('owner', true);
+  await clickTab('Catálogo');
+  await clickTexto('button', 'Agregar producto');
+  await tipear(fPh('MAD500'), 'MAD901');
+  await tipear(fPh('Mesa Nórdica Petiribí'), 'Banqueta Alta');
+  const inputFoto = ficha().querySelector('input[type="file"]');
+  check('la ficha tiene por dónde subir la foto', !!inputFoto);
+  await act(async () => {
+    Object.defineProperty(inputFoto, 'files', {
+      configurable: true,
+      value: [{ name:'foto.jpg', type:'image/jpeg', size: 50000 }],
+    });
+    inputFoto.dispatchEvent(new dom.window.Event('change', { bubbles:true }));
+  });
+  await flush();
+  check('★ elegir la foto todavía no la sube (cancelar no deja basura)',
+        STORAGE_LOG.length === 0, JSON.stringify(STORAGE_LOG));
+  await click(btnFicha());
+  check('★ la foto se sube recién al guardar, con el código ya definitivo',
+        STORAGE_LOG.length === 1 && STORAGE_LOG[0].ruta === 'MAD901/foto.jpg'
+        && STORAGE_LOG[0].bucket === 'b2b_fotos',
+        JSON.stringify(STORAGE_LOG));
+  const altaFoto = RPC_LOG.filter(r => r.nombre === 'b2b_rpc_admin_set_producto');
+  check('y la ruta queda guardada en el producto',
+        altaFoto.length === 1 && altaFoto[0].payload.items[0].foto_path === 'MAD901/foto.jpg',
+        JSON.stringify(altaFoto[0] && altaFoto[0].payload.items));
+
+  /* Si el maestro no carga, la pantalla de precios tiene que seguir andando y
+     el alta tiene que decir por qué no se puede. Lo que no puede pasar es que
+     el nombre se deje editar y guardar en el vacío. */
+  BASE_ROMPE = true;
+  await montar('owner', true);
+  await clickTab('Catálogo');
+  BASE_ROMPE = false;
+  check('★ si falla la base de productos, los precios se siguen cargando',
+        cuerpo().includes('MAD100') && container.querySelectorAll('tbody input[type="number"]').length > 0);
+  const btnAlta = Array.from(container.querySelectorAll('button'))
+    .find(b => txt(b).includes('Agregar producto'));
+  check('★ y el alta queda apagada con el motivo, no rota',
+        !!btnAlta && btnAlta.disabled
+        && /base de productos/i.test(btnAlta.getAttribute('title') || ''),
+        btnAlta && btnAlta.getAttribute('title'));
+  await click(lapizDe(0));
+  const nomRoto = Array.from(ficha().querySelectorAll('input')).find(i => i.value === 'Mesa Nordica');
+  check('★ y el nombre no se deja editar para no guardar en el vacío',
+        !!nomRoto && nomRoto.disabled && /no se pudo leer la base/i.test(txt(ficha())),
+        txt(ficha()).slice(0, 200));
 
   /* (6) Canales: owner-only */
   console.log('\n— Canales —');
