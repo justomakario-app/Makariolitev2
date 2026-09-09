@@ -70,7 +70,20 @@ window.LP_DATA = window.LP_DATA || (function () {
     ventasVinculadas:  (j) => sel('prod_jornada_orden', 'order_id, snapshot_status', q => q.eq('jornada_id', j)), // para estado neutro de sectores
 
     // ── Maestros ──
-    placas:    () => sel('prod_placa', 'sku, nombre, material, rendimiento, pieza_sku, combinada', q => q.order('sku')),
+    /* prod_v_placa (0174) suma lo que rinde la SEGUNDA medida de una placa combinada: una
+       COM001 da 8 tapas de una medida y 15 de otra, y hasta ahora la pantalla solo mostraba
+       las 8. El fallback no es paranoia de manual: la migracion la aplica el dueño, y sel()
+       tira si la vista todavia no existe. Sin catch, CNC se quedaria sin una sola placa que
+       elegir — la pantalla abre igual y no se puede trabajar. */
+    placas: async () => {
+      try {
+        return await sel('prod_v_placa',
+          'sku, nombre, material, rendimiento, rendimiento_extra, rendimiento_total, pieza_sku, combinada, extras',
+          q => q.order('sku'));
+      } catch (e) {
+        return await sel('prod_placa', 'sku, nombre, material, rendimiento, pieza_sku, combinada', q => q.order('sku'));
+      }
+    },
     piezas:    () => sel('prod_pieza', 'sku, nombre', q => q.order('sku')),
     productos: () => sel('prod_producto', 'sku, nombre, color, patas_tipo, patas_cant, kit_embalaje, activo', q => q.eq('activo', true).order('sku')),
     recetaProducto: (sku) => sel('prod_receta', 'pieza_sku, cantidad', q => q.eq('producto_sku', sku)),
@@ -164,6 +177,12 @@ window.LP_DATA = window.LP_DATA || (function () {
     mpUpsert: (p) => rpc('prod_rpc_mp_upsert', p),  // {sku,nombre,tipo,sector,unidad} owner/admin
     mpAjuste: (p) => rpc('prod_rpc_mp_ajuste', p),  // {sku,delta,motivo} owner/admin/encargado (auditado)
     stockMP:  () => sel('prod_v_stock_mp', '*', (q) => q.order('sku')),
+    /* Placas que se cortaron sin stock cargado (0174). [] si la vista no existe todavia: el
+       panel del encargado tiene que abrir igual. */
+    mpFaltantes: async () => {
+      try { return await sel('prod_v_mp_faltante', '*', (q) => q.order('faltan', { ascending: false })); }
+      catch (e) { return []; }
+    },
 
     // ── Estados demorado/reprogramado (0142) ──
     setEstadoExterno: (p) => rpc('prod_rpc_set_estado_externo', p), // {order_id, valor_externo, reprogramada_para?}

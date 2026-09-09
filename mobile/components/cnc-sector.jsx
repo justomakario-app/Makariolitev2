@@ -290,8 +290,22 @@ function CncScan({ U, turno, placas, onRegistrado, toast, goInicio }) {
   }, [placas]);
 
   const rend = Number(sel && sel.rendimiento) || 0;
+  /* Una placa combinada rinde DOS medidas por hoja: la principal y las extras. El sistema
+     acreditaba solo la principal — de 23 tapas por hoja entraban 8 y las otras 15 se cortaban,
+     existian en el galpon y nunca aparecian en ningun lado. La 0174 las acredita; esta cuenta
+     es la que tiene que coincidir con lo que devuelve el backend. */
+  const rendX = Number(sel && sel.rendimiento_extra) || 0;
+  const extrasLbl = useMemo(() => {
+    const xs = (sel && Array.isArray(sel.extras)) ? sel.extras : [];
+    return xs.map(e => e && e.pieza_sku).filter(Boolean).join(' + ');
+  }, [sel]);
   const nH = parseInt(hojas, 10); const nD = parseInt(desp, 10) || 0;
-  const preview = sel && Number.isFinite(nH) && nH > 0 ? Math.max(nH * rend - nD, 0) : null;
+  const hojasOk = Number.isFinite(nH) && nH > 0;
+  /* El desperdicio se descuenta de la principal (es la medida que el operario esta mirando
+     cuando lo carga) y las extras van enteras: igual que prod_rpc_registrar_corte. */
+  const previewPrin = sel && hojasOk ? Math.max(nH * rend - nD, 0) : null;
+  const previewX = sel && hojasOk ? nH * rendX : 0;
+  const preview = previewPrin != null ? previewPrin + previewX : null;
   const puedeEnviar = jornadaAbierta && sel && Number.isFinite(nH) && nH > 0 && !saving;
 
   const enviar = async () => {
@@ -301,6 +315,10 @@ function CncScan({ U, turno, placas, onRegistrado, toast, goInicio }) {
       const res = await window.LP_DATA.registrarCorte({ placa_sku: sel.sku, hojas: nH, desperdicio: nD });
       const pg = res && res.piezas_generadas != null ? res.piezas_generadas : preview;
       toast.success(`+${pg} piezas → Melamina`);
+      /* Avisos (0174): se corto con placas que el sistema no tenia cargadas, o falta la receta.
+         El corte SE registro — por eso son avisos y no un error. Duran mas que un toast normal
+         porque piden hacer algo despues (cargar el conteo real de placas). */
+      for (const a of ((res && res.avisos) || [])) toast.warning(a, { dur: 7000 });
       setSel(null); setHojas(''); setDesp('');
       await onRegistrado();
       goInicio();
@@ -342,6 +360,8 @@ function CncScan({ U, turno, placas, onRegistrado, toast, goInicio }) {
           <div style={{display:'flex', flexWrap:'wrap', gap:8}}>
             {g.items.map(p => {
               const on = sel && sel.sku === p.sku;
+              const rTot = p.rendimiento_total != null ? p.rendimiento_total : p.rendimiento;
+              const rExt = Number(p.rendimiento_extra) || 0;
               return (
                 <button key={p.sku} onClick={() => setSel(p)}
                   style={{border:`1px solid ${on ? U.accent : U.border}`, background: on ? U.accentSoft : U.surface,
@@ -349,7 +369,7 @@ function CncScan({ U, turno, placas, onRegistrado, toast, goInicio }) {
                           textAlign:'left', minWidth:96, transition:'all .12s ease'}}>
                   <div style={{fontSize:12.5, fontWeight:700, color:on ? U.ink : U.inkSoft}}>{p.nombre || p.sku}</div>
                   <div style={{fontSize:10, color: on ? U.accent : U.inkMuted, marginTop:1}}>
-                    {p.sku} · rinde {p.rendimiento != null ? p.rendimiento : '—'}
+                    {p.sku} · rinde {rTot != null ? rTot : '—'}{rExt > 0 ? ' · 2 medidas' : ''}
                   </div>
                 </button>
               );
@@ -381,12 +401,19 @@ function CncScan({ U, turno, placas, onRegistrado, toast, goInicio }) {
             </div>
             <div style={{display:'flex', alignItems:'baseline', justifyContent:'space-between'}}>
               <span style={{fontSize:12.5, color:U.inkSoft}}>
-                {nH > 0 ? `${nH} hojas × ${rend} − ${nD} desp.` : 'Ingresá las hojas'}
+                {hojasOk ? `${nH} hojas × ${rend + rendX} − ${nD} desp.` : 'Ingresá las hojas'}
               </span>
               <span style={{fontSize:26, fontWeight:800, color:U.ok, fontVariantNumeric:'tabular-nums'}}>
                 {preview != null ? preview : '—'}
               </span>
             </div>
+            {/* El desglose solo aparece en las combinadas. En una placa comun seria ruido. */}
+            {rendX > 0 && hojasOk ? (
+              <div style={{fontSize:11.5, color:U.inkSoft, marginTop:7, lineHeight:1.6}}>
+                Placa combinada: <b style={{color:U.ink}}>{previewPrin}</b> de {sel.pieza_sku || 'la medida principal'}
+                {' + '}<b style={{color:U.ink}}>{previewX}</b> de {extrasLbl || 'la segunda medida'}
+              </div>
+            ) : null}
             <div style={{fontSize:11, color:U.inkMuted, marginTop:4}}>piezas netas que pasan a Melamina</div>
           </div>
 

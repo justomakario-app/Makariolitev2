@@ -279,8 +279,11 @@ function PinoScan({ U, turno, onRegistrado, toast, goInicio }) {
         terminadas: estado === 'terminada' ? nC : 0,
         masilladas: estado === 'masillada' ? nC : 0,
       };
-      await window.LP_DATA.registrarPino(payload);
+      const res = await window.LP_DATA.registrarPino(payload);
       toast.success(estado === 'terminada' ? `+${nC} patas → Embalaje` : `+${nC} patas masilladas`);
+      /* Avisos (0174): tirante sin cargar, o receta de pino sin definir. Antes eso reventaba y
+         la pata quedaba sin registrar; ahora entra y avisa. La respuesta se venia descartando. */
+      for (const a of ((res && res.avisos) || [])) toast.warning(a, { dur: 7000 });
       setTamano(''); setEstado('terminada'); setCant('');
       await onRegistrado();
       goInicio();

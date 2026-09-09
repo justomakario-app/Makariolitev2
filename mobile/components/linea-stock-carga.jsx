@@ -10,6 +10,10 @@
   const BUCKETS = [
     { v:'pieza', l:'Pieza cruda (CNC)' }, { v:'melamina', l:'Melamina terminada' },
     { v:'patas', l:'Patas (Pino)' }, { v:'terminado', l:'Producto terminado' }, { v:'insumo', l:'Insumo / varilla' },
+    /* 0174 · la placa es lo unico que la linea consume y no se podia cargar desde aca.
+       Habia una salida, escondida en Configuracion -> Materia prima, donde el de CNC no
+       entra. Cargar placas aca ademas salda solo lo que quedo anotado como faltante. */
+    { v:'mp', l:'Placa / materia prima' },
   ];
   const ORIGENES = [ {v:'conteo_fisico',l:'Conteo físico'}, {v:'stock_legacy',l:'Stock legacy'}, {v:'compra',l:'Compra/ingreso'}, {v:'ajuste',l:'Ajuste'}, {v:'otro',l:'Otro'} ];
   const nuevaFila = () => ({ sku:'', bucket:'insumo', cantidad:'', origen:'conteo_fisico', motivo:'' });
@@ -74,7 +78,7 @@
           <div key={i} style={{ background:U.surface, border:`1px solid ${U.border}`, borderRadius:12, padding:'12px', marginBottom:10 }}>
             <div style={{ display:'flex', flexWrap:'wrap', gap:8, alignItems:'flex-end' }}>
               <label style={{ flex:'2 1 130px', minWidth:110 }}><div style={lb}>SKU</div>
-                <input value={f.sku} onChange={e=>setFila(i,'sku',e.target.value)} placeholder="TAP005 / PAT001 / VAR003…" style={inp} /></label>
+                <input value={f.sku} onChange={e=>setFila(i,'sku',e.target.value)} placeholder="TAP005 / PAT001 / MEL18B…" style={inp} /></label>
               <label style={{ flex:'2 1 150px', minWidth:130 }}><div style={lb}>Sector / bucket</div>
                 <select value={f.bucket} onChange={e=>setFila(i,'bucket',e.target.value)} style={inp}>{BUCKETS.map(b=><option key={b.v} value={b.v}>{b.l}</option>)}</select></label>
               <label style={{ flex:'1 1 80px', minWidth:70 }}><div style={lb}>Cantidad</div>
@@ -123,6 +127,11 @@
           <div style={{ background:'rgba(22,163,74,.06)', border:'1px solid rgba(22,163,74,.3)', borderRadius:12, padding:'12px 14px', fontSize:12.5 }}>
             <div style={{ fontWeight:800, color:U.ok }}>✓ Lote {result.lote_id} confirmado</div>
             <div style={{ color:U.inkSoft, marginTop:4 }}>Aplicadas nuevas: <b>{result.aplicadas_nuevas}</b> · ya aplicadas (idempotente): <b>{result.ya_aplicadas_idempotente}</b></div>
+            {result.faltantes_saldados > 0 ? (
+              <div style={{ color:U.inkSoft, marginTop:4 }}>
+                Se saldaron <b>{result.faltantes_saldados}</b> placas que figuraban como faltante a reponer.
+              </div>
+            ) : null}
             <button onClick={limpiar} style={Object.assign({}, btn(U,'ghost'), { marginTop:10 })}>Cargar otro lote</button>
           </div>
         ) : null}

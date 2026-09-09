@@ -44,6 +44,7 @@ function EncargadoPanel() {
   const [embalaje, setEmbalaje] = useState([]);
   const [demanda, setDemanda] = useState([]);
   const [alertas, setAlertas] = useState([]);
+  const [mpFalta, setMpFalta] = useState([]);   // placas cortadas sin stock cargado (0174)
   const [mantes, setMantes] = useState([]);
   const [insumos, setInsumos] = useState([]);
   const [minEdit, setMinEdit] = useState(null);  // Punto 4 — insumo cuyo mínimo se está configurando
@@ -62,7 +63,7 @@ function EncargadoPanel() {
       const j = await window.LP_DATA.jornadaHoy();
       setJornada(j);
       const jid = j && j.jornada_id ? j.jornada_id : null;
-      const [pl, st, ct, ml, pn, em, dm, al, mt, ins, sl, rm] = await Promise.all([
+      const [pl, st, ct, ml, pn, em, dm, al, mt, ins, sl, rm, mpf] = await Promise.all([
         window.LP_DATA.placas().catch(() => []),
         window.LP_DATA.stock().catch(() => null),
         jid ? window.LP_DATA.cortesDia(jid).catch(() => []) : Promise.resolve([]),
@@ -75,10 +76,11 @@ function EncargadoPanel() {
         window.LP_DATA.insumos().catch(() => []),
         window.LP_DATA.solicitudes().catch(() => []),
         window.LP_DATA.remitos().catch(() => []),
+        window.LP_DATA.mpFaltantes().catch(() => []),
       ]);
       setPlacas(pl); setStock(st || { stock_pieza:[], stock_melamina:[], stock_patas:[], stock_terminado:[] });
       setCortes(ct); setMelamina(ml); setPino(pn); setEmbalaje(em);
-      setDemanda(dm); setAlertas(al); setMantes(mt); setInsumos(ins); setSolicitudes(sl); setRemitos(rm);
+      setDemanda(dm); setAlertas(al); setMantes(mt); setInsumos(ins); setSolicitudes(sl); setRemitos(rm); setMpFalta(mpf || []);
     } catch (err) {
       toast.error(err && err.message ? err.message : 'No se pudo cargar el panel');
     } finally { setLoading(false); }
@@ -92,7 +94,7 @@ function EncargadoPanel() {
     ['prod_corte', 'prod_melamina', 'prod_pino', 'prod_embalaje',
      'prod_stock_pieza', 'prod_stock_melamina', 'prod_stock_patas', 'prod_stock_terminado',
      'prod_alerta', 'prod_mantenimiento', 'prod_solicitud', 'prod_jornada',
-     'prod_insumo', 'prod_remito'],
+     'prod_insumo', 'prod_remito', 'prod_mp_faltante'],
     () => cargar({ silent: true })
   ), [cargar]);
 
@@ -251,7 +253,7 @@ function EncargadoPanel() {
           <div style={{textAlign:'center', color:U.inkMuted, padding:'60px 0', fontSize:13}}>Cargando panel…</div>
         ) : tab === 'inicio' ? (
           <EncInicio U={U} kpis={kpis} cadena={{ pieza:sPieza, mel:sMel, patas:sPatas, term:sTerm }} alertas={alertas} demanda={demanda}
-                     toast={toast} puedeGestionar={canCoord}/>
+                     toast={toast} puedeGestionar={canCoord} mpFalta={mpFalta}/>
         ) : tab === 'sectores' ? (
           <EncSectores U={U} jornada={jornada} placaMap={placaMap}
                        cortes={cortes} melamina={melamina} pino={pino} embalaje={embalaje}
@@ -313,7 +315,7 @@ function EncargadoPanel() {
 }
 
 /* ── Tab Inicio (estado general) ── */
-function EncInicio({ U, kpis, cadena, alertas, demanda, toast, puedeGestionar }) {
+function EncInicio({ U, kpis, cadena, alertas, demanda, toast, puedeGestionar, mpFalta }) {
   const kpi = (label, val, color, sub) => (
     <div style={{flex:1, minWidth:0, background:U.surface, border:`1px solid ${U.border}`, borderRadius:14, padding:'13px 14px'}}>
       <div style={{fontSize:26, fontWeight:800, color, fontVariantNumeric:'tabular-nums', lineHeight:1}}>{val}</div>
@@ -390,6 +392,34 @@ function EncInicio({ U, kpis, cadena, alertas, demanda, toast, puedeGestionar })
           })}
         </div>
       )}
+
+      {/* Placas a reponer (0174). No es una alerta de minimo: es trabajo que YA se hizo con
+          material que el sistema no sabia que existia. Si esto no se ve, el stock de placas
+          queda mintiendo para siempre y nadie se entera de que hay que contar el galpon. */}
+      {(mpFalta || []).length > 0 ? (
+        <div style={{marginBottom:18}}>
+          <h3 style={{fontSize:13.5, fontWeight:800, margin:'0 0 4px', color:U.ink}}>Placas a reponer</h3>
+          <div style={{fontSize:11.5, color:U.inkMuted, marginBottom:10, lineHeight:1.55}}>
+            Se cortó con placas que el sistema no tenía cargadas. Cargá el conteo real en
+            Carga de stock (sector «Placa / materia prima») y el faltante se salda solo.
+          </div>
+          <div style={{display:'flex', flexDirection:'column', gap:8}}>
+            {mpFalta.slice(0, 8).map(f => (
+              <div key={f.mp_sku} style={{background:U.warn+'14', border:`1px solid ${U.warn}44`, borderRadius:12,
+                           padding:'10px 13px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:10}}>
+                <div style={{minWidth:0}}>
+                  <div style={{fontSize:12.5, fontWeight:700, color:U.ink, overflow:'hidden',
+                               textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{f.nombre || f.mp_sku}</div>
+                  <div style={{fontSize:10.5, color:U.inkMuted, marginTop:2}}>{f.mp_sku} · en stock {f.stock_actual}</div>
+                </div>
+                <span style={{fontSize:15, fontWeight:800, color:U.warn, fontVariantNumeric:'tabular-nums', whiteSpace:'nowrap'}}>
+                  faltan {f.faltan}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {/* Avance / pendientes por producto */}
       {topDemanda.length > 0 && (
