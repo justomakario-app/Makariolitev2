@@ -27,7 +27,6 @@ function MelaminaSector() {
   const U = MEL_UI;
   const toast = useToast();
   const [tab, setTab] = useState('inicio');
-  const [jornada, setJornada] = useState(null);
   const [piezas, setPiezas] = useState([]);       // TAP
   const [crudo, setCrudo] = useState([]);          // stock_pieza [{pieza_sku, disponible}]
   const [prioridad, setPrioridad] = useState([]);  // prod_v_prioridad_melamina
@@ -43,18 +42,26 @@ function MelaminaSector() {
     const m = {}; for (const p of piezas) m[p.sku] = p.nombre || p.sku; return m;
   }, [piezas]);
 
-  const jornadaAbierta = jornada && jornada.estado === 'abierta';
+  /* 0173: el interruptor de carga ya no es la jornada comercial sino TU turno de sector.
+     Se conserva el nombre `jornadaAbierta` — lo que cambió es de dónde sale, no qué significa
+     para las pantallas de abajo: "¿puedo registrar?". */
+  const turno = useLpTurno('melamina', toast);
+  const jornadaAbierta = turno.abierto;
+  const turnoId = turno.turnoId;
+  const turnoRecargar = turno.recargar;
 
   const cargar = useCallback(async (opts) => {
     if (!(opts && opts.silent)) setLoading(true);
     try {
       const j = await window.LP_DATA.jornadaHoy();
-      setJornada(j);
+      /* Con el turno abierto se lista TU turno; con el turno cerrado, la jornada entera.
+         Así no te colgás el trabajo del turno anterior, pero tampoco te quedás ciego. */
+      const ambito = { turno_id: turnoId, jornada_id: j && j.jornada_id };
       const [pz, st, pr, rg, vv] = await Promise.all([
         window.LP_DATA.piezas().catch(() => []),
         window.LP_DATA.stock().catch(() => null),
         window.LP_DATA.prioridadMelamina().catch(() => []),
-        j && j.jornada_id ? window.LP_DATA.melaminaDia(j.jornada_id).catch(() => []) : Promise.resolve([]),
+        window.LP_DATA.melaminaDia(ambito).catch(() => []),
         j && j.jornada_id ? window.LP_DATA.ventasVinculadas(j.jornada_id).catch(() => []) : Promise.resolve([]),
       ]);
       setPiezas((pz || []).filter(p => String(p.sku).startsWith('TAP')));
@@ -65,15 +72,17 @@ function MelaminaSector() {
     } catch (err) {
       toast.error(err && err.message ? err.message : 'No se pudo cargar el sector');
     } finally { setLoading(false); }
-  }, [toast]);
+  }, [toast, turnoId]);
 
-  useEffect(() => { cargar(); }, [cargar]);
+  /* Espera a saber si tu turno está abierto: arrancar antes traería el ámbito equivocado y la
+     pantalla parpadearía mostrando primero lo de otro turno. */
+  useEffect(() => { if (!turno.cargando) cargar(); }, [cargar, turno.cargando]);
 
   // 🔴 Realtime (Fase 4.2): crudo de CNC + cargas propias + jornada en vivo.
   useEffect(() => window.LP_DATA.subscribe(
-    ['prod_stock_pieza', 'prod_melamina', 'prod_jornada'],
-    () => cargar({ silent: true })
-  ), [cargar]);
+    ['prod_stock_pieza', 'prod_melamina', 'prod_jornada', 'prod_jornada_sector'],
+    () => { turnoRecargar(); cargar({ silent: true }); }
+  ), [cargar, turnoRecargar]);
 
   const totalTerminadas = registros.reduce((s, r) => s + (Number(r.terminadas) || 0), 0);
 
@@ -102,14 +111,14 @@ function MelaminaSector() {
             </div>
           </div>
         </div>
-        <div style={{textAlign:'right'}}>
-          <div style={{fontSize:15, fontWeight:800, fontVariantNumeric:'tabular-nums'}}><LpClock/></div>
-          <span style={{display:'inline-block', marginTop:3, fontSize:9.5, fontWeight:800, letterSpacing:'.06em',
-                        textTransform:'uppercase', padding:'2px 8px', borderRadius:999,
-                        background: jornadaAbierta ? 'rgba(0,214,143,.14)' : 'rgba(255,64,96,.14)',
-                        color: jornadaAbierta ? U.ok : U.danger}}>
-            {jornada ? (jornadaAbierta ? 'Jornada abierta' : 'Jornada cerrada') : 'Sin jornada'}
-          </span>
+        {/* El botón vive acá arriba, visible desde cualquier tab: el operario abre y cierra
+            su jornada sin tener que buscar en qué pantalla estaba. */}
+        <div style={{display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', justifyContent:'flex-end'}}>
+          <div style={{textAlign:'right'}}>
+            <div style={{fontSize:15, fontWeight:800, fontVariantNumeric:'tabular-nums'}}><LpClock/></div>
+            <div style={{marginTop:4}}><LpTurnoChip U={U} t={turno}/></div>
+          </div>
+          <LpTurnoBoton U={U} t={turno} sectorLabel="Melamina" compact/>
         </div>
       </div>
 
@@ -139,11 +148,11 @@ function MelaminaSector() {
         {loading ? (
           <div style={{textAlign:'center', color:U.inkMuted, padding:'60px 0', fontSize:13}}>Cargando sector…</div>
         ) : tab === 'inicio' ? (
-          <MelInicio U={U} jornadaAbierta={jornadaAbierta} jornada={jornada} crudo={crudo}
+          <MelInicio U={U} turno={turno} crudo={crudo}
                      prioridad={prioridad} registros={registros} piezaNombre={piezaNombre} totalTerminadas={totalTerminadas}
                      nVentas={ventas.filter(v => v.snapshot_status !== 'cancelada').length} onEdit={setEditing}/>
         ) : tab === 'scan' ? (
-          <MelScan U={U} jornadaAbierta={jornadaAbierta} piezas={piezas} crudoMap={crudoMap}
+          <MelScan U={U} turno={turno} piezas={piezas} crudoMap={crudoMap}
                    onRegistrado={cargar} toast={toast} goInicio={() => setTab('inicio')}/>
         ) : tab === 'solicitud' ? (
           <LpSolicitud U={U} sector="melamina" catalogo={MEL_SOLICITUD_CAT} toast={toast}/>
@@ -169,22 +178,18 @@ function MelaminaSector() {
 }
 
 /* ── Tab Inicio ── */
-function MelInicio({ U, jornadaAbierta, jornada, crudo, prioridad, registros, piezaNombre, totalTerminadas, nVentas, onEdit }) {
+function MelInicio({ U, turno, crudo, prioridad, registros, piezaNombre, totalTerminadas, nVentas, onEdit }) {
+  const jornadaAbierta = turno.abierto;
   const prioridadFalta = prioridad.filter(p => (Number(p.falta) || 0) > 0);
-  const neu = lpNeutralMsg(jornada, nVentas, prioridadFalta.length, 'Melamina');
+  if (!jornadaAbierta && !prioridadFalta.length && !(registros || []).length && !(crudo || []).length)
+    return <LpTurnoPortada U={U} t={turno} sectorLabel="Melamina" verbo="registrar piezas terminadas"/>;
+  const neu = jornadaAbierta
+    ? lpNeutralMsg({ abierto:true, hayDemanda:turno.hayDemanda, nVentas, nTareas:prioridadFalta.length, sectorLabel:'Melamina' })
+    : null;
   if (neu) return <LpNeutral U={U} msg={neu}/>;
   return (
     <div>
-      {!jornadaAbierta && (
-        <div style={{background:'rgba(255,64,96,.10)', border:`1px solid rgba(255,64,96,.28)`,
-                     borderRadius:12, padding:'12px 14px', marginBottom:16, display:'flex', gap:10, alignItems:'flex-start'}}>
-          <Icon n="alert" s={17} c={U.danger}/>
-          <div style={{fontSize:12.5, lineHeight:1.5, color:U.ink}}>
-            {jornada ? 'La jornada de hoy está cerrada.' : 'Todavía no se abrió la jornada de hoy.'}
-            <span style={{color:U.inkSoft}}> Podés ver el stock pero no registrar.</span>
-          </div>
-        </div>
-      )}
+      {!jornadaAbierta && <LpTurnoAviso U={U} t={turno} sectorLabel="Melamina" verbo="registrar"/>}
 
       {/* Crudo de CNC */}
       <div style={{marginBottom:18}}>
@@ -291,7 +296,8 @@ function MelInicio({ U, jornadaAbierta, jornada, crudo, prioridad, registros, pi
 }
 
 /* ── Tab Scan ── */
-function MelScan({ U, jornadaAbierta, piezas, crudoMap, onRegistrado, toast, goInicio }) {
+function MelScan({ U, turno, piezas, crudoMap, onRegistrado, toast, goInicio }) {
+  const jornadaAbierta = turno.abierto;
   const [sel, setSel] = useState(null);
   const [term, setTerm] = useState('');
   const [fallas, setFallas] = useState('');
@@ -325,17 +331,9 @@ function MelScan({ U, jornadaAbierta, piezas, crudoMap, onRegistrado, toast, goI
     padding:'14px 10px', outline:'none', fontVariantNumeric:'tabular-nums',
   };
 
-  if (!jornadaAbierta) {
-    return (
-      <div style={{textAlign:'center', color:U.inkMuted, padding:'56px 16px'}}>
-        <Icon n="lock" s={28} c={U.inkMuted}/>
-        <h3 style={{color:U.ink, fontSize:16, fontWeight:800, margin:'14px 0 6px'}}>Jornada no abierta</h3>
-        <p style={{fontSize:12.5, lineHeight:1.6, maxWidth:280, margin:'0 auto'}}>
-          No se puede registrar hasta que el encargado abra la jornada de hoy.
-        </p>
-      </div>
-    );
-  }
+  /* Antes acá había un cartel sin salida ("hasta que el encargado abra la jornada de hoy").
+     Ahora el que abre es el propio sector, así que la pantalla trae el botón. */
+  if (!jornadaAbierta) return <LpTurnoPortada U={U} t={turno} sectorLabel="Melamina" verbo="registrar piezas terminadas"/>;
 
   return (
     <div>

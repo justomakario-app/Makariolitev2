@@ -30,7 +30,6 @@ function PinoSector() {
   const U = PINO_UI;
   const toast = useToast();
   const [tab, setTab] = useState('inicio');
-  const [jornada, setJornada] = useState(null);
   const [patas, setPatas] = useState([]);          // stock_patas [{tamano, disponible, masilladas}]
   const [registros, setRegistros] = useState([]);  // pinoDia
   const [ventas, setVentas] = useState([]);
@@ -42,16 +41,24 @@ function PinoSector() {
     const m = {}; for (const r of patas) m[r.tamano] = r; return m;
   }, [patas]);
 
-  const jornadaAbierta = jornada && jornada.estado === 'abierta';
+  /* 0173: el interruptor de carga ya no es la jornada comercial sino TU turno de sector.
+     Se conserva el nombre `jornadaAbierta` — lo que cambió es de dónde sale, no qué significa
+     para las pantallas de abajo: "¿puedo registrar?". */
+  const turno = useLpTurno('pino', toast);
+  const jornadaAbierta = turno.abierto;
+  const turnoId = turno.turnoId;
+  const turnoRecargar = turno.recargar;
 
   const cargar = useCallback(async (opts) => {
     if (!(opts && opts.silent)) setLoading(true);
     try {
       const j = await window.LP_DATA.jornadaHoy();
-      setJornada(j);
+      /* Con el turno abierto se lista TU turno; con el turno cerrado, la jornada entera.
+         Así no te colgás el trabajo del turno anterior, pero tampoco te quedás ciego. */
+      const ambito = { turno_id: turnoId, jornada_id: j && j.jornada_id };
       const [st, rg, os, vv] = await Promise.all([
         window.LP_DATA.stock().catch(() => null),
-        j && j.jornada_id ? window.LP_DATA.pinoDia(j.jornada_id).catch(() => []) : Promise.resolve([]),
+        window.LP_DATA.pinoDia(ambito).catch(() => []),
         window.LP_DATA.ordenSector().catch(() => []),
         j && j.jornada_id ? window.LP_DATA.ventasVinculadas(j.jornada_id).catch(() => []) : Promise.resolve([]),
       ]);
@@ -62,15 +69,17 @@ function PinoSector() {
     } catch (err) {
       toast.error(err && err.message ? err.message : 'No se pudo cargar el sector');
     } finally { setLoading(false); }
-  }, [toast]);
+  }, [toast, turnoId]);
 
-  useEffect(() => { cargar(); }, [cargar]);
+  /* Espera a saber si tu turno está abierto: arrancar antes traería el ámbito equivocado y la
+     pantalla parpadearía mostrando primero lo de otro turno. */
+  useEffect(() => { if (!turno.cargando) cargar(); }, [cargar, turno.cargando]);
 
   // 🔴 Realtime (Fase 4.2): stock de patas + cargas propias + jornada en vivo.
   useEffect(() => window.LP_DATA.subscribe(
-    ['prod_stock_patas', 'prod_pino', 'prod_jornada'],
-    () => cargar({ silent: true })
-  ), [cargar]);
+    ['prod_stock_patas', 'prod_pino', 'prod_jornada', 'prod_jornada_sector'],
+    () => { turnoRecargar(); cargar({ silent: true }); }
+  ), [cargar, turnoRecargar]);
 
   const totalTerminadas = registros.reduce((s, r) => s + (Number(r.terminadas) || 0), 0);
 
@@ -99,14 +108,14 @@ function PinoSector() {
             </div>
           </div>
         </div>
-        <div style={{textAlign:'right'}}>
-          <div style={{fontSize:15, fontWeight:800, fontVariantNumeric:'tabular-nums'}}><LpClock/></div>
-          <span style={{display:'inline-block', marginTop:3, fontSize:9.5, fontWeight:800, letterSpacing:'.06em',
-                        textTransform:'uppercase', padding:'2px 8px', borderRadius:999,
-                        background: jornadaAbierta ? 'rgba(0,214,143,.14)' : 'rgba(255,64,96,.14)',
-                        color: jornadaAbierta ? U.ok : U.danger}}>
-            {jornada ? (jornadaAbierta ? 'Jornada abierta' : 'Jornada cerrada') : 'Sin jornada'}
-          </span>
+        {/* El botón vive acá arriba, visible desde cualquier tab: el operario abre y cierra
+            su jornada sin tener que buscar en qué pantalla estaba. */}
+        <div style={{display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', justifyContent:'flex-end'}}>
+          <div style={{textAlign:'right'}}>
+            <div style={{fontSize:15, fontWeight:800, fontVariantNumeric:'tabular-nums'}}><LpClock/></div>
+            <div style={{marginTop:4}}><LpTurnoChip U={U} t={turno}/></div>
+          </div>
+          <LpTurnoBoton U={U} t={turno} sectorLabel="Pino" compact/>
         </div>
       </div>
 
@@ -136,10 +145,10 @@ function PinoSector() {
         {loading ? (
           <div style={{textAlign:'center', color:U.inkMuted, padding:'60px 0', fontSize:13}}>Cargando sector…</div>
         ) : tab === 'inicio' ? (
-          <PinoInicio U={U} jornadaAbierta={jornadaAbierta} jornada={jornada} patasMap={patasMap} registros={registros} totalTerminadas={totalTerminadas}
+          <PinoInicio U={U} turno={turno} patasMap={patasMap} registros={registros} totalTerminadas={totalTerminadas}
                       nVentas={ventas.filter(v => v.snapshot_status !== 'cancelada').length} nTareas={tareasPino} onEdit={setEditing}/>
         ) : tab === 'scan' ? (
-          <PinoScan U={U} jornadaAbierta={jornadaAbierta} onRegistrado={cargar} toast={toast} goInicio={() => setTab('inicio')}/>
+          <PinoScan U={U} turno={turno} onRegistrado={cargar} toast={toast} goInicio={() => setTab('inicio')}/>
         ) : tab === 'solicitud' ? (
           <LpSolicitud U={U} sector="pino" catalogo={PINO_SOLICITUD_CAT} toast={toast}/>
         ) : (
@@ -164,8 +173,13 @@ function PinoSector() {
 }
 
 /* ── Tab Inicio ── */
-function PinoInicio({ U, jornadaAbierta, jornada, patasMap, registros, totalTerminadas, nVentas, nTareas, onEdit }) {
-  const neu = lpNeutralMsg(jornada, nVentas, nTareas, 'Pino');
+function PinoInicio({ U, turno, patasMap, registros, totalTerminadas, nVentas, nTareas, onEdit }) {
+  const jornadaAbierta = turno.abierto;
+  if (!jornadaAbierta && !nTareas && !(registros || []).length)
+    return <LpTurnoPortada U={U} t={turno} sectorLabel="Pino" verbo="registrar producción"/>;
+  const neu = jornadaAbierta
+    ? lpNeutralMsg({ abierto:true, hayDemanda:turno.hayDemanda, nVentas, nTareas, sectorLabel:'Pino' })
+    : null;
   if (neu) return <LpNeutral U={U} msg={neu}/>;
   const chica = patasMap['chica'] || { disponible:0, masilladas:0 };
   const grande = patasMap['grande'] || { disponible:0, masilladas:0 };
@@ -180,16 +194,7 @@ function PinoInicio({ U, jornadaAbierta, jornada, patasMap, registros, totalTerm
 
   return (
     <div>
-      {!jornadaAbierta && (
-        <div style={{background:'rgba(255,64,96,.10)', border:`1px solid rgba(255,64,96,.28)`,
-                     borderRadius:12, padding:'12px 14px', marginBottom:16, display:'flex', gap:10, alignItems:'flex-start'}}>
-          <Icon n="alert" s={17} c={U.danger}/>
-          <div style={{fontSize:12.5, lineHeight:1.5, color:U.ink}}>
-            {jornada ? 'La jornada de hoy está cerrada.' : 'Todavía no se abrió la jornada de hoy.'}
-            <span style={{color:U.inkSoft}}> Podés ver el stock pero no cargar.</span>
-          </div>
-        </div>
-      )}
+      {!jornadaAbierta && <LpTurnoAviso U={U} t={turno} sectorLabel="Pino" verbo="cargar"/>}
 
       <h3 style={{fontSize:13.5, fontWeight:800, margin:'0 0 10px', color:U.ink}}>Patas terminadas · stock</h3>
       <div style={{display:'flex', gap:12, marginBottom:14}}>
@@ -255,7 +260,8 @@ function PinoInicio({ U, jornadaAbierta, jornada, patasMap, registros, totalTerm
 }
 
 /* ── Tab Scan (carga manual: tamaño → estado → cantidad) ── */
-function PinoScan({ U, jornadaAbierta, onRegistrado, toast, goInicio }) {
+function PinoScan({ U, turno, onRegistrado, toast, goInicio }) {
+  const jornadaAbierta = turno.abierto;
   const [tamano, setTamano] = useState('');
   const [estado, setEstado] = useState('terminada');
   const [cant, setCant] = useState('');
@@ -283,17 +289,9 @@ function PinoScan({ U, jornadaAbierta, onRegistrado, toast, goInicio }) {
     } finally { setSaving(false); }
   };
 
-  if (!jornadaAbierta) {
-    return (
-      <div style={{textAlign:'center', color:U.inkMuted, padding:'56px 16px'}}>
-        <Icon n="lock" s={28} c={U.inkMuted}/>
-        <h3 style={{color:U.ink, fontSize:16, fontWeight:800, margin:'14px 0 6px'}}>Jornada no abierta</h3>
-        <p style={{fontSize:12.5, lineHeight:1.6, maxWidth:280, margin:'0 auto'}}>
-          No se puede cargar hasta que el encargado abra la jornada de hoy.
-        </p>
-      </div>
-    );
-  }
+  /* Antes acá había un cartel sin salida ("hasta que el encargado abra la jornada de hoy").
+     Ahora el que abre es el propio sector, así que la pantalla trae el botón. */
+  if (!jornadaAbierta) return <LpTurnoPortada U={U} t={turno} sectorLabel="Pino" verbo="registrar producción"/>;
 
   const chip = (active, onClick, label, key) => (
     <button key={key} onClick={onClick}

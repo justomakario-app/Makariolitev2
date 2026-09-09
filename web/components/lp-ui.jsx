@@ -13,19 +13,464 @@ function LpClock() {
   return <span>{hh}:{mm}</span>;
 }
 
-/* ── Estado neutro de la Línea Productiva por sector (3 situaciones distintas) ──
-   lpNeutralMsg(jornada, nVentas, nTareas) → {titulo, sub} o null (null = hay trabajo).
-   1) sin jornada abierta · 2) abierta sin ventas vinculadas · 3) con ventas, sin tareas del sector. */
-function lpNeutralMsg(jornada, nVentas, nTareas, sectorLabel) {
-  const abierta = jornada && jornada.estado === 'abierta';
-  if (!abierta) return { titulo:'Línea Productiva todavía no iniciada',
-    sub:'Cuando el encargado inicie la jornada y vincule ventas, vas a ver acá tus tareas.' };
-  if (!nVentas) return { titulo:'Jornada abierta, todavía sin ventas vinculadas',
-    sub:'La jornada arrancó pero todavía no se vincularon ventas. En cuanto se vinculen, aparecen las tareas.' };
-  if (!nTareas) return { titulo:'No hay tareas pendientes para este sector',
-    sub:'Hay ventas en la jornada, pero ' + (sectorLabel || 'este sector') + ' no tiene trabajo pendiente ahora.' };
+/* ── Estado neutro de la Línea Productiva por sector ──
+   lpNeutralMsg({abierto, hayDemanda, nVentas, nTareas, sectorLabel}) → {titulo, sub} o null.
+
+   Cambió de firma en 0173. Antes preguntaba por la jornada global y decía "cuando el encargado
+   inicie la jornada": eso ya no es cierto — ahora el sector abre la suya y puede trabajar aunque
+   nadie haya vinculado ventas. Cuatro situaciones, cada una con su salida concreta. */
+function lpNeutralMsg(ctx) {
+  const c = ctx || {};
+  const sec = c.sectorLabel || 'este sector';
+  if (!c.abierto) return { titulo:'Tu jornada de ' + sec + ' está cerrada',
+    sub:'Abrila con el botón de arriba para empezar a cargar. Mientras esté cerrada no se registra producción de este sector.' };
+  if (!c.hayDemanda) return { titulo:'Jornada abierta · todavía sin pedidos vinculados',
+    sub:'Podés cargar igual: lo que produzcas entra al stock libre y queda registrado en tu turno. Cuando el encargado vincule ventas, acá aparecen las prioridades.' };
+  if (!c.nVentas) return { titulo:'Jornada abierta, todavía sin ventas vinculadas',
+    sub:'La jornada arrancó pero todavía no se vincularon ventas. En cuanto se vinculen, aparecen las tareas. Mientras tanto podés cargar a stock libre.' };
+  if (!c.nTareas) return { titulo:'No hay trabajo pendiente para ' + sec,
+    sub:'Hay ventas en la jornada, pero ' + sec + ' no tiene nada pendiente ahora. Si producís igual, entra como stock libre.' };
   return null;
 }
+
+/* ══ TURNO DE SECTOR (0173) ══════════════════════════════════════════
+   Seba: "el encargado de cada área tiene que prender su jornada y cerrarla cuando se vaya".
+   Todo esto vive una sola vez y lo consumen los cuatro sectores: con el botón copiado cuatro
+   veces, el quinto arreglo se olvida en alguno.
+   ═════════════════════════════════════════════════════════════════ */
+
+const LP_SECTORES = [
+  { id:'cnc',      label:'CNC',      verbo:'registrar cortes' },
+  { id:'melamina', label:'Melamina', verbo:'registrar piezas terminadas' },
+  { id:'pino',     label:'Pino',     verbo:'registrar producción' },
+  { id:'embalaje', label:'Embalaje', verbo:'registrar armados' },
+];
+
+/* "3 h 20 min" · "45 min" · "recién". */
+function lpDesdeHace(iso) {
+  if (!iso) return '';
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!(ms >= 0)) return '';
+  const min = Math.floor(ms / 60000);
+  if (min < 1) return 'recién';
+  if (min < 60) return min + ' min';
+  const h = Math.floor(min / 60), r = min % 60;
+  return r ? (h + ' h ' + r + ' min') : (h + ' h');
+}
+
+/* Estado + acciones del turno del sector: un solo lugar donde vive abrir/cerrar.
+   Devuelve `abierto` como booleano duro para que las pantallas no adivinen. */
+function useLpTurno(sector, toast) {
+  const [estado, setEstado] = useState(null);
+  const [cargando, setCarg] = useState(true);
+  const [ocupado, setOcup]  = useState(false);
+  const [error, setError]   = useState('');
+
+  /* `toast` es el objeto de useToast() — estable por useMemo, así que sirve de dependencia. */
+  const aviso = useCallback((tipo, msg) => {
+    if (!toast) return;
+    const f = toast[tipo] || toast.info;
+    if (f) f(msg);
+  }, [toast]);
+
+  const recargar = useCallback(async () => {
+    try {
+      const e = await window.LP_DATA.sectorEstado();
+      setEstado(e || null); setError('');
+    } catch (ex) {
+      /* Fail-closed: si no se puede leer el estado, NO se asume abierto. Dejar cargar sobre un
+         turno que no existe termina en un error del backend después de tipear todo. */
+      setEstado(null); setError(ex.message || 'No se pudo leer el estado de la jornada.');
+    } finally { setCarg(false); }
+  }, []);
+
+  useEffect(() => { recargar(); }, [recargar]);
+
+  const mio = useMemo(() => {
+    const list = (estado && estado.sectores) || [];
+    for (let i = 0; i < list.length; i++) if (list[i].sector === sector) return list[i];
+    return null;
+  }, [estado, sector]);
+
+  const abrir = useCallback(async () => {
+    setOcup(true);
+    try {
+      const r = await window.LP_DATA.sectorAbrir({ sector });
+      await recargar();
+      if (r && r.retomada) aviso('info', 'Tu jornada ya estaba abierta.');
+      else if (r && r.sin_jornada_demanda) aviso('info', 'Jornada abierta. Todavía no hay pedidos vinculados: lo que cargues va a stock libre.');
+      else aviso('success', 'Jornada abierta. A trabajar.');
+      return r;
+    } catch (ex) { aviso('error', ex.message || 'No se pudo abrir la jornada.'); throw ex; }
+    finally { setOcup(false); }
+  }, [sector, recargar, aviso]);
+
+  const cerrar = useCallback(async () => {
+    setOcup(true);
+    try {
+      const r = await window.LP_DATA.sectorCerrar({ sector });
+      await recargar();
+      return r;
+    } catch (ex) { aviso('error', ex.message || 'No se pudo cerrar la jornada.'); throw ex; }
+    finally { setOcup(false); }
+  }, [sector, recargar, aviso]);
+
+  return {
+    estado, cargando, ocupado, error, recargar, abrir, cerrar, sector,
+    turno: mio,
+    abierto: !!(mio && mio.abierta),
+    turnoId: (mio && mio.turno_id) || null,
+    jornadaId: (estado && estado.jornada_id) || null,
+    hayDemanda: !!(estado && estado.hay_jornada_demanda),
+  };
+}
+
+/* Chip de la topbar. Mientras el turno está abierto el tiempo sube solo cada 30 s: el operario
+   ve que la pantalla está viva y no una foto vieja. */
+function LpTurnoChip({ U, t }) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!t.abierto) return undefined;
+    const id = setInterval(() => tick((n) => n + 1), 30000);
+    return () => clearInterval(id);
+  }, [t.abierto]);
+
+  const ok  = t.abierto;
+  const col = t.cargando ? U.inkMuted : (ok ? U.ok : U.danger);
+  const bg  = t.cargando ? 'rgba(0,0,0,.05)' : (ok ? 'rgba(22,163,74,.12)' : 'rgba(220,38,38,.12)');
+  const txt = t.cargando ? 'Cargando…'
+            : ok ? ('Tu jornada · ' + lpDesdeHace(t.turno && t.turno.abierta_at))
+            : 'Tu jornada cerrada';
+  return (
+    <span style={{display:'inline-flex', alignItems:'center', gap:6, padding:'5px 10px', borderRadius:999,
+                  background:bg, color:col, fontSize:11, fontWeight:800, whiteSpace:'nowrap'}}>
+      <span style={{width:7, height:7, borderRadius:999, background:col, flexShrink:0,
+                    boxShadow: ok ? `0 0 0 3px ${bg}` : 'none'}}/>
+      {txt}
+    </span>
+  );
+}
+
+/* Botón de abrir/cerrar. Cerrar pide confirmación y después muestra el resumen del turno:
+   cerrar sin ver qué hiciste es la clase de acción que después nadie puede auditar. */
+function LpTurnoBoton({ U, t, sectorLabel, compact }) {
+  const [paso, setPaso] = useState(null);   // null | 'confirmar' | 'resumen'
+  const [res, setRes]   = useState(null);
+
+  const doCerrar = async () => {
+    try { const r = await t.cerrar(); setRes(r); setPaso('resumen'); }
+    catch (e) { setPaso(null); }
+  };
+
+  const base = { border:'none', borderRadius:9, fontWeight:800, cursor:'pointer', lineHeight:1,
+                 whiteSpace:'nowrap', fontSize: compact ? 11.5 : 12.5,
+                 padding: compact ? '7px 11px' : '9px 15px' };
+
+  if (t.cargando) return null;
+
+  return (
+    <React.Fragment>
+      {!t.abierto ? (
+        <button onClick={t.abrir} disabled={t.ocupado}
+          style={{...base, background:U.accent, color:'#fff', opacity: t.ocupado ? .6 : 1,
+                  boxShadow:`0 2px 10px ${U.accentSoft}`}}>
+          {t.ocupado ? 'Abriendo…' : 'Abrir mi jornada'}
+        </button>
+      ) : (
+        <button onClick={() => setPaso('confirmar')} disabled={t.ocupado}
+          style={{...base, background:'transparent', color:U.inkSoft,
+                  border:`1px solid ${U.border}`, opacity: t.ocupado ? .6 : 1}}>
+          {t.ocupado ? 'Cerrando…' : 'Cerrar mi jornada'}
+        </button>
+      )}
+
+      {paso === 'confirmar' && (
+        <LpTurnoModal U={U} titulo={`¿Cerrás tu jornada de ${sectorLabel}?`} onCerrar={() => setPaso(null)}>
+          <p style={{margin:'0 0 12px', fontSize:13, lineHeight:1.6, color:U.inkSoft}}>
+            Trabajaste <b style={{color:U.ink}}>{lpDesdeHace(t.turno && t.turno.abierta_at)}</b>. Al cerrar
+            no vas a poder cargar más en {sectorLabel} hasta que la vuelvas a abrir.
+          </p>
+          <p style={{margin:'0 0 18px', fontSize:12, lineHeight:1.6, color:U.inkMuted}}>
+            Los otros sectores siguen trabajando normal — esto cierra <b>solo el tuyo</b>. Si te quedó
+            material reservado sin usar, vuelve al stock.
+          </p>
+          <div style={{display:'flex', gap:8, justifyContent:'flex-end', flexWrap:'wrap'}}>
+            <button onClick={() => setPaso(null)}
+              style={{...base, background:'transparent', color:U.inkSoft, border:`1px solid ${U.border}`}}>
+              Seguir trabajando
+            </button>
+            <button onClick={doCerrar} disabled={t.ocupado}
+              style={{...base, background:U.accent, color:'#fff', opacity: t.ocupado ? .6 : 1}}>
+              {t.ocupado ? 'Cerrando…' : 'Sí, cerrar'}
+            </button>
+          </div>
+        </LpTurnoModal>
+      )}
+
+      {paso === 'resumen' && (
+        <LpTurnoModal U={U} titulo={`Jornada de ${sectorLabel} cerrada`} onCerrar={() => setPaso(null)}>
+          <LpTurnoResumen U={U} r={res} sectorLabel={sectorLabel}/>
+          <div style={{display:'flex', justifyContent:'flex-end', marginTop:16}}>
+            <button onClick={() => setPaso(null)} style={{...base, background:U.accent, color:'#fff'}}>Listo</button>
+          </div>
+        </LpTurnoModal>
+      )}
+    </React.Fragment>
+  );
+}
+
+/* Modal propio del kit LP, no el de la app: estas pantallas las usa gente con guantes y
+   necesitan tipografía y áreas de toque más grandes. */
+function LpTurnoModal({ U, titulo, children, onCerrar }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onCerrar(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onCerrar]);
+  return (
+    <div onClick={onCerrar}
+      style={{position:'fixed', inset:0, background:'rgba(10,10,10,.45)', backdropFilter:'blur(3px)',
+              display:'flex', alignItems:'center', justifyContent:'center', padding:16, zIndex:9000}}>
+      <div onClick={(e) => e.stopPropagation()}
+        style={{background:U.surface, borderRadius:16, padding:'22px 22px 20px', width:'100%', maxWidth:440,
+                boxShadow:'0 24px 60px rgba(0,0,0,.28)', border:`1px solid ${U.border}`}}>
+        <h3 style={{margin:'0 0 12px', fontSize:17, fontWeight:850, color:U.ink, lineHeight:1.3}}>{titulo}</h3>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/* Lo que hizo el turno. Si no hizo nada lo dice con todas las letras en vez de mostrar ceros
+   sueltos: un tablero en cero se lee igual que "no cargó" y que "no anduvo", y no son lo mismo. */
+function LpTurnoResumen({ U, r, sectorLabel }) {
+  const res = (r && r.resumen) || {};
+  const cargas = res.cargas || 0;
+  const filas = Object.keys(res).filter((k) => k !== 'cargas').map((k) => ({ k, v: res[k] }));
+  const etiqueta = { hojas:'Placas cortadas', desperdicio:'Desperdicio', terminadas:'Terminadas',
+                     fallas:'Fallas', masilladas:'Masilladas', unidades:'Unidades armadas' };
+  const kpi = (rot, val) => (
+    <div style={{flex:'1 1 120px', background:U.surface2, borderRadius:12, padding:'12px 14px'}}>
+      <div style={{fontSize:10, fontWeight:700, color:U.inkMuted, textTransform:'uppercase', letterSpacing:'.08em'}}>{rot}</div>
+      <div style={{fontSize:19, fontWeight:850, color:U.ink, marginTop:3}}>{val}</div>
+    </div>
+  );
+  return (
+    <div>
+      <div style={{display:'flex', gap:10, flexWrap:'wrap', marginBottom:14}}>
+        {kpi('Duración', (r && r.horas != null) ? `${r.horas} h` : '—')}
+        {kpi('Cargas', cargas)}
+      </div>
+
+      {cargas === 0 ? (
+        <div style={{background:'rgba(217,119,6,.08)', border:'1px solid rgba(217,119,6,.25)', borderRadius:12,
+                     padding:'12px 14px', fontSize:12.5, lineHeight:1.6, color:U.warn}}>
+          No quedó ninguna carga registrada en este turno de {sectorLabel}. Si hoy produjiste algo,
+          avisale al encargado: sin carga, ese trabajo no existe para el sistema.
+        </div>
+      ) : (
+        <div style={{border:`1px solid ${U.border}`, borderRadius:12, overflow:'hidden'}}>
+          {filas.map((f, i) => (
+            <div key={f.k} style={{display:'flex', justifyContent:'space-between', alignItems:'center',
+                                   padding:'10px 14px', fontSize:13,
+                                   borderTop: i ? `1px solid ${U.border}` : 'none'}}>
+              <span style={{color:U.inkSoft}}>{etiqueta[f.k] || f.k}</span>
+              <b style={{color:U.ink, fontSize:14.5}}>{f.v}</b>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* Turno cerrado pero con contenido para mirar (demanda del día, lo ya cargado). Barra arriba
+   con el botón, y la pantalla sigue abajo: cerrar el turno no tiene por qué cegar al operario.
+   Antes acá había un cartel rojo que sólo decía "el encargado la gestiona" y no ofrecía salida. */
+function LpTurnoAviso({ U, t, sectorLabel, verbo }) {
+  return (
+    <div style={{background:U.accentSoft, border:`1px solid ${U.accentLine}`, borderRadius:12,
+                 padding:'12px 14px', marginBottom:16, display:'flex', gap:12, alignItems:'center',
+                 flexWrap:'wrap'}}>
+      <Icon n="lock" s={17} c={U.accent}/>
+      <div style={{flex:'1 1 200px', fontSize:12.5, lineHeight:1.5, color:U.ink}}>
+        Tu jornada de {sectorLabel} está cerrada.
+        <span style={{color:U.inkSoft}}> Podés mirar, pero para {verbo || 'cargar'} tenés que abrirla.</span>
+      </div>
+      <LpTurnoBoton U={U} t={t} sectorLabel={sectorLabel} compact/>
+    </div>
+  );
+}
+
+/* Portada del sector con el turno cerrado. Reemplaza al viejo cartel "Jornada no abierta / no se
+   pueden registrar cortes hasta que el encargado abra la jornada", que además de ser un callejón
+   sin salida era falso: ahora el que abre es el propio sector, y el botón está acá mismo. */
+function LpTurnoPortada({ U, t, sectorLabel, verbo }) {
+  return (
+    <div style={{textAlign:'center', padding:'46px 22px', background:U.surface,
+                 border:`1px solid ${U.border}`, borderRadius:16, margin:'10px 0'}}>
+      <div style={{width:56, height:56, borderRadius:999, margin:'0 auto 16px', background:U.accentSoft,
+                   display:'flex', alignItems:'center', justifyContent:'center'}}>
+        <span style={{width:14, height:14, borderRadius:999, background:U.accent, display:'block'}}/>
+      </div>
+      <div style={{color:U.ink, fontSize:17.5, fontWeight:850, marginBottom:8}}>
+        Tu jornada de {sectorLabel} está cerrada
+      </div>
+      <div style={{color:U.inkSoft, fontSize:13, lineHeight:1.65, maxWidth:380, margin:'0 auto 20px'}}>
+        Abrila para {verbo || 'cargar producción'}. Es tuya: no depende de ventas ni de que el
+        encargado abra nada, y no afecta a los otros sectores.
+      </div>
+      {t.error ? (
+        <div style={{color:U.danger, fontSize:12.5, margin:'0 0 14px', lineHeight:1.6}}>{t.error}</div>
+      ) : null}
+      <button onClick={t.abrir} disabled={t.ocupado}
+        style={{border:'none', borderRadius:11, background:U.accent, color:'#fff', fontWeight:850,
+                fontSize:14.5, padding:'13px 26px', cursor:'pointer', opacity: t.ocupado ? .6 : 1,
+                boxShadow:`0 6px 20px ${U.accentSoft}`}}>
+        {t.ocupado ? 'Abriendo…' : 'Abrir mi jornada'}
+      </button>
+      {t.turno && t.turno.ultimo_cierre ? (
+        <div style={{color:U.inkMuted, fontSize:11.5, marginTop:16}}>
+          Último cierre: hace {lpDesdeHace(t.turno.ultimo_cierre)}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+/* ── Tablero de turnos (panel del encargado) ──────────────────────────────────────────────
+   Con la jornada por sector, el encargado ya no prende nada: cada sector prende el suyo. El
+   riesgo nuevo es el silencio — si el de CNC nunca abrió, sus cargas se rechazan todo el día
+   y nadie se entera hasta que falta la producción. Esto lo pone a la vista, y como el backend
+   ya deja que encargado/owner/admin abran o cierren cualquier sector (para destrabar al que se
+   fue sin cerrar), acá está el botón: una capacidad sin pantalla es tan inútil como un botón
+   sin efecto. */
+function LpTurnosStrip({ U, toast, puedeGestionar }) {
+  const [estado, setEstado] = useState(null);
+  const [error, setError]   = useState('');
+  const [busy, setBusy]     = useState('');      // sector en curso
+  const [confirmar, setConf] = useState(null);   // sector a cerrar
+
+  const recargar = useCallback(async () => {
+    try { setEstado(await window.LP_DATA.sectorEstado()); setError(''); }
+    catch (ex) { setError((ex && ex.message) || 'No se pudo leer el estado de los sectores.'); }
+  }, []);
+
+  useEffect(() => { recargar(); }, [recargar]);
+  useEffect(() => window.LP_DATA.subscribe(['prod_jornada_sector'], recargar), [recargar]);
+
+  /* Se re-pinta cada 60 s para que "hace 3 h" no envejezca mientras el panel queda abierto en
+     una pantalla del taller todo el día. */
+  const [, tick] = useState(0);
+  useEffect(() => { const id = setInterval(() => tick((n) => n + 1), 60000); return () => clearInterval(id); }, []);
+
+  const porSector = useMemo(() => {
+    const m = {};
+    for (const s of ((estado && estado.sectores) || [])) m[s.sector] = s;
+    return m;
+  }, [estado]);
+
+  const accion = async (fn, sector, msgOk) => {
+    setBusy(sector);
+    try { await fn({ sector }); await recargar(); if (toast) toast.success(msgOk); }
+    catch (ex) { if (toast) toast.error((ex && ex.message) || 'No se pudo.'); }
+    finally { setBusy(''); setConf(null); }
+  };
+
+  const abiertos = LP_SECTORES.filter((s) => porSector[s.id] && porSector[s.id].abierta).length;
+  const btn = {
+    border:'none', borderRadius:8, fontSize:11, fontWeight:800, padding:'6px 10px',
+    cursor:'pointer', lineHeight:1, whiteSpace:'nowrap',
+  };
+
+  return (
+    <div style={{marginBottom:18}}>
+      <div style={{display:'flex', alignItems:'baseline', justifyContent:'space-between', gap:10, marginBottom:10, flexWrap:'wrap'}}>
+        <h3 style={{fontSize:15, fontWeight:800, margin:0, color:U.ink}}>Quién está trabajando</h3>
+        <span style={{fontSize:11.5, color:U.inkMuted, fontWeight:700}}>
+          {abiertos} de {LP_SECTORES.length} sectores con la jornada abierta
+        </span>
+      </div>
+
+      {error ? (
+        <div style={{color:U.danger, fontSize:12.5, marginBottom:10, lineHeight:1.6}}>{error}</div>
+      ) : null}
+
+      <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(190px, 1fr))', gap:10}}>
+        {LP_SECTORES.map((s) => {
+          const t  = porSector[s.id] || {};
+          const on = !!t.abierta;
+          const trabajando = busy === s.id;
+          return (
+            <div key={s.id} style={{background:U.surface, border:`1px solid ${on ? 'rgba(22,163,74,.35)' : U.border}`,
+                                    borderRadius:14, padding:'13px 14px'}}>
+              <div style={{display:'flex', alignItems:'center', gap:7, marginBottom:6}}>
+                <span style={{width:8, height:8, borderRadius:999, flexShrink:0,
+                              background: on ? U.ok : U.inkMuted,
+                              boxShadow: on ? '0 0 0 3px rgba(22,163,74,.15)' : 'none'}}/>
+                <span style={{fontSize:13.5, fontWeight:800, color:U.ink}}>{s.label}</span>
+              </div>
+
+              <div style={{fontSize:11.5, color:U.inkSoft, lineHeight:1.55, minHeight:32}}>
+                {on ? (
+                  <React.Fragment>
+                    Abierta hace <b style={{color:U.ink}}>{lpDesdeHace(t.abierta_at)}</b>
+                    {t.abierta_por_nombre ? <span style={{color:U.inkMuted}}> · {t.abierta_por_nombre}</span> : null}
+                  </React.Fragment>
+                ) : t.ultimo_cierre ? (
+                  <span style={{color:U.inkMuted}}>Cerrada · último cierre hace {lpDesdeHace(t.ultimo_cierre)}</span>
+                ) : (
+                  /* Nunca abrió. Es el caso caro: no es que cerró temprano, es que todo lo que
+                     hizo hoy no se pudo cargar. */
+                  <span style={{color:U.warn, fontWeight:700}}>Sin abrir todavía — no puede cargar producción</span>
+                )}
+              </div>
+
+              {puedeGestionar ? (
+                <div style={{marginTop:10}}>
+                  {on ? (
+                    <button onClick={() => setConf(s)} disabled={trabajando}
+                      style={{...btn, background:'transparent', color:U.inkSoft,
+                              border:`1px solid ${U.border}`, opacity: trabajando ? .6 : 1}}>
+                      {trabajando ? 'Cerrando…' : 'Cerrar por él'}
+                    </button>
+                  ) : (
+                    <button onClick={() => accion(window.LP_DATA.sectorAbrir, s.id, `Jornada de ${s.label} abierta.`)}
+                      disabled={trabajando}
+                      style={{...btn, background:U.accentSoft, color:U.accent,
+                              border:`1px solid ${U.accentLine}`, opacity: trabajando ? .6 : 1}}>
+                      {trabajando ? 'Abriendo…' : 'Abrir por él'}
+                    </button>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+
+      {confirmar ? (
+        <LpTurnoModal U={U} titulo={`¿Cerrás la jornada de ${confirmar.label}?`} onCerrar={() => setConf(null)}>
+          <p style={{margin:'0 0 18px', fontSize:13, lineHeight:1.6, color:U.inkSoft}}>
+            Esto cierra el turno de otra persona. Desde ese momento {confirmar.label} no puede cargar
+            producción hasta que lo vuelva a abrir. Usalo cuando el operario se fue sin cerrar.
+          </p>
+          <div style={{display:'flex', gap:8, justifyContent:'flex-end', flexWrap:'wrap'}}>
+            <button onClick={() => setConf(null)}
+              style={{...btn, padding:'9px 14px', fontSize:12.5, background:'transparent',
+                      color:U.inkSoft, border:`1px solid ${U.border}`}}>
+              Dejarla abierta
+            </button>
+            <button onClick={() => accion(window.LP_DATA.sectorCerrar, confirmar.id, `Jornada de ${confirmar.label} cerrada.`)}
+              style={{...btn, padding:'9px 14px', fontSize:12.5, background:U.accent, color:'#fff'}}>
+              Sí, cerrar
+            </button>
+          </div>
+        </LpTurnoModal>
+      ) : null}
+    </div>
+  );
+}
+
 function LpNeutral({ U, msg }) {
   if (!msg) return null;
   return (

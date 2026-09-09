@@ -23,6 +23,19 @@ window.LP_DATA = window.LP_DATA || (function () {
     return data || [];
   };
 
+  /* Lo que cargó un sector, acotado a SU turno (0173). Antes se acotaba a la jornada,
+     que era de toda la línea: el de CNC veía la lista del día entero y no la suya.
+
+     Sin ámbito devuelve [] sin consultar. Es a propósito: un select sin filtro traería
+     la tabla completa y la pantalla la mostraría como "lo que cargaste hoy". Vale más
+     una lista vacía honesta que una llena de trabajo ajeno. */
+  const lpDia = async (tabla, cols, ambito) => {
+    const a = (typeof ambito === 'string') ? { jornada_id: ambito } : (ambito || {});
+    if (!a.turno_id && !a.jornada_id) return [];
+    return sel(tabla, cols, (q) => (a.turno_id ? q.eq('turno_id', a.turno_id) : q.eq('jornada_id', a.jornada_id))
+      .order('created_at', { ascending: false }));
+  };
+
   return {
     // ── Feature flag (aislamiento LP) — FAIL-CLOSED: sin tabla/flag/err ⇒ deshabilitada ──
     lpFlag: async () => {
@@ -34,6 +47,19 @@ window.LP_DATA = window.LP_DATA || (function () {
     },
     // ── Jornada ──
     jornadaHoy: () => rpc('prod_rpc_get_jornada_hoy'),
+
+    /* ── Turno de sector (0173) ────────────────────────────────────────────────
+       Cada sector prende y apaga SU jornada. No es la jornada comercial ni la de
+       demanda del encargado: son tres cosas distintas que antes estaban pegadas.
+       sectorEstado devuelve los cuatro sectores siempre, así el encargado ve de un
+       vistazo quién está trabajando y quién no. */
+    sectorEstado: ()  => rpc('prod_rpc_sector_estado'),
+    sectorAbrir:  (p) => rpc('prod_rpc_sector_abrir', p),   // {sector?} → el rol de sector abre el suyo
+    sectorCerrar: (p) => rpc('prod_rpc_sector_cerrar', p),  // {sector?} → cierra y devuelve el resumen del turno
+    turnos: (p) => sel('prod_v_turnos', '*', (q) => {
+      let r = (p && p.sector) ? q.eq('sector', p.sector) : q;
+      return r.order('abierta_at', { ascending: false }).limit((p && p.limite) || 30);
+    }),
     abrirJornada:  () => rpc('prod_rpc_abrir_jornada'),   // owner/admin/encargado; abre la de HOY
     cerrarJornada: (p) => rpc('prod_rpc_cerrar_jornada', p),  // {forzar?} → si hay pendientes y no forzar: {ok:false, requiere_confirmacion}
     // ── Puente de activación LP (0117) ──
@@ -65,17 +91,17 @@ window.LP_DATA = window.LP_DATA || (function () {
     planCorte: () => rpc('prod_rpc_plan_corte'), // → { total_placas, total_merma, plan:[{placa,material,tipo,cantidad,produce}] }
     registrarCorte: (p) => rpc('prod_rpc_registrar_corte', p),
     editarCorte: (p) => rpc('prod_rpc_editar_corte', p),
-    cortesDia: (j) => sel('prod_corte', 'id, placa_sku, hojas, desperdicio, created_at, editable_hasta', q => q.eq('jornada_id', j).order('created_at', { ascending: false })),
+    cortesDia: (a) => lpDia('prod_corte', 'id, placa_sku, hojas, desperdicio, created_at, editable_hasta', a),
 
     // ── Melamina ──
     registrarMelamina: (p) => rpc('prod_rpc_registrar_melamina', p),
     editarMelamina: (p) => rpc('prod_rpc_editar_melamina', p),
-    melaminaDia: (j) => sel('prod_melamina', 'id, pieza_sku, terminadas, fallas, created_at, editable_hasta', q => q.eq('jornada_id', j).order('created_at', { ascending: false })),
+    melaminaDia: (a) => lpDia('prod_melamina', 'id, pieza_sku, terminadas, fallas, created_at, editable_hasta', a),
 
     // ── Pino ──
     registrarPino: (p) => rpc('prod_rpc_registrar_pino', p),
     editarPino: (p) => rpc('prod_rpc_editar_pino', p),
-    pinoDia: (j) => sel('prod_pino', 'id, tamano, terminadas, masilladas, created_at, editable_hasta', q => q.eq('jornada_id', j).order('created_at', { ascending: false })),
+    pinoDia: (a) => lpDia('prod_pino', 'id, tamano, terminadas, masilladas, created_at, editable_hasta', a),
 
     // ── Embalaje ──
     // M01/M03: request_id SIEMPRE presente (idempotencia backend 0123). El caller puede pasar el suyo
@@ -89,7 +115,7 @@ window.LP_DATA = window.LP_DATA || (function () {
     stockPreview:   (p) => rpc('prod_rpc_stock_preview', p),   // read-only
     stockConfirmar: (p) => rpc('prod_rpc_stock_confirmar', p), // write explícito idempotente
     // editarEmbalaje: DESHABILITADO — embalaje inmutable en este lanzamiento (guard backend 0126). Sin acceso desde la UI.
-    embalajeDia: (j) => sel('prod_embalaje', 'id, producto_sku, unidades, canal, created_at', q => q.eq('jornada_id', j).order('created_at', { ascending: false })),
+    embalajeDia: (a) => lpDia('prod_embalaje', 'id, producto_sku, unidades, canal, created_at', a),
 
     // ── Encargado (panel de control) ──
     alertas: () => sel('prod_alerta', 'id, insumo_sku, nivel, stock_actual, stock_minimo, vista, created_at', q => q.eq('vista', false).order('created_at', { ascending: false })),
@@ -97,7 +123,10 @@ window.LP_DATA = window.LP_DATA || (function () {
     solicitudes: () => sel('prod_solicitud', 'id, jornada_id, sector, items, estado, solicitado_por, created_at', q => q.order('created_at', { ascending: false })),
     insumos: () => sel('prod_insumo', 'sku, nombre, categoria, sector, stock_actual, stock_minimo, unidad, minimo_configurado', q => q.order('nombre')),
     // Punto 4 — configuración de mínimos: estado + setear con auditoría.
-    minimos:   () => sel('prod_v_minimos', 'sku, nombre, categoria, sector, unidad, stock_actual, stock_minimo, minimo_configurado, estado, minimo_actualizado_at', q => q.order('nombre')),
+    /* Se llamaba `minimos`, igual que la RPC de más abajo, en el MISMO objeto literal.
+       La segunda clave gana siempre: esta lectura estaba muerta y nadie lo veía. Renombrada
+       para que las dos existan de verdad — `minimosVista` es la tabla, `minimos` la RPC. */
+    minimosVista: () => sel('prod_v_minimos', 'sku, nombre, categoria, sector, unidad, stock_actual, stock_minimo, minimo_configurado, estado, minimo_actualizado_at', q => q.order('nombre')),
     setMinimo: (p) => rpc('prod_rpc_set_minimo', p), // { sku, minimo, motivo }
 
     // ── Materia prima / Remitos (Fase 6) ── ingreso suma stock; el historial

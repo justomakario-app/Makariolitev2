@@ -250,7 +250,8 @@ function EncargadoPanel() {
         {loading ? (
           <div style={{textAlign:'center', color:U.inkMuted, padding:'60px 0', fontSize:13}}>Cargando panel…</div>
         ) : tab === 'inicio' ? (
-          <EncInicio U={U} kpis={kpis} cadena={{ pieza:sPieza, mel:sMel, patas:sPatas, term:sTerm }} alertas={alertas} demanda={demanda}/>
+          <EncInicio U={U} kpis={kpis} cadena={{ pieza:sPieza, mel:sMel, patas:sPatas, term:sTerm }} alertas={alertas} demanda={demanda}
+                     toast={toast} puedeGestionar={canCoord}/>
         ) : tab === 'sectores' ? (
           <EncSectores U={U} jornada={jornada} placaMap={placaMap}
                        cortes={cortes} melamina={melamina} pino={pino} embalaje={embalaje}
@@ -312,7 +313,7 @@ function EncargadoPanel() {
 }
 
 /* ── Tab Inicio (estado general) ── */
-function EncInicio({ U, kpis, cadena, alertas, demanda }) {
+function EncInicio({ U, kpis, cadena, alertas, demanda, toast, puedeGestionar }) {
   const kpi = (label, val, color, sub) => (
     <div style={{flex:1, minWidth:0, background:U.surface, border:`1px solid ${U.border}`, borderRadius:14, padding:'13px 14px'}}>
       <div style={{fontSize:26, fontWeight:800, color, fontVariantNumeric:'tabular-nums', lineHeight:1}}>{val}</div>
@@ -333,6 +334,10 @@ function EncInicio({ U, kpis, cadena, alertas, demanda }) {
 
   return (
     <div>
+      {/* Antes que los numeros: quien esta prendido. Un sector sin abrir explica solo el resto
+          del tablero — no produjo porque no pudo cargar. */}
+      <LpTurnosStrip U={U} toast={toast} puedeGestionar={puedeGestionar}/>
+
       {/* KPIs */}
       <div style={{display:'flex', gap:10, marginBottom:10}}>
         {kpi('Producido hoy', kpis.producido, U.ink)}
