@@ -922,12 +922,18 @@ function CierreModal({ open, onClose, onConfirm, jornadaId }) {
 }
 
 /* ── Confirm modal genérico ── */
-function ConfirmModal({ open, onClose, onConfirm, title, message, confirmText, danger }) {
+/* `confirmDisabled` existe para los carteles que primero tienen que averiguar algo antes de
+   dejar confirmar (por ejemplo: cuantos pedidos borra de verdad este lote). Sin esto, el
+   unico camino era mostrar un numero sin confirmar, que es como se llego a un cartel de
+   borrado irreversible que decia "0 pedidos" sobre un lote de 186. */
+function ConfirmModal({ open, onClose, onConfirm, title, message, confirmText, danger, confirmDisabled }) {
   return (
     <Modal open={open} onClose={onClose} title={title} footer={
       <>
         <button className="btn-ghost" onClick={onClose}>Cancelar</button>
-        <button className={danger?'btn-danger':'btn-primary'} onClick={() => { onConfirm?.(); onClose(); }}>
+        <button className={danger?'btn-danger':'btn-primary'} disabled={!!confirmDisabled}
+                style={confirmDisabled ? {opacity:.5, cursor:'not-allowed'} : undefined}
+                onClick={() => { if (confirmDisabled) return; onConfirm?.(); onClose(); }}>
           <Icon n="check" s={14}/> {confirmText || 'Confirmar'}
         </button>
       </>

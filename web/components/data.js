@@ -675,6 +675,36 @@ async function loadOrders() {
   applySelectedJornadaToCarriers();
 }
 
+/* El archivo repetido no es un error del sistema: es el sistema haciendo lo que tiene que
+   hacer. Los pedidos ya estan cargados. Lo unico que faltaba era decirlo.
+
+   Ojo con la tentacion de "dejar importar igual en otra jornada": el hash se calcula sobre
+   el nombre + los items ya normalizados, asi que solo choca cuando el contenido es
+   identico. Volver a importarlo no traeria un solo pedido nuevo — `orders` ya deduplica por
+   (channel_id, order_number, sku) — asi que el permiso serviria para nada y ensuciaria el
+   historial de lotes. Lo correcto es explicar, no destrabar. */
+function esArchivoRepetido(error) {
+  const m = ((error && (error.message || error.details)) || '').toLowerCase();
+  return m.includes('import_batches_file_hash_key')
+      || (m.includes('duplicate key') && m.includes('file_hash'));
+}
+
+function mensajeArchivoRepetido(previo) {
+  let cuando = '';
+  if (previo && previo.imported_at) {
+    const d = new Date(previo.imported_at);
+    if (!isNaN(d)) {
+      cuando = ' el ' + d.toLocaleDateString('es-AR', { day: 'numeric', month: 'long' })
+             + ' a las ' + d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+    }
+  }
+  const canal = (previo && previo.channel_id) ? (' en ' + previo.channel_id.toUpperCase()) : '';
+  return 'Este archivo ya se importo' + cuando + canal + '. '
+       + 'Sus pedidos ya estan cargados y no se duplican. '
+       + 'Si esperabas pedidos nuevos, baja un export nuevo de Mercado Libre: '
+       + 'este tiene exactamente el mismo contenido que la vez anterior.';
+}
+
 async function loadBatches() {
   const { data, error } = await supa
     .from('import_batches').select('*')
@@ -687,11 +717,19 @@ async function loadBatches() {
     c.lotes.push({
       id: b.id,
       fecha: b.imported_at,
-      cantidad: b.unidades_count || 0,
+      /* `unidades_count` esta en CERO en los 310 lotes de la base: rpc_import_batch nunca
+         escribio la columna (inserta el lote antes de procesar y no vuelve a tocarlo). La
+         pantalla mostraba ese cero como si fuera el tamano del lote, y el cartel de borrado
+         decia "y TODAS sus ordenes (0 pedidos)" para lotes de 186 pedidos reales. El numero
+         de verdad se cuenta contra `orders`; hasta entonces esto queda en null y la UI
+         muestra un guion, que es la verdad: todavia no lo sabemos. */
+      cantidad: b.unidades_count || null,
       archivo: b.filename,
       detectado: '',
     });
   }
+  /* Los lotes cambiaron: lo contado deja de valer. */
+  window.MOCK.loteConteos = {};
 }
 
 /* Carga el stock libre por SKU. Se acumula desde free_stock (PK por
@@ -1382,8 +1420,23 @@ window.MOCK_ACTIONS = {
       p_items: normalizedItems,
     };
     if (jornadaDestino) rpcParams.p_target_jornada_id = jornadaDestino;
+
+    /* Si el archivo ya se importo, el INSERT en import_batches choca contra
+       `import_batches_file_hash_key` y Postgres devuelve el nombre crudo de la restriccion.
+       Eso es lo que le llegaba al operario: "duplicate key value violates unique constraint
+       ...". No dice que paso, ni cuando, ni que hacer. Preguntamos antes para poder
+       contarlo en castellano. Si la consulta falla, seguimos igual: el bloqueo real lo pone
+       la base, esto es solo para poder explicarlo. */
+    const yaEsta = await supa.from('import_batches')
+      .select('filename, imported_at, channel_id')
+      .eq('file_hash', p_file_hash).limit(1)
+      .then(r => (r.error ? null : (r.data || [])[0]), () => null);
+    if (yaEsta) throw new Error(mensajeArchivoRepetido(yaEsta));
+
     const { data, error } = await supa.rpc('rpc_import_batch', rpcParams);
-    if (error) throw new Error(error.message);
+    /* Y por si dos personas importan el mismo archivo al mismo tiempo: entre la consulta de
+       arriba y este INSERT no hay candado, asi que la restriccion puede saltar igual. */
+    if (error) throw new Error(esArchivoRepetido(error) ? mensajeArchivoRepetido(null) : error.message);
     await Promise.all([loadCarriers(), loadOrders(), loadBatches(), loadFreeStock()]);
     window.MOCK_BUS.emit();
     // El RPC v3 devuelve 4 contadores de cancelacion. Los sumamos para
@@ -1523,6 +1576,46 @@ window.MOCK_ACTIONS = {
       .order('at', { ascending: false });
     if (error) throw new Error(error.message);
     return data || [];
+  },
+
+  /* Cuenta de verdad lo que tiene un lote, leyendo `orders`. Es la unica fuente honesta:
+     los contadores denormalizados de import_batches nunca se escribieron.
+     `fresco` saltea el cache — se usa antes de borrar, donde un numero viejo es peligroso. */
+  async contarLote(batchId, fresco) {
+    if (!batchId) return null;
+    if (!window.MOCK.loteConteos) window.MOCK.loteConteos = {};
+    if (!fresco && window.MOCK.loteConteos[batchId]) return window.MOCK.loteConteos[batchId];
+    const { data, error } = await supa
+      .from('orders').select('cantidad').eq('import_batch_id', batchId);
+    if (error) throw new Error(error.message || 'No se pudieron contar los pedidos del lote');
+    const filas = data || [];
+    let uds = 0;
+    for (const r of filas) uds += (r.cantidad || 0);
+    const conteo = { pedidos: filas.length, unidades: uds };
+    window.MOCK.loteConteos[batchId] = conteo;
+    return conteo;
+  },
+
+  /* Varios lotes de una. Una sola consulta para toda la lista visible, y solo por los que
+     todavia no estan contados. */
+  async contarLotes(batchIds) {
+    if (!window.MOCK.loteConteos) window.MOCK.loteConteos = {};
+    const faltan = (batchIds || []).filter(id => id && !window.MOCK.loteConteos[id]);
+    if (!faltan.length) return window.MOCK.loteConteos;
+    const { data, error } = await supa
+      .from('orders').select('import_batch_id, cantidad').in('import_batch_id', faltan);
+    if (error) throw new Error(error.message || 'No se pudieron contar los lotes');
+    /* Arranca en cero para TODOS los pedidos: un lote sin ninguna fila tiene que quedar en
+       0 y no en "desconocido para siempre". */
+    for (const id of faltan) window.MOCK.loteConteos[id] = { pedidos: 0, unidades: 0 };
+    for (const r of (data || [])) {
+      const c = window.MOCK.loteConteos[r.import_batch_id];
+      if (!c) continue;
+      c.pedidos += 1;
+      c.unidades += (r.cantidad || 0);
+    }
+    window.MOCK_BUS.emit();
+    return window.MOCK.loteConteos;
   },
 
   async eliminarLote(batchId) {

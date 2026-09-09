@@ -8,6 +8,10 @@ function CarrierPage({ channel, onBack }) {
   const [registerOpen, setRegisterOpen] = useState(false);
   const [pendingSku, setPendingSku] = useState(null);
   const [loteAEliminar, setLoteAEliminar] = useState(null);
+  /* Ver web/components/carrier.jsx: unidades_count esta en cero en los 310 lotes de la
+     base, y ese cero se mostraba como si fuera el tamano del lote. */
+  const [conteos, setConteos] = useState({});
+  const [conteoBorrar, setConteoBorrar] = useState(null);
   const [borrando, setBorrando] = useState(false);
   // Pedidos manuales + edición (paridad con web — feature flag controla visibilidad)
   const [showManualOrder, setShowManualOrder] = useState(false);
@@ -23,6 +27,29 @@ function CarrierPage({ channel, onBack }) {
   const empty = data.kpis.activos === 0 && data.table.length === 0;
   const userRole = window.MOCK.user.role;
   const puedeEliminarLote = ['owner','admin','encargado'].includes(userRole);
+
+  /* En el celular la lista de lotes se ve siempre (no hay desplegable), asi que se cuenta
+     apenas se sabe cuales son. Una sola consulta, y solo por los que faltan. */
+  const lotesIds = (data.lotes || []).map(l => l.id).join(',');
+  useEffect(() => {
+    if (!puedeEliminarLote || !lotesIds) return;
+    let vivo = true;
+    window.MOCK_ACTIONS.contarLotes(lotesIds.split(','))
+      .then(m => { if (vivo) setConteos({ ...m }); })
+      .catch(() => {});
+    return () => { vivo = false; };
+  }, [puedeEliminarLote, lotesIds]);
+
+  /* Antes de borrar se cuenta de nuevo, salteando el cache. */
+  useEffect(() => {
+    setConteoBorrar(null);
+    if (!loteAEliminar) return;
+    let vivo = true;
+    window.MOCK_ACTIONS.contarLote(loteAEliminar.id, true)
+      .then(c => { if (vivo) setConteoBorrar(c); })
+      .catch(() => { if (vivo) setConteoBorrar(false); });
+    return () => { vivo = false; };
+  }, [loteAEliminar && loteAEliminar.id]);
   const puedeMoverStock = puedeEliminarLote;
   const featurePedidos = !!window.FEATURE_PEDIDOS_MANUALES && channel !== 'distribuidor';
   const puedeCargarManual = featurePedidos && ['owner','admin','encargado'].includes(userRole);
@@ -273,7 +300,9 @@ function CarrierPage({ channel, onBack }) {
                   <div style={{flex:1, minWidth:0}}>
                     <div style={{fontSize:12, fontWeight:600, color:'var(--ink)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{l.archivo}</div>
                     <div style={{fontSize:11, color:'var(--ink-muted)', marginTop:2}}>
-                      {fmt.dateTime(l.fecha)} · <strong style={{fontFamily:'var(--mono)'}}>{l.cantidad}</strong> uds.
+                      {fmt.dateTime(l.fecha)} · {conteos[l.id]
+                        ? <><strong style={{fontFamily:'var(--mono)'}}>{conteos[l.id].pedidos}</strong> ped. · <strong style={{fontFamily:'var(--mono)'}}>{conteos[l.id].unidades}</strong> uds.</>
+                        : <span>contando…</span>}
                     </div>
                   </div>
                   <button
@@ -380,17 +409,25 @@ function CarrierPage({ channel, onBack }) {
         open={!!loteAEliminar}
         onClose={() => !borrando && setLoteAEliminar(null)}
         title="Eliminar lote"
-        message={loteAEliminar
-          ? `Vas a eliminar el lote "${loteAEliminar.archivo}" y todas sus órdenes (${loteAEliminar.cantidad} uds.). El faltante se va a recalcular. Esta acción NO se puede deshacer.`
-          : ''}
+        /* Decía "(0 uds.)" para lotes de 189 unidades, porque leía el contador que nadie
+           escribe. Ahora dice lo que va a pasar de verdad, y si no lo pudo averiguar lo
+           dice y no deja seguir. */
+        message={!loteAEliminar ? ''
+          : conteoBorrar === null
+            ? `Contando los pedidos del lote "${loteAEliminar.archivo}"...`
+          : conteoBorrar === false
+            ? `No se pudieron contar los pedidos del lote "${loteAEliminar.archivo}". Sin ese número no se puede borrar a ciegas: probá de nuevo.`
+          : `Vas a eliminar el lote "${loteAEliminar.archivo}": ${conteoBorrar.pedidos} ${conteoBorrar.pedidos === 1 ? 'pedido' : 'pedidos'} (${conteoBorrar.unidades} uds.) y los registros de producción de esos SKU desde la fecha del lote. El faltante se va a recalcular. Esta acción NO se puede deshacer.`}
+        confirmDisabled={borrando || !conteoBorrar}
         confirmText={borrando ? 'Eliminando...' : 'Sí, eliminar todo'}
         danger
         onConfirm={async () => {
           if (!loteAEliminar || borrando) return;
+          if (!conteoBorrar) return;   // sin el numero verificado no se borra
           setBorrando(true);
           try {
             await window.MOCK_ACTIONS.eliminarLote(loteAEliminar.id);
-            toast.success('Lote eliminado · ' + loteAEliminar.archivo);
+            toast.success(`Lote eliminado · ${conteoBorrar.pedidos} pedidos · ${loteAEliminar.archivo}`);
             setLoteAEliminar(null);
           } catch (e) {
             toast.error(e.message || 'No se pudo eliminar el lote');

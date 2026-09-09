@@ -25,6 +25,13 @@ function CarrierPage({ channel, onBack, onNav }) {
   const [openReprog, setOpenReprog]   = useState(false);  // sección Reprogramadas (informativo)
   const [loteAEliminar, setLoteAEliminar] = useState(null);  // lote pendiente de borrar
   const [borrando, setBorrando] = useState(false);
+  /* Cuantos pedidos tiene cada lote DE VERDAD. La columna unidades_count de import_batches
+     esta en cero en toda la base (rpc_import_batch nunca la escribe), y ese cero se venia
+     mostrando como si fuera el tamano del lote. */
+  const [conteos, setConteos] = useState({});
+  /* El conteo del lote que estan por borrar, leido en el momento: null = todavia contando,
+     false = no se pudo. Mientras no sea un numero, el boton de borrar no habilita. */
+  const [conteoBorrar, setConteoBorrar] = useState(null);
   // Carga manual + edición (feature flag protege visibilidad)
   const [showManualOrder, setShowManualOrder] = useState(false);
   const [editingOrder, setEditingOrder]       = useState(null); // string order_number
@@ -37,6 +44,30 @@ function CarrierPage({ channel, onBack, onNav }) {
 
   const userRole = window.MOCK.user.role;
   const puedeEliminarLote = ['owner','admin','encargado'].includes(userRole);
+
+  /* Se cuenta cuando el operario abre la lista, no en cada carga de la pagina: es una sola
+     consulta por los lotes visibles y solo por los que todavia no estan contados. */
+  const lotesIds = (data.lotes || []).map(l => l.id).join(',');
+  useEffect(() => {
+    if (!openLotes || !lotesIds) return;
+    let vivo = true;
+    window.MOCK_ACTIONS.contarLotes(lotesIds.split(','))
+      .then(m => { if (vivo) setConteos({ ...m }); })
+      .catch(() => {});
+    return () => { vivo = false; };
+  }, [openLotes, lotesIds]);
+
+  /* Antes de borrar se cuenta de nuevo, salteando el cache. Un numero viejo en el cartel de
+     una accion que no se puede deshacer es peor que no tener numero. */
+  useEffect(() => {
+    setConteoBorrar(null);
+    if (!loteAEliminar) return;
+    let vivo = true;
+    window.MOCK_ACTIONS.contarLote(loteAEliminar.id, true)
+      .then(c => { if (vivo) setConteoBorrar(c); })
+      .catch(() => { if (vivo) setConteoBorrar(false); });
+    return () => { vivo = false; };
+  }, [loteAEliminar && loteAEliminar.id]);
   const puedeMoverStock = puedeEliminarLote;  // mismo set de roles
 
   // Estados informativos del canal (spec ML): canceladas (ya existen) +
@@ -388,7 +419,11 @@ function CarrierPage({ channel, onBack, onNav }) {
                           <tr key={l.id}>
                             <td style={{fontSize:11}}>{fmt.dateTime(l.fecha)}</td>
                             <td style={{fontSize:11, color:'var(--ink-muted)', fontFamily:'var(--mono)'}}>{l.archivo}</td>
-                            <td style={{textAlign:'right'}}><span className="cell-color-num">{l.cantidad}</span></td>
+                            <td style={{textAlign:'right'}}>
+                              {conteos[l.id]
+                                ? <span className="cell-color-num">{conteos[l.id].pedidos}</span>
+                                : <span style={{color:'var(--ink-muted)'}} title="Contando los pedidos del lote...">—</span>}
+                            </td>
                             <td style={{textAlign:'right', width:1, whiteSpace:'nowrap'}}>
                               {puedeEliminarLote && (
                                 <button
@@ -541,17 +576,26 @@ function CarrierPage({ channel, onBack, onNav }) {
         open={!!loteAEliminar}
         onClose={() => !borrando && setLoteAEliminar(null)}
         title="Eliminar lote"
-        message={loteAEliminar
-          ? `Vas a eliminar el lote ${loteAEliminar.archivo} y TODAS sus órdenes (${loteAEliminar.cantidad} pedidos). El faltante se va a recalcular automáticamente. Esta acción NO se puede deshacer.`
-          : ''}
-        confirmText={borrando ? 'Eliminando...' : 'Sí, eliminar todo'}
+        /* Decía "(0 pedidos)" para lotes de 186 pedidos, porque leía el contador que nadie
+           escribe. Un cartel de borrado irreversible que subestima lo que borra es peor
+           que no tener cartel. Ahora dice lo que va a pasar de verdad — y si no lo pudo
+           averiguar, lo dice y no deja seguir. */
+        message={!loteAEliminar ? ''
+          : conteoBorrar === null
+            ? `Contando los pedidos del lote ${loteAEliminar.archivo}...`
+          : conteoBorrar === false
+            ? `No se pudieron contar los pedidos del lote ${loteAEliminar.archivo}. Sin ese número no se puede borrar a ciegas: probá de nuevo.`
+          : `Vas a eliminar el lote ${loteAEliminar.archivo}: ${conteoBorrar.pedidos} ${conteoBorrar.pedidos === 1 ? 'pedido' : 'pedidos'} (${conteoBorrar.unidades} uds.) y los registros de producción de esos SKU desde la fecha del lote. El faltante se va a recalcular automáticamente. Esta acción NO se puede deshacer.`}
+        confirmDisabled={borrando || !conteoBorrar}
+        confirmText={borrando ? 'Eliminando...' : (conteoBorrar ? 'Sí, eliminar todo' : 'Contando...')}
         danger
         onConfirm={async () => {
           if (!loteAEliminar || borrando) return;
+          if (!conteoBorrar) return;   // sin el numero verificado no se borra
           setBorrando(true);
           try {
             await window.MOCK_ACTIONS.eliminarLote(loteAEliminar.id);
-            toast.success('Lote eliminado · ' + loteAEliminar.archivo);
+            toast.success(`Lote eliminado · ${conteoBorrar.pedidos} pedidos · ${loteAEliminar.archivo}`);
             setLoteAEliminar(null);
           } catch (e) {
             toast.error(e.message || 'No se pudo eliminar el lote');
