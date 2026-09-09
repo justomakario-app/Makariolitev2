@@ -329,6 +329,18 @@ check('lpNeutralMsg dejó de hablar de "cuando el encargado inicie la jornada"',
 /* ══ F · ESTÁTICO — la migración 0173 ══════════════════════════════════ */
 console.log('\n[F · estático — migración 0173]');
 
+/* Devuelve el cuerpo de UNA función: desde su `create ... function <nombre>` hasta el
+   `$fn$` que la cierra. Sin esto, un slice de largo fijo lee lo de la función de al lado
+   y el check pasa por vecindad. */
+function cuerpoFn(sql, nombre) {
+  const i = sql.indexOf('function public.' + nombre);
+  if (i < 0) return '';
+  const ini = sql.indexOf('$fn$', i);
+  if (ini < 0) return '';
+  const fin = sql.indexOf('$fn$', ini + 4);
+  return fin < 0 ? sql.slice(i) : sql.slice(i, fin + 4);
+}
+
 const MIG = path.join(ROOT, 'supabase', 'migrations', '0173_jornada_por_sector.sql');
 check('existe la migración 0173', fs.existsSync(MIG), MIG);
 if (fs.existsSync(MIG)) {
@@ -342,12 +354,20 @@ if (fs.existsSync(MIG)) {
           .every(t => new RegExp('alter table[\\s\\S]{0,40}' + t + '[\\s\\S]{0,200}turno_id', 'i').test(sql)));
 
   /* La barrera real. La UI se puede saltear con una llamada directa a la RPC;
-     esto es lo que impide que una carga caiga fuera de todo turno. */
+     esto es lo que impide que una carga caiga fuera de todo turno.
+
+     El cuerpo se corta en el $fn$ que cierra LA función, no a los 9000 caracteres.
+     Con el corte fijo, el pedazo se metía dentro de las funciones siguientes: una RPC
+     que NO exigiera turno pasaba igual, porque la palabra aparecía cien líneas más
+     abajo, en otra función. Ocho checks que no podían fallar. */
   for (const r of ['registrar_corte', 'registrar_melamina', 'registrar_pino', 'registrar_embalaje']) {
-    const i = sql.indexOf('function public.prod_rpc_' + r);
-    const cuerpo = i >= 0 ? sql.slice(i, i + 9000) : '';
+    const cuerpo = cuerpoFn(sql, 'prod_rpc_' + r);
+    check(`prod_rpc_${r} existe en la 0173`, cuerpo.length > 0, r);
     check(`prod_rpc_${r} exige turno abierto`, /prod_fn_exigir_turno/.test(cuerpo), r);
-    check(`prod_rpc_${r} guarda el turno_id de la carga`, /turno_id/.test(cuerpo), r);
+    /* Que en el cuerpo aparezca la palabra `turno_id` no prueba nada: la RPC la lee para
+       otras cosas. Lo que importa es que la columna entre en el INSERT. */
+    check(`prod_rpc_${r} guarda el turno_id de la carga`,
+          /insert into[\s\S]{0,400}\bturno_id\b/i.test(cuerpo), r);
   }
 
   /* 0147 revocó esta función a propósito: sin el revoke, cualquier logueado
@@ -465,7 +485,9 @@ check('al confirmar sí lo cierra', cerrados() === antesCerrarStrip + 1);
 await montarStrip(false);
 check('un operario común ve el tablero pero no puede tocar el turno ajeno',
       botones('Abrir por él').length === 0 && botones('Cerrar por él').length === 0
-      && /sectores con la jornada abierta/i.test(txt()), txt().slice(0, 200));
+      /* 0175: decía "con la jornada abierta", igual que el botón de la jornada de demanda
+         que está tres centímetros más arriba y es otra cosa. Ahora dice "su turno". */
+      && /sectores con su turno abierto/i.test(txt()), txt().slice(0, 200));
 
 for (const b of ['web', 'mobile']) {
   const enc = fs.readFileSync(path.join(ROOT, b, 'components', 'encargado-panel.jsx'), 'utf8');

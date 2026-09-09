@@ -118,6 +118,16 @@ function useLpTurno(sector, toast) {
     turnoId: (mio && mio.turno_id) || null,
     jornadaId: (estado && estado.jornada_id) || null,
     hayDemanda: !!(estado && estado.hay_jornada_demanda),
+    /* 0175 · el día lo da el backend, no el reloj del dispositivo: una tablet del taller con
+       la hora corrida movía un día entero de producción de lugar. Queda null hasta que la
+       0175 esté aplicada, y ahí las pantallas se caen solas al filtro por jornada. */
+    fechaOperativa: (estado && estado.fecha_operativa) || null,
+    /* Cerró el turno y sigue mirando: con esto la pantalla no se queda en blanco como si no
+       hubiera trabajado en todo el día. */
+    ultimoTurnoId: (mio && mio.ultimo_turno_id) || null,
+    abrioHoy: !!(mio && mio.abrio_hoy),
+    /* El turno quedó abierto de ayer y se está comiendo lo que se carga hoy. */
+    turnoDeOtroDia: !!(mio && mio.turno_de_otro_dia),
   };
 }
 
@@ -325,9 +335,9 @@ function LpTurnoPortada({ U, t, sectorLabel, verbo }) {
                 boxShadow:`0 6px 20px ${U.accentSoft}`}}>
         {t.ocupado ? 'Abriendo…' : 'Abrir mi jornada'}
       </button>
-      {t.turno && t.turno.ultimo_cierre ? (
+      {t.turno && (t.turno.ultimo_cierre_hoy || t.turno.ultimo_cierre) ? (
         <div style={{color:U.inkMuted, fontSize:11.5, marginTop:16}}>
-          Último cierre: hace {lpDesdeHace(t.turno.ultimo_cierre)}
+          Último cierre: hace {lpDesdeHace(t.turno.ultimo_cierre_hoy || t.turno.ultimo_cierre)}
         </div>
       ) : null}
     </div>
@@ -383,9 +393,21 @@ function LpTurnosStrip({ U, toast, puedeGestionar }) {
       <div style={{display:'flex', alignItems:'baseline', justifyContent:'space-between', gap:10, marginBottom:10, flexWrap:'wrap'}}>
         <h3 style={{fontSize:15, fontWeight:800, margin:0, color:U.ink}}>Quién está trabajando</h3>
         <span style={{fontSize:11.5, color:U.inkMuted, fontWeight:700}}>
-          {abiertos} de {LP_SECTORES.length} sectores con la jornada abierta
+          {abiertos} de {LP_SECTORES.length} sectores con su turno abierto
         </span>
       </div>
+
+      {/* La palabra "jornada" nombraba dos cosas distintas en la misma pantalla: el turno de
+          cada sector (estas cuatro tarjetas) y la jornada de demanda que vincula pedidos (el
+          botón de arriba). Con el mismo nombre para las dos, "abrir la jornada" no significaba
+          nada. Acá se dice cuál es cuál. */}
+      {estado && estado.hay_jornada_demanda === false ? (
+        <div style={{fontSize:11.5, color:U.inkSoft, lineHeight:1.55, marginBottom:10,
+                     background:U.surface, border:`1px dashed ${U.border}`, borderRadius:10, padding:'9px 12px'}}>
+          No hay <b style={{color:U.ink}}>jornada de demanda</b> abierta: los sectores pueden trabajar igual
+          y lo que produzcan queda registrado en su turno y en el stock, pero no se imputa a ningún pedido.
+        </div>
+      ) : null}
 
       {error ? (
         <div style={{color:U.danger, fontSize:12.5, marginBottom:10, lineHeight:1.6}}>{error}</div>
@@ -412,11 +434,16 @@ function LpTurnosStrip({ U, toast, puedeGestionar }) {
                     Abierta hace <b style={{color:U.ink}}>{lpDesdeHace(t.abierta_at)}</b>
                     {t.abierta_por_nombre ? <span style={{color:U.inkMuted}}> · {t.abierta_por_nombre}</span> : null}
                   </React.Fragment>
-                ) : t.ultimo_cierre ? (
-                  <span style={{color:U.inkMuted}}>Cerrada · último cierre hace {lpDesdeHace(t.ultimo_cierre)}</span>
+                ) : (t.abrio_hoy !== undefined ? t.abrio_hoy : !!t.ultimo_cierre) ? (
+                  <span style={{color:U.inkMuted}}>Cerrada · último cierre hace {lpDesdeHace(t.ultimo_cierre_hoy || t.ultimo_cierre)}</span>
                 ) : (
-                  /* Nunca abrió. Es el caso caro: no es que cerró temprano, es que todo lo que
-                     hizo hoy no se pudo cargar. */
+                  /* Nunca abrió HOY. Es el caso caro: no es que cerró temprano, es que todo lo
+                     que hizo hoy no se pudo cargar.
+                     0175: esto se decidía con `ultimo_cierre`, que era el máximo histórico del
+                     sector. Después del primer cierre de su vida el cartel ya no podía volver a
+                     aparecer nunca: la alarma más importante del panel se apagaba sola a los dos
+                     días. Ahora pregunta si abrió HOY. El `!== undefined` es para que siga
+                     funcionando mientras la 0175 no esté aplicada. */
                   <span style={{color:U.warn, fontWeight:700}}>Sin abrir todavía — no puede cargar producción</span>
                 )}
               </div>
@@ -467,8 +494,18 @@ function LpTurnosStrip({ U, toast, puedeGestionar }) {
   );
 }
 
-function LpNeutral({ U, msg }) {
+/* `compact` (0175): el mismo mensaje pero como banda arriba de la pantalla en vez de tarjeta
+   a pantalla completa. Nació porque el cartel grande REEMPLAZABA la pestaña entera y tapaba
+   las cargas que el operario acababa de hacer. */
+function LpNeutral({ U, msg, compact }) {
   if (!msg) return null;
+  if (compact) return (
+    <div style={{ background:U.surface||'#fff', border:`1px dashed ${U.border||'rgba(0,0,0,.12)'}`, borderRadius:12,
+                  padding:'12px 14px', margin:'0 0 16px' }}>
+      <div style={{ fontSize:12.5, fontWeight:800, color:U.ink||'#0A0A0A', marginBottom:3 }}>{msg.titulo}</div>
+      <div style={{ fontSize:11.5, color:U.inkSoft||U.inkMuted||'#666', lineHeight:1.55 }}>{msg.sub}</div>
+    </div>
+  );
   return (
     <div style={{ background:U.surface||'#fff', border:`1px dashed ${U.border||'rgba(0,0,0,.12)'}`, borderRadius:14,
                   padding:'36px 20px', textAlign:'center', margin:'10px 0' }}>
@@ -477,6 +514,106 @@ function LpNeutral({ U, msg }) {
     </div>
   );
 }
+
+/* Aviso de turno colgado del día anterior (0175). No se cierra solo: el que trabaja de noche
+   tiene todo el derecho a seguir con su turno abierto, y un cierre automático le partiría el
+   trabajo al medio. Lo que hacía falta era que se entere, porque mientras siga abierto lo que
+   cargue hoy queda contado en el día de ayer. */
+function LpTurnoOtroDia({ U, t, sectorLabel }) {
+  if (!t || !t.turnoDeOtroDia) return null;
+  const fecha = (t.turno && t.turno.fecha) || '';
+  return (
+    <div style={{background:'rgba(217,119,6,.10)', border:`1px solid rgba(217,119,6,.32)`, borderRadius:12,
+                 padding:'12px 14px', marginBottom:16, display:'flex', gap:11, alignItems:'flex-start'}}>
+      <Icon n="alert" s={17} c={U.warn}/>
+      <div style={{flex:1, minWidth:0, fontSize:12.5, lineHeight:1.55, color:U.ink}}>
+        Tu jornada de {sectorLabel} viene abierta{fecha ? ` desde el ${fecha}` : ' de otro día'}.
+        <span style={{color:U.inkSoft}}> Todo lo que cargues ahora se cuenta en ese día. Cerrala
+        y abrí la de hoy para que el trabajo quede en la fecha correcta.</span>
+      </div>
+    </div>
+  );
+}
+/* ── Historial de turnos ──────────────────────────────────────────────────────────────────
+   La 0173 dejó `prod_v_turnos` y `LP_DATA.turnos()` andando y sin una sola pantalla que los
+   mostrara: el resumen que se guarda al cerrar cada turno (hojas, terminadas, unidades) no se
+   podía ver desde ningún lado. Una capacidad del backend sin pantalla es lo mismo que un botón
+   sin efecto — no existe para el que trabaja. */
+function LpTurnosHistorial({ U, sector, limite }) {
+  const [rows, setRows] = useState(null);
+  const [error, setError] = useState('');
+  const [abierto, setAbierto] = useState(false);
+
+  const cargar = useCallback(async () => {
+    try { setRows(await window.LP_DATA.turnos({ sector: sector || null, limite: limite || 20 })); setError(''); }
+    catch (ex) { setRows([]); setError((ex && ex.message) || 'No se pudo leer el historial de turnos.'); }
+  }, [sector, limite]);
+
+  useEffect(() => { if (abierto) cargar(); }, [abierto, cargar]);
+
+  const label = { cnc:'CNC', melamina:'Melamina', pino:'Pino', embalaje:'Embalaje' };
+  const hora = (iso) => {
+    if (!iso) return '—';
+    try { return new Date(iso).toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' }); }
+    catch (e) { return '—'; }
+  };
+  /* El resumen es un jsonb distinto por sector (cortes/hojas, terminadas/fallas, unidades…).
+     Se pinta lo que venga en vez de tipar cuatro formas: si mañana el backend agrega una clave,
+     aparece sola en vez de quedar invisible. */
+  const resumenTxt = (r) => {
+    const o = r && r.resumen;
+    if (!o || typeof o !== 'object') return '';
+    return Object.keys(o).map((k) => `${k.replace(/_/g, ' ')} ${o[k]}`).join(' · ');
+  };
+
+  return (
+    <div style={{marginTop:18}}>
+      <button onClick={() => setAbierto(!abierto)}
+        style={{border:`1px solid ${U.border}`, background:U.surface, color:U.inkSoft, borderRadius:10,
+                padding:'10px 13px', fontSize:12.5, fontWeight:700, cursor:'pointer', width:'100%',
+                display:'flex', alignItems:'center', justifyContent:'space-between', gap:8}}>
+        <span>Historial de turnos{sector ? ` · ${label[sector] || sector}` : ''}</span>
+        <span style={{color:U.inkMuted, fontSize:11.5}}>{abierto ? 'Ocultar' : 'Ver'}</span>
+      </button>
+
+      {abierto ? (
+        <div style={{marginTop:10}}>
+          {error ? (
+            <div style={{color:U.danger, fontSize:12.5, lineHeight:1.6, padding:'10px 2px'}}>{error}</div>
+          ) : rows === null ? (
+            <div style={{color:U.inkMuted, fontSize:12.5, padding:'14px 2px'}}>Cargando…</div>
+          ) : !rows.length ? (
+            <div style={{color:U.inkMuted, fontSize:12.5, padding:'14px 2px'}}>Todavía no se cerró ningún turno.</div>
+          ) : (
+            <div style={{background:U.surface, border:`1px solid ${U.border}`, borderRadius:12, overflow:'hidden'}}>
+              {rows.map((r, i) => (
+                <div key={r.id || i} style={{padding:'11px 13px', borderBottom: i < rows.length - 1 ? `1px solid ${U.border}` : 'none'}}>
+                  <div style={{display:'flex', alignItems:'baseline', justifyContent:'space-between', gap:10, flexWrap:'wrap'}}>
+                    <span style={{fontSize:12.5, fontWeight:800, color:U.ink}}>
+                      {label[r.sector] || r.sector}
+                      <span style={{color:U.inkMuted, fontWeight:600}}> · {r.fecha || (r.abierta_at || '').slice(0, 10)}</span>
+                    </span>
+                    <span style={{fontSize:11.5, color: r.estado === 'abierta' ? U.ok : U.inkMuted, fontWeight:700}}>
+                      {r.estado === 'abierta' ? 'en curso' : `${r.horas} h`}
+                    </span>
+                  </div>
+                  <div style={{fontSize:11, color:U.inkSoft, marginTop:3, lineHeight:1.5}}>
+                    {hora(r.abierta_at)} → {r.cerrada_at ? hora(r.cerrada_at) : '—'}
+                    {r.abierta_por_nombre ? ` · ${r.abierta_por_nombre}` : ''}
+                  </div>
+                  {resumenTxt(r) ? (
+                    <div style={{fontSize:11, color:U.inkMuted, marginTop:3}}>{resumenTxt(r)}</div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 
 /* Niveles de urgencia (Mantenimiento) — color por nivel. */
 const LP_URGENCIAS = [

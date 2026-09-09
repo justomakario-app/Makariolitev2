@@ -29,11 +29,40 @@ window.LP_DATA = window.LP_DATA || (function () {
      Sin ámbito devuelve [] sin consultar. Es a propósito: un select sin filtro traería
      la tabla completa y la pantalla la mostraría como "lo que cargaste hoy". Vale más
      una lista vacía honesta que una llena de trabajo ajeno. */
+  /* Vistas por día (0175). La fila que se carga con el turno del sector abierto pero SIN
+     jornada de demanda entra con jornada_id null, y todo lo que lee producción filtraba por
+     jornada_id: el operario apretaba "Registrar", el stock subía, y la carga no aparecía en
+     ninguna pantalla. La vista resuelve el día de cada fila (jornada → turno → created_at)
+     sin mover dónde se escribe. */
+  const LP_VISTA_DIA = {
+    prod_corte:    'prod_v_corte_dia',
+    prod_melamina: 'prod_v_melamina_dia',
+    prod_pino:     'prod_v_pino_dia',
+    prod_embalaje: 'prod_v_embalaje_dia',
+  };
+
   const lpDia = async (tabla, cols, ambito) => {
     const a = (typeof ambito === 'string') ? { jornada_id: ambito } : (ambito || {});
-    if (!a.turno_id && !a.jornada_id) return [];
-    return sel(tabla, cols, (q) => (a.turno_id ? q.eq('turno_id', a.turno_id) : q.eq('jornada_id', a.jornada_id))
-      .order('created_at', { ascending: false }));
+    /* Con turno propio se lista ese turno: es exacto y no depende de ninguna vista nueva. */
+    if (a.turno_id) {
+      return sel(tabla, cols, (q) => q.eq('turno_id', a.turno_id).order('created_at', { ascending: false }));
+    }
+    if (a.dia) {
+      try {
+        return await sel(LP_VISTA_DIA[tabla] || tabla, cols + ', dia',
+          (q) => q.eq('dia', a.dia).order('created_at', { ascending: false }));
+      } catch (e) {
+        /* La 0175 la aplica el dueño: hasta que la aplique la vista no existe y sel() tira.
+           Se cae al filtro viejo por jornada, que es exactamente lo que hacía antes. Si no hay
+           jornada a la que caer, el error sube: que la pantalla diga que falló es mucho mejor
+           que una lista vacía que se lee como "hoy no se produjo nada". */
+        if (!a.jornada_id) throw e;
+      }
+    }
+    if (a.jornada_id) {
+      return sel(tabla, cols, (q) => q.eq('jornada_id', a.jornada_id).order('created_at', { ascending: false }));
+    }
+    return [];
   };
 
   return {

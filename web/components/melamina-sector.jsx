@@ -48,15 +48,23 @@ function MelaminaSector() {
   const turno = useLpTurno('melamina', toast);
   const jornadaAbierta = turno.abierto;
   const turnoId = turno.turnoId;
+  /* 0175 · el día que el backend considera "hoy". Con el turno cerrado y sin jornada de
+     demanda es lo único que ancla las cargas del día: sin esto la pantalla se vaciaba. */
+  const diaOper = turno.fechaOperativa;
   const turnoRecargar = turno.recargar;
 
   const cargar = useCallback(async (opts) => {
     if (!(opts && opts.silent)) setLoading(true);
     try {
       const j = await window.LP_DATA.jornadaHoy();
-      /* Con el turno abierto se lista TU turno; con el turno cerrado, la jornada entera.
-         Así no te colgás el trabajo del turno anterior, pero tampoco te quedás ciego. */
-      const ambito = { turno_id: turnoId, jornada_id: j && j.jornada_id };
+      /* Con el turno abierto se lista TU turno; con el turno cerrado, todo el día.
+         Así no te colgás el trabajo del turno anterior, pero tampoco te quedás ciego.
+         0175: antes, con el turno cerrado se caía a la jornada de demanda, y si ese día no
+         había ninguna abierta el ámbito quedaba vacío: la pantalla mostraba cero cargas
+         aunque el sector hubiera trabajado toda la mañana. Ahora cae al día. */
+      const ambito = turnoId
+        ? { turno_id: turnoId, jornada_id: j && j.jornada_id }
+        : { dia: diaOper, jornada_id: j && j.jornada_id };
       const [pz, st, pr, rg, vv] = await Promise.all([
         window.LP_DATA.piezas().catch(() => []),
         window.LP_DATA.stock().catch(() => null),
@@ -72,7 +80,7 @@ function MelaminaSector() {
     } catch (err) {
       toast.error(err && err.message ? err.message : 'No se pudo cargar el sector');
     } finally { setLoading(false); }
-  }, [toast, turnoId]);
+  }, [toast, turnoId, diaOper]);
 
   /* Espera a saber si tu turno está abierto: arrancar antes traería el ámbito equivocado y la
      pantalla parpadearía mostrando primero lo de otro turno. */
@@ -186,10 +194,15 @@ function MelInicio({ U, turno, crudo, prioridad, registros, piezaNombre, totalTe
   const neu = jornadaAbierta
     ? lpNeutralMsg({ abierto:true, hayDemanda:turno.hayDemanda, nVentas, nTareas:prioridadFalta.length, sectorLabel:'Melamina' })
     : null;
-  if (neu) return <LpNeutral U={U} msg={neu}/>;
+  /* 0175: el cartel a pantalla completa REEMPLAZABA la pestaña. Si el operario ya había
+     cargado algo, sus propias cargas desaparecían detrás de un "no hay nada pendiente".
+     A pantalla completa solo cuando de verdad no hay nada abajo; si no, como banda. */
+  if (neu && !(registros || []).length) return <LpNeutral U={U} msg={neu}/>;
   return (
     <div>
       {!jornadaAbierta && <LpTurnoAviso U={U} t={turno} sectorLabel="Melamina" verbo="registrar"/>}
+      <LpTurnoOtroDia U={U} t={turno} sectorLabel="Melamina"/>
+      {neu ? <LpNeutral U={U} msg={neu} compact/> : null}
 
       {/* Crudo de CNC */}
       <div style={{marginBottom:18}}>

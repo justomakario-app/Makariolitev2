@@ -36,6 +36,8 @@ function EncargadoPanel() {
   const role = ((M.user || {}).role || '').toLowerCase();
   const [tab, setTab] = useState('inicio');
   const [jornada, setJornada] = useState(null);
+  /* 0175 · el turno de cada sector, que es cosa distinta de la jornada de demanda. */
+  const [sectEstado, setSectEstado] = useState(null);
   const [placas, setPlacas] = useState([]);
   const [stock, setStock] = useState({ stock_pieza:[], stock_melamina:[], stock_patas:[], stock_terminado:[] });
   const [cortes, setCortes] = useState([]);
@@ -60,16 +62,25 @@ function EncargadoPanel() {
   const cargar = useCallback(async (opts) => {
     if (!(opts && opts.silent)) setLoading(true);
     try {
-      const j = await window.LP_DATA.jornadaHoy();
-      setJornada(j);
+      const [j, se] = await Promise.all([
+        window.LP_DATA.jornadaHoy(),
+        window.LP_DATA.sectorEstado().catch(() => null),
+      ]);
+      setJornada(j); setSectEstado(se);
       const jid = j && j.jornada_id ? j.jornada_id : null;
+      /* 0175 · el panel leía producción SOLO por jornada de demanda: sin una abierta mostraba
+         los cuatro sectores en cero aunque el taller estuviera trabajando con sus turnos
+         abiertos. El encargado veía "no se produjo nada" y era mentira. Ahora el ámbito es el
+         día operativo (con la jornada como respaldo si la 0175 todavía no está aplicada). */
+      const dia = (se && se.fecha_operativa) || null;
+      const ambito = (dia || jid) ? { dia: dia, jornada_id: jid } : null;
       const [pl, st, ct, ml, pn, em, dm, al, mt, ins, sl, rm, mpf] = await Promise.all([
         window.LP_DATA.placas().catch(() => []),
         window.LP_DATA.stock().catch(() => null),
-        jid ? window.LP_DATA.cortesDia(jid).catch(() => []) : Promise.resolve([]),
-        jid ? window.LP_DATA.melaminaDia(jid).catch(() => []) : Promise.resolve([]),
-        jid ? window.LP_DATA.pinoDia(jid).catch(() => []) : Promise.resolve([]),
-        jid ? window.LP_DATA.embalajeDia(jid).catch(() => []) : Promise.resolve([]),
+        ambito ? window.LP_DATA.cortesDia(ambito).catch(() => []) : Promise.resolve([]),
+        ambito ? window.LP_DATA.melaminaDia(ambito).catch(() => []) : Promise.resolve([]),
+        ambito ? window.LP_DATA.pinoDia(ambito).catch(() => []) : Promise.resolve([]),
+        ambito ? window.LP_DATA.embalajeDia(ambito).catch(() => []) : Promise.resolve([]),
         window.LP_DATA.resumenDia().catch(() => []),
         window.LP_DATA.alertas().catch(() => []),
         window.LP_DATA.mantenimientos().catch(() => []),
@@ -94,6 +105,7 @@ function EncargadoPanel() {
     ['prod_corte', 'prod_melamina', 'prod_pino', 'prod_embalaje',
      'prod_stock_pieza', 'prod_stock_melamina', 'prod_stock_patas', 'prod_stock_terminado',
      'prod_alerta', 'prod_mantenimiento', 'prod_solicitud', 'prod_jornada',
+     'prod_jornada_sector',   // 0175: abrir/cerrar un turno cambia lo que se lee
      'prod_insumo', 'prod_remito', 'prod_mp_faltante'],
     () => cargar({ silent: true })
   ), [cargar]);
@@ -212,7 +224,7 @@ function EncargadoPanel() {
                     fontSize:12.5, fontWeight:800, cursor: jornadaBusy ? 'default' : 'pointer',
                     opacity: jornadaBusy ? 0.6 : 1, display:'flex', alignItems:'center', gap:7, whiteSpace:'nowrap'}}>
             <Icon n={jornadaAbierta ? 'check' : 'plus'} s={15} c={jornadaAbierta ? U.inkSoft : '#fff'}/>
-            {jornadaAbierta ? 'Cerrar jornada' : 'Abrir jornada'}
+            {jornadaAbierta ? 'Cerrar demanda' : 'Abrir demanda'}
           </button>
           <div style={{textAlign:'right'}}>
             <div style={{fontSize:15, fontWeight:800, fontVariantNumeric:'tabular-nums'}}><LpClock/></div>
@@ -220,7 +232,10 @@ function EncargadoPanel() {
                           textTransform:'uppercase', padding:'2px 8px', borderRadius:999,
                           background: jornadaAbierta ? 'rgba(22,163,74,.12)' : 'rgba(220,38,38,.10)',
                           color: jornadaAbierta ? U.ok : U.danger}}>
-              {jornada ? (jornada.estado === 'abierta' ? 'Jornada abierta' : 'Jornada cerrada') : 'Sin jornada'}
+              {/* 0175: decía "Jornada" a secas, igual que las tarjetas de los cuatro sectores,
+                  que son otra cosa. El encargado leía "Sin jornada" y creía que el taller
+                  estaba parado cuando en realidad los turnos estaban abiertos. */}
+              {jornada ? (jornada.estado === 'abierta' ? 'Demanda abierta' : 'Demanda cerrada') : 'Sin jornada de demanda'}
             </span>
           </div>
         </div>
@@ -255,7 +270,7 @@ function EncargadoPanel() {
           <EncInicio U={U} kpis={kpis} cadena={{ pieza:sPieza, mel:sMel, patas:sPatas, term:sTerm }} alertas={alertas} demanda={demanda}
                      toast={toast} puedeGestionar={canCoord} mpFalta={mpFalta}/>
         ) : tab === 'sectores' ? (
-          <EncSectores U={U} jornada={jornada} placaMap={placaMap}
+          <EncSectores U={U} jornada={jornada} sectEstado={sectEstado} placaMap={placaMap}
                        cortes={cortes} melamina={melamina} pino={pino} embalaje={embalaje}
                        onEdit={(sector, row) => setEditing({ sector, row })}/>
         ) : tab === 'optim' ? (
@@ -444,8 +459,25 @@ function EncInicio({ U, kpis, cadena, alertas, demanda, toast, puedeGestionar, m
 }
 
 /* ── Tab Sectores (detalle + edición con auditoría) ── */
-function EncSectores({ U, jornada, placaMap, cortes, melamina, pino, embalaje, onEdit }) {
-  const estado = jornada ? (jornada.estado === 'abierta' ? 'En curso' : 'Cerrado') : 'Sin jornada';
+function EncSectores({ U, jornada, sectEstado, placaMap, cortes, melamina, pino, embalaje, onEdit }) {
+  /* 0175 · las cuatro tarjetas decían todas lo mismo, porque el estado salía de la jornada de
+     demanda: si no había ninguna abierta, CNC aparecía "Sin jornada" aunque llevara tres horas
+     cortando. Cada tarjeta mira ahora su propio turno. */
+  const porSector = useMemo(() => {
+    const m = {};
+    for (const s of ((sectEstado && sectEstado.sectores) || [])) m[s.sector] = s;
+    return m;
+  }, [sectEstado]);
+  const estadoDe = (id) => {
+    const t = porSector[id];
+    if (!t) return jornada ? (jornada.estado === 'abierta' ? 'En curso' : 'Cerrado') : 'Sin turno';
+    if (t.abierta) return t.turno_de_otro_dia ? 'Abierto de otro día' : 'En curso';
+    return t.abrio_hoy ? 'Cerrado' : 'Sin abrir hoy';
+  };
+  const alarmaDe = (id) => {
+    const t = porSector[id];
+    return !!(t && !t.abierta && !t.abrio_hoy) || !!(t && t.turno_de_otro_dia);
+  };
   const horaUlt = (rows) => {
     let t = null;
     for (const r of rows) { if (r.created_at && (!t || r.created_at > t)) t = r.created_at; }
@@ -487,7 +519,10 @@ function EncSectores({ U, jornada, placaMap, cortes, melamina, pino, embalaje, o
                 </span>
                 <div>
                   <div style={{fontSize:13.5, fontWeight:800, color:U.ink}}>{s.label}</div>
-                  <div style={{fontSize:10, color:U.inkMuted}}>{estado} · últ. carga {d.hora}</div>
+                  <div style={{fontSize:10, color: alarmaDe(s.id) ? U.warn : U.inkMuted,
+                               fontWeight: alarmaDe(s.id) ? 700 : 400}}>
+                    {estadoDe(s.id)} · últ. carga {d.hora}
+                  </div>
                 </div>
               </div>
             </div>
@@ -524,6 +559,11 @@ function EncSectores({ U, jornada, placaMap, cortes, melamina, pino, embalaje, o
       <div style={{fontSize:11, color:U.inkMuted, textAlign:'center', padding:'4px 16px 8px', lineHeight:1.5}}>
         Tocá una carga de CNC, Melamina o Pino para corregirla (exige motivo y queda auditada). El embalaje confirmado es inmutable.
       </div>
+
+      {/* El resumen que se guarda al cerrar cada turno no se veía desde ninguna pantalla:
+          `prod_v_turnos` existía desde la 0173 y no lo leía nadie. Acá el encargado puede
+          mirar quién abrió, cuánto duró y qué produjo cada turno de los últimos días. */}
+      <LpTurnosHistorial U={U} limite={30}/>
     </div>
   );
 }
