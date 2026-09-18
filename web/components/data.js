@@ -325,7 +325,7 @@ window.MOCK = {
   },
 
   ROLE_NAV: {
-    owner:     { landing:'dashboard',        items:['dashboard','colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino','produccion-hub','registrar','historico','catalogo','equipo','notificaciones','perfil','administracion','ventas','finanzas','rrhh','marketing'] },
+    owner:     { landing:'dashboard',        items:['dashboard','colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino','produccion-hub','registrar','historico','catalogo','equipo','notificaciones','perfil','administracion','ventas','finanzas','rrhh','marketing','metricas-seller'] },
     admin:     { landing:'dashboard',        items:['dashboard','colecta','flex','tiendanube','distribuidor','no_flex','correo_argentino','produccion-hub','registrar','historico','catalogo','equipo','notificaciones','perfil','administracion'] },
     encargado: { landing:'produccion-hub',   items:['produccion-hub','registrar','notificaciones','perfil'] },
     cnc:       { landing:'produccion-hub',   items:['produccion-hub','registrar','perfil'] },
@@ -471,6 +471,10 @@ window.MODULE_TO_NAV = {
   finanzas:         ['finanzas'],
   finanzas_egresos: ['finanzas'],
   marketing:        ['marketing'],
+  /* Métricas Seller (0177). No está en ROLE_NAV.admin a propósito: es una
+     herramienta de decisión de compra, no de operación. Un admin la ve solo
+     si se le da la fila explícita en user_module_permissions. */
+  'metricas-seller': ['metricas-seller'],
 };
 
 /* Items que un admin permisionado SIEMPRE ve (además de sus módulos). */

@@ -3105,3 +3105,450 @@ tr.row-inactive:hover { opacity: 0.85; }
 /* El mismo chip que cuenta comprobantes, del otro color: ámbar es lo que
    subió el cliente y todavía miramos, azul es el papel que ya emitimos. */
 .b2b-clip.fac { background: var(--blue-bg); color: var(--blue); }
+
+/* ══════════════════════════════════════════════════════════════════════
+   MÉTRICAS SELLER (0177)
+
+   La referencia es el panel de SellerAmp: una pantalla que decide una
+   compra. Pero SellerAmp pone 24 celdas del mismo tamaño y deja que vos
+   encuentres la conclusión. Acá la jerarquía es al revés y a propósito:
+
+     · el techo de costo ocupa media pantalla y va en el color del
+       veredicto — es lo único que hace falta leer para decidir;
+     · el desglose existe, completo, pero en tipografía chica y gris:
+       está para discutir el número, no para leerlo cada vez;
+     · lo que es un supuesto mío se ve distinto (ámbar punteado) hasta
+       que alguien lo confirma.
+
+   Números en JetBrains Mono con `font-variant-numeric: tabular-nums`:
+   en una columna de plata las cifras tienen que alinearse por la coma, o
+   comparar dos filas es imposible.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.rev-page { --rev-gap: 14px; }
+
+/* ── Pestañas ── */
+.rev-tabs { display: flex; gap: 4px; background: var(--paper-dim); padding: 3px; border-radius: 8px; }
+.rev-tab {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 13px; border: 0; background: transparent; cursor: pointer;
+  font-family: var(--font); font-size: 12px; font-weight: 600; color: var(--ink-muted);
+  border-radius: 6px; transition: background .12s, color .12s;
+}
+.rev-tab:hover { color: var(--ink); }
+.rev-tab.activo { background: var(--paper); color: var(--ink); box-shadow: var(--shadow-xs); }
+
+/* ── EL HERO ──
+   El único bloque de la pantalla que se lee de lejos. */
+.rev-hero {
+  display: grid; grid-template-columns: 1fr auto; gap: 40px; align-items: center;
+  border: 1px solid; border-radius: 10px;
+  padding: 26px 30px; margin-bottom: var(--rev-gap);
+}
+/* min-width:0 o el numero gigante estira la columna y empuja el lateral
+   fuera de la pantalla: en CSS grid una celda no baja de su contenido. */
+.rev-hero-main { min-width: 0; }
+.rev-hero-kicker {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 10px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.rev-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.rev-hero-label { font-size: 12px; color: var(--ink-soft); font-weight: 600; margin-bottom: 2px; }
+.rev-hero-num {
+  font-family: var(--mono); font-size: 54px; font-weight: 700;
+  letter-spacing: -.035em; line-height: 1; font-variant-numeric: tabular-nums;
+}
+.rev-hero-num-gris { font-family: var(--font); font-size: 24px; font-weight: 800; color: var(--ink-soft); letter-spacing: -.02em; }
+.rev-hero-sub { font-size: 12px; color: var(--ink-muted); margin-top: 8px; max-width: 46ch; }
+
+.rev-hero-side { min-width: 250px; }
+.rev-hero-side-row {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 16px;
+  font-size: 12px; color: var(--ink-muted);
+}
+.rev-hero-side-row strong { font-family: var(--mono); font-size: 14px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.rev-hero-side-final { margin-top: 9px; font-weight: 600; }
+.rev-hero-side-final strong { color: inherit; font-size: 16px; }
+
+/* La barra: dónde cae el precio del proveedor contra el techo. El mismo
+   dato que el número, dicho como distancia — "62.480" no dice si estás
+   cerca; la barra sí. La muesca negra es el techo. */
+.rev-barra {
+  position: relative; height: 8px; border-radius: 4px;
+  background: rgba(0,0,0,.07); margin: 10px 0 4px; overflow: visible;
+}
+.rev-barra-fill { position: absolute; left: 0; top: 0; height: 100%; border-radius: 4px; transition: width .2s; }
+.rev-barra-exceso {
+  position: absolute; left: 100%; top: 0; height: 100%;
+  background: repeating-linear-gradient(45deg, #DC2626, #DC2626 3px, #fff0f0 3px, #fff0f0 6px);
+  border-radius: 0 4px 4px 0;
+}
+.rev-barra-techo {
+  position: absolute; left: 100%; top: -4px; width: 2px; height: 16px;
+  background: var(--ink); border-radius: 1px;
+}
+
+/* ── Las cuatro métricas ── */
+.rev-metricas { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--rev-gap); margin-bottom: var(--rev-gap); }
+.rev-metrica {
+  background: var(--paper); border: 1px solid var(--border); border-left: 3px solid var(--border-md);
+  border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow-xs);
+}
+.rev-metrica.bien  { border-left-color: var(--green); }
+.rev-metrica.medio { border-left-color: var(--amber); }
+.rev-metrica.mal   { border-left-color: var(--red); }
+.rev-metrica-k { font-size: 9px; font-weight: 700; letter-spacing: .11em; text-transform: uppercase; color: var(--ink-muted); }
+.rev-metrica-v {
+  font-family: var(--mono); font-size: 22px; font-weight: 700; letter-spacing: -.02em;
+  margin: 5px 0 2px; font-variant-numeric: tabular-nums;
+}
+.rev-metrica-meta { font-size: 11px; color: var(--ink-faint); }
+
+/* ── Alertas ── */
+.rev-alertas { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--rev-gap); }
+.rev-alerta {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 10px 14px; border-radius: var(--radius); font-size: 12.5px; line-height: 1.45;
+  border: 1px solid var(--border);
+}
+.rev-alerta svg { flex-shrink: 0; margin-top: 1px; }
+.rev-alerta.nivel-rojo  { background: var(--red-bg);   border-color: #fecaca; color: #7f1d1d; }
+.rev-alerta.nivel-ambar { background: var(--amber-bg); border-color: #fde68a; color: #78350f; }
+.rev-alerta.nivel-gris  { background: var(--paper-dim); color: var(--ink-soft); }
+.rev-alerta.nivel-verde { background: var(--green-bg); border-color: #bbf7d0; color: #14532d; }
+
+/* ── Layout de dos columnas ── */
+.rev-grid-2 { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.05fr); gap: var(--rev-gap); align-items: start; }
+.rev-lote { display: flex; flex-direction: column; gap: var(--rev-gap); }
+
+.rev-panel {
+  background: var(--paper); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow-xs); overflow: hidden;
+}
+.rev-panel-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 13px 18px; border-bottom: 1px solid var(--border); background: var(--paper-off);
+}
+.rev-panel-head-mid { border-top: 1px solid var(--border); }
+.rev-panel-head h3 {
+  font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft);
+}
+.rev-panel-nota { font-size: 11px; color: var(--ink-faint); }
+
+/* ── Campos ── */
+.rev-campos { display: grid; grid-template-columns: 1fr 1fr; gap: 13px 16px; padding: 16px 18px; }
+.rev-campo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.rev-campo-label {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 600; color: var(--ink-soft);
+}
+.rev-campo-caja {
+  display: flex; align-items: center; gap: 4px;
+  border: 1px solid var(--border-md); border-radius: var(--radius);
+  background: var(--paper); padding: 0 9px; transition: border-color .12s, box-shadow .12s;
+}
+.rev-campo-caja:focus-within { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(0,0,0,.05); }
+.rev-campo-input {
+  flex: 1; min-width: 0; border: 0; outline: 0; background: transparent;
+  padding: 8px 0; font-family: var(--mono); font-size: 13px; font-weight: 500;
+  color: var(--ink); font-variant-numeric: tabular-nums;
+}
+.rev-campo-input::placeholder { color: var(--ink-faint); font-weight: 400; }
+select.rev-campo-input { font-family: var(--font); cursor: pointer; }
+.rev-campo-fijo { font-family: var(--mono); font-size: 12px; color: var(--ink-faint); flex-shrink: 0; }
+.rev-campo-ayuda { font-size: 10.5px; color: var(--ink-faint); line-height: 1.35; }
+
+.rev-campo-bool { grid-column: span 2; flex-direction: row; align-items: flex-start; gap: 9px; }
+.rev-campo-bool input { margin-top: 2px; width: 15px; height: 15px; accent-color: var(--ink); cursor: pointer; }
+.rev-campo-bool > span { display: flex; flex-direction: column; gap: 2px; }
+
+/* El contrato del ámbar: esto lo puse yo, todavía no lo confirmó nadie.
+   Deja de verse así en cuanto el campo se toca. Un default que se lee
+   como dato confirmado es peor que un campo vacío: nadie lo revisa. */
+.rev-campo.es-supuesto .rev-campo-caja { border-color: #fbbf24; border-style: dashed; background: #fffdf5; }
+.rev-supuesto-dot {
+  font-size: 8.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+  color: #92400e; background: #fef3c7; border-radius: 3px; padding: 1.5px 5px;
+}
+
+/* ── Tablas ── */
+.rev-tabla { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.rev-tabla th {
+  text-align: left; padding: 9px 18px; font-size: 9px; font-weight: 700;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--ink-muted);
+  border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+.rev-tabla td { padding: 7px 18px; border-bottom: 1px solid var(--border); }
+.rev-tabla tr:last-child td { border-bottom: 0; }
+.rev-tabla .num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rev-tabla .soft { color: var(--ink-faint); }
+.rev-tabla .strong { font-weight: 700; }
+.rev-tabla .soft-row td { color: var(--ink-faint); }
+.rev-tabla-total td { font-weight: 700; border-top: 1px solid var(--border-md); background: var(--paper-off); }
+.rev-tabla-res { border-top: 1px solid var(--border); }
+.rev-final td { font-size: 14px; background: var(--paper-dim); }
+.rev-tabla-pct { border-top: 1px solid var(--border); }
+
+/* El divisor de la cascada, a la vista. Ver "÷ 0,94" es lo que lleva a
+   preguntar por qué, y esa pregunta lleva a la tasa de devoluciones —
+   el parámetro que más mueve la cuenta y el que nadie mira. */
+.rev-divisor {
+  font-size: 11px; color: var(--amber); background: var(--amber-bg);
+  padding: 1px 6px; border-radius: 3px; font-weight: 600;
+}
+.rev-divisor::before { content: "\00f7 "; opacity: .6; }
+
+.rev-explica {
+  display: flex; gap: 9px; align-items: flex-start;
+  padding: 12px 18px; font-size: 11.5px; line-height: 1.5;
+  color: var(--ink-muted); background: var(--paper-off); border-top: 1px solid var(--border);
+}
+.rev-explica svg { flex-shrink: 0; margin-top: 2px; }
+.rev-explica strong { color: var(--ink-soft); }
+
+/* ── LA FÓRMULA ──
+   El corazón de la herramienta, escrito donde se mira. Los cargos que se
+   cobran como % de la venta van en el denominador: sumarlos al costo es
+   el error que hace que una planilla prometa margen y entregue pérdida. */
+.rev-formula { padding: 16px 18px; background: #fafaff; border-top: 1px solid var(--border); }
+.rev-formula-tit { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--purple); margin-bottom: 7px; }
+.rev-formula p { font-size: 11.5px; line-height: 1.5; color: var(--ink-soft); margin-bottom: 12px; }
+.rev-formula-linea {
+  display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;
+  font-family: var(--mono); font-size: 13px; font-variant-numeric: tabular-nums;
+  padding: 10px 0;
+}
+.rev-formula-linea .op { color: var(--ink-faint); }
+.rev-formula-linea .res { font-size: 17px; font-weight: 700; color: var(--purple); }
+.rev-formula-linea .frac { display: inline-flex; flex-direction: column; text-align: center; }
+.rev-formula-linea .arriba { padding: 0 8px 3px; border-bottom: 1.5px solid var(--ink-soft); }
+.rev-formula-linea .abajo { padding: 3px 8px 0; font-size: 11.5px; }
+.rev-formula-nota { font-size: 11px; color: var(--ink-muted); margin: 6px 0 0; font-style: italic; }
+.rev-formula-rota {
+  margin-top: 8px; padding: 10px 12px; border-radius: var(--radius);
+  background: var(--red-bg); border: 1px solid #fecaca; color: #7f1d1d;
+  font-size: 11.5px; line-height: 1.5;
+}
+
+/* ── Las otras dos inversas ── */
+.rev-inversas { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--border); }
+.rev-inversa { padding: 14px 18px; }
+.rev-inversa + .rev-inversa { border-left: 1px solid var(--border); }
+.rev-inversa-k { font-size: 9px; font-weight: 700; letter-spacing: .11em; text-transform: uppercase; color: var(--ink-muted); }
+.rev-inversa-v { font-family: var(--mono); font-size: 19px; font-weight: 700; letter-spacing: -.02em; margin: 4px 0 3px; font-variant-numeric: tabular-nums; }
+.rev-inversa-s { font-size: 10.5px; color: var(--ink-faint); line-height: 1.4; }
+
+/* ── EL LOTE ──
+   Nadie carga 40 productos de a uno dos veces. Si la carga masiva no
+   está, la herramienta no se usa y la cuenta correcta no sirve de nada. */
+.rev-cargar { padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+.rev-pegar {
+  width: 100%; border: 1px solid var(--border-md); border-radius: var(--radius);
+  padding: 10px 12px; font-family: var(--mono); font-size: 12px; resize: vertical;
+  outline: 0; color: var(--ink); background: var(--paper);
+}
+.rev-pegar:focus { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(0,0,0,.05); }
+.rev-pegar::placeholder { color: var(--ink-faint); }
+.rev-cargar-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.rev-file { cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+
+.rev-resumen {
+  display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+  background: var(--paper); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 12px 18px; box-shadow: var(--shadow-xs); font-size: 12px; color: var(--ink-muted);
+}
+.rev-resumen-item { display: flex; align-items: center; gap: 6px; }
+.rev-resumen-item strong { color: var(--ink); font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+.rev-orden { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--ink-faint); }
+.rev-orden-btn {
+  border: 0; background: transparent; cursor: pointer; padding: 3px 8px; border-radius: 4px;
+  font-family: var(--font); font-size: 11px; font-weight: 600; color: var(--ink-muted);
+}
+.rev-orden-btn:hover { background: var(--paper-dim); color: var(--ink); }
+.rev-orden-btn.activo { background: var(--ink); color: var(--paper); }
+
+.rev-tabla-scroll { overflow-x: auto; }
+.rev-tabla-lote td { padding: 6px 12px; }
+.rev-tabla-lote th { padding: 9px 12px; }
+.rev-fila-nombre { font-weight: 600; }
+.rev-fila-sku { font-family: var(--mono); font-size: 10px; color: var(--ink-faint); }
+.rev-fila-rojo td { background: rgba(220,38,38,.028); }
+.rev-fila-gris td { background: rgba(0,0,0,.018); }
+.rev-inline {
+  width: 92px; text-align: right; border: 1px solid transparent; border-radius: 4px;
+  background: transparent; padding: 4px 6px; font-family: var(--mono); font-size: 12px;
+  color: var(--ink); outline: 0; font-variant-numeric: tabular-nums;
+}
+.rev-inline:hover { border-color: var(--border-md); }
+.rev-inline:focus { border-color: var(--ink); background: var(--paper); }
+
+/* ── Nota sobre los supuestos ── */
+.rev-nota-supuestos { padding: 16px 18px; border-top: 1px solid var(--border); background: #fffdf5; }
+.rev-nota-tit { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; color: #92400e; margin-bottom: 8px; }
+.rev-nota-supuestos p { font-size: 11.5px; line-height: 1.55; color: var(--ink-soft); }
+.rev-nota-supuestos p + p { margin-top: 8px; }
+
+/* ── Angosto ── */
+@media (max-width: 1180px) {
+  .rev-grid-2 { grid-template-columns: 1fr; }
+  .rev-metricas { grid-template-columns: 1fr 1fr; }
+  .rev-hero { grid-template-columns: 1fr; gap: 20px; }
+  .rev-hero-num { font-size: 42px; }
+}
+
+/* ══ CAMPAÑAS — TABLA DE DIAGNÓSTICO DE ROAS (0177-b) ═══════════════════
+   Hereda .rev-panel, .rev-tabla, .rev-alerta y .rev-campo. Acá solo va lo
+   que la tabla de campañas necesita y el resto del módulo no tiene. */
+
+.camp-panel { display: flex; flex-direction: column; gap: var(--rev-gap); }
+
+/* ── Las tres referencias ──
+   Van arriba de todo y no se pueden editar. Que se vean como un dato
+   calculado y no como un campo es la mitad del punto: el objetivo sale
+   del costo del producto, y para moverlo hay que ir a cambiar el costo. */
+.camp-ref-grid {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px; background: var(--border);
+}
+.camp-ref-item {
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 14px 16px 15px; background: var(--paper);
+  border-top: 2px solid var(--border);
+}
+.camp-ref-label {
+  font-size: 9.5px; font-weight: 800; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-muted);
+}
+.camp-ref-num {
+  font-family: var(--mono); font-size: 26px; font-weight: 700;
+  line-height: 1.1; font-variant-numeric: tabular-nums;
+}
+.camp-ref-gasto { font-size: 11px; color: var(--ink-soft); font-weight: 500; }
+.camp-ref-ayuda { font-size: 10.5px; color: var(--ink-faint); line-height: 1.35; margin-top: 2px; }
+
+.camp-ref-vacio {
+  display: flex; gap: 11px; align-items: flex-start;
+  padding: 15px 18px; font-size: 12.5px; line-height: 1.5; color: var(--ink-soft);
+}
+.camp-ref-vacio svg { flex-shrink: 0; margin-top: 2px; }
+
+/* ── Resumen de cartera ── */
+.camp-resumen {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px;
+  padding: 11px 18px; border-bottom: 1px solid var(--border); background: var(--paper-off);
+}
+.camp-resumen-plata {
+  display: flex; flex-wrap: wrap; gap: 8px 18px; margin-left: auto;
+  font-size: 11.5px; color: var(--ink-soft);
+}
+.camp-resumen-plata b { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--ink); }
+
+/* ── La tabla ──
+   overflow-x propio: con siete columnas y nombres largos, en un notebook
+   angosto la página entera se desplazaba de costado y el lateral quedaba
+   fuera de pantalla. Que el scroll sea de la tabla y no del documento. */
+.camp-tabla-wrap { overflow-x: auto; }
+.camp-tabla { min-width: 780px; }
+.camp-fila { cursor: pointer; transition: background .1s; }
+.camp-fila:hover { background: var(--paper-dim); }
+.camp-fila.abierta { background: var(--paper-off); }
+.camp-fila.abierta td { border-bottom-color: transparent; }
+
+.camp-td-nombre {
+  display: flex; align-items: center; gap: 7px;
+  font-weight: 600; max-width: 230px;
+}
+.camp-td-nombre span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.camp-td-nombre em { color: var(--ink-faint); font-weight: 400; }
+.camp-td-decision { font-size: 12px; color: var(--ink-soft); }
+.camp-td-acc { text-align: right; white-space: nowrap; }
+.camp-td-acc .icon-btn { opacity: 0; transition: opacity .12s; }
+.camp-fila:hover .camp-td-acc .icon-btn,
+.camp-fila.abierta .camp-td-acc .icon-btn { opacity: 1; }
+
+/* El rango debajo del ROAS medido. Es la diferencia entre un número y un
+   número con su margen de error, y es lo único que impide leer "2,1x"
+   con tres ventas como si fuera un hecho. */
+.camp-rango {
+  display: block; font-size: 10px; font-weight: 500;
+  color: var(--ink-faint); letter-spacing: -.01em; margin-top: 1px;
+}
+
+.camp-estado {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 9px; border-radius: 999px; border: 1px solid transparent;
+  font-size: 11px; font-weight: 600; white-space: nowrap;
+}
+
+/* ── El detalle desplegado ── */
+.camp-detalle-fila td { padding: 0 !important; background: var(--paper-off); }
+.camp-detalle {
+  display: flex; flex-direction: column; gap: 9px;
+  padding: 4px 18px 16px;
+}
+.camp-detalle-nums {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(105px, 1fr)); gap: 1px;
+  background: var(--border); border: 1px solid var(--border); border-radius: var(--radius);
+  overflow: hidden;
+}
+.camp-detalle-num {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 9px 12px; background: var(--paper);
+}
+.camp-detalle-num span { font-size: 9.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-muted); }
+.camp-detalle-num strong { font-family: var(--mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+
+.camp-nota-firmeza, .camp-nota-escalar {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 10px 14px; border-radius: var(--radius);
+  font-size: 12.5px; line-height: 1.45; border: 1px solid var(--border);
+}
+.camp-nota-firmeza { background: var(--paper-dim); color: var(--ink-soft); }
+.camp-nota-escalar { background: var(--green-bg); border-color: #bbf7d0; color: #14532d; }
+.camp-nota-firmeza svg, .camp-nota-escalar svg { flex-shrink: 0; margin-top: 1px; }
+
+/* ── Vacío ── */
+.camp-vacio {
+  display: flex; flex-direction: column; align-items: center; gap: 7px;
+  padding: 40px 24px; text-align: center;
+}
+.camp-vacio strong { font-size: 13.5px; }
+.camp-vacio span { font-size: 12px; color: var(--ink-faint); max-width: 400px; line-height: 1.5; }
+
+/* ── El modal ── */
+.camp-modal { display: flex; flex-direction: column; gap: 15px; }
+.camp-modal .rev-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px 16px; }
+.camp-modal-sec { display: flex; flex-direction: column; gap: 9px; }
+.camp-modal-sec h4 {
+  font-size: 9.5px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink-muted); padding-top: 12px; border-top: 1px solid var(--border);
+}
+.camp-modal-nota { font-size: 11.5px; color: var(--ink-faint); line-height: 1.45; margin: -3px 0 0; }
+
+/* El cotejo contra lo que el dueño cargó en ML. Es el hallazgo más
+   accionable del módulo: casi nadie pone en ML un objetivo que salga de
+   sus costos, y ML compra clics hasta el umbral que le pidas. */
+.camp-cotejo {
+  align-self: end; padding: 10px 13px; border-radius: var(--radius);
+  font-size: 11.5px; line-height: 1.45; border: 1px solid var(--border);
+}
+.camp-cotejo.mal  { background: var(--amber-bg); border-color: #fde68a; color: #78350f; }
+.camp-cotejo.bien { background: var(--green-bg); border-color: #bbf7d0; color: #14532d; }
+
+/* La vista previa del veredicto, viva mientras se tipea. Es la razón de
+   que esto sea un modal y no un formulario aparte. */
+.camp-preview {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 10px 18px; padding: 11px 15px; border-radius: var(--radius); border: 1px solid;
+}
+.camp-preview-izq { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.camp-preview-der { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 11.5px; color: var(--ink-soft); }
+.camp-preview-der b { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--ink); }
+
+@media (max-width: 900px) {
+  .camp-ref-grid { grid-template-columns: 1fr; }
+  .camp-modal .rev-grid-2 { grid-template-columns: 1fr; }
+  .camp-resumen-plata { margin-left: 0; }
+}

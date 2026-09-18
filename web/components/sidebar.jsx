@@ -25,6 +25,7 @@ function Sidebar({ current, onNav, onLogout, unread }) {
     { id:'finanzas',       label:'Finanzas',           icon:'dollar' },
     { id:'rrhh',           label:'Recursos Humanos',   icon:'users' },
     { id:'marketing',      label:'Marketing',          icon:'megaphone' },
+    { id:'metricas-seller', label:'Métricas Seller',   icon:'chart' },
 
     { sec:'otros', label:'Otros' },
     { id:'historico',     label:'Histórico',          icon:'history' },

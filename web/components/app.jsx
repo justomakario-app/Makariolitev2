@@ -109,6 +109,14 @@ function App() {
       if (!canSee('rrhh')) return <DashboardPage onNav={setPage}/>;
       return window.RrhhPage ? <window.RrhhPage/> : <DashboardPage onNav={setPage}/>;
     }
+    /* Métricas Seller (0177): decidir si un producto de reventa cierra.
+       Igual que el resto de los módulos opcionales, si el archivo no cargó
+       se cae al dashboard en vez de tumbar la app entera. */
+    if (p === 'metricas-seller') {
+      if (!canSee('metricas-seller')) return <DashboardPage onNav={setPage}/>;
+      return window.MetricasSellerPage ? <window.MetricasSellerPage/> : <DashboardPage onNav={setPage}/>;
+    }
+
     if (p === 'ventas') {
       // Owner siempre; admin solo con módulo 'ventas'.
       if (!canSee('ventas')) return <DashboardPage onNav={setPage}/>;
