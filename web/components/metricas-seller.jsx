@@ -43,9 +43,11 @@
 /* ── Plata y porcentajes, en argentino ── */
 const revMoney = (n, dec) => {
   if (n === null || n === undefined || !Number.isFinite(Number(n))) return '—';
-  return '$ ' + Number(n).toLocaleString('es-AR', {
+  const v = Number(n);
+  const s = Math.abs(v).toLocaleString('es-AR', {
     minimumFractionDigits: dec || 0, maximumFractionDigits: dec || 0,
   });
+  return (v < 0 && s !== '0' ? '-$ ' : '$ ') + s;
 };
 const revPct = (n, dec) => {
   if (n === null || n === undefined || !Number.isFinite(Number(n))) return '—';
@@ -247,6 +249,10 @@ function RevHero({ r, costoPedido }) {
    dice nada: 28% de margen puede ser excelente o un desastre según lo que
    se haya fijado como mínimo. Por eso siempre va el objetivo al lado. */
 function RevMetricas({ r, cfg }) {
+  /* Sin datos no hay número. Un "0,0%" con borde rojo se lee como un
+     veredicto ("este producto pierde") cuando en realidad no se calculó
+     nada todavía. */
+  const vacio = r.veredicto === 'gris';
   const items = [
     { k: 'Margen',   v: revPct(r.margen), meta: `objetivo ${revPct(cfg.margen_objetivo, 0)}`,
       ok: r.margen >= cfg.margen_objetivo, mal: r.margen < cfg.margen_minimo },
@@ -260,9 +266,9 @@ function RevMetricas({ r, cfg }) {
   return (
     <div className="rev-metricas">
       {items.map(it => (
-        <div key={it.k} className={`rev-metrica ${it.neutro ? '' : it.mal ? 'mal' : it.ok ? 'bien' : 'medio'}`}>
+        <div key={it.k} className={`rev-metrica ${(it.neutro || vacio) ? '' : it.mal ? 'mal' : it.ok ? 'bien' : 'medio'}`}>
           <div className="rev-metrica-k">{it.k}</div>
-          <div className="rev-metrica-v">{it.v}</div>
+          <div className={`rev-metrica-v ${vacio ? 'vacio' : ''}`}>{vacio ? '—' : it.v}</div>
           <div className="rev-metrica-meta">{it.meta}</div>
         </div>
       ))}
@@ -402,7 +408,7 @@ function RevCascada({ r, cfg }) {
             <td className="num soft">{revMoney(r.iva_debito)}</td>
           </tr>
           <tr>
-            <td>− Costos y cargos</td>
+            <td>Costos y cargos</td>
             <td className="num">{revMoney(-(r.costos_totales + r.precio_neto * r.cargos_pct))}</td>
           </tr>
           <tr>
@@ -410,7 +416,7 @@ function RevCascada({ r, cfg }) {
             <td className="num">{revMoney(r.utilidad_antes_impuesto)}</td>
           </tr>
           <tr>
-            <td>− Ganancias ({revPct(cfg.ganancias_pct, 0)} sobre la utilidad)</td>
+            <td>Ganancias ({revPct(cfg.ganancias_pct, 0)} sobre la utilidad)</td>
             <td className="num">{revMoney(-r.ganancias)}</td>
           </tr>
           <tr className="rev-tabla-total rev-final">
@@ -447,7 +453,10 @@ function RevCascada({ r, cfg }) {
    Lo que el número no dice. Cada una es una cosa que puede hacer que la
    cuenta esté bien y el negocio igual salga mal. */
 function RevAlertas({ r }) {
-  if (!r.alertas.length && !r.faltantes.length) {
+  /* Qué falta ya lo dice el hero, en grande. Repetirlo acá era la misma
+     frase dos veces en la misma pantalla. */
+  if (!r.alertas.length && r.faltantes.length) return null;
+  if (!r.alertas.length) {
     return (
       <div className="rev-alertas">
         <div className="rev-alerta nivel-verde">
@@ -460,12 +469,6 @@ function RevAlertas({ r }) {
   const icono = { rojo: 'alert', ambar: 'alert', gris: 'info', verde: 'check-circle' };
   return (
     <div className="rev-alertas">
-      {r.faltantes.length > 0 && (
-        <div className="rev-alerta nivel-gris">
-          <Icon n="info" s={15} c="#888"/>
-          <span>Sin estos datos no hay veredicto: <strong>{r.faltantes.join(', ')}</strong>.</span>
-        </div>
-      )}
       {r.alertas.map((a, i) => (
         <div key={i} className={`rev-alerta nivel-${a.nivel}`}>
           <Icon n={icono[a.nivel] || 'info'} s={15} c={(REV_COLOR[a.nivel] || REV_COLOR.gris).c}/>
@@ -595,6 +598,30 @@ function revParsearPegado(texto) {
   }).filter(f => f.nombre || f.costo_proveedor !== undefined);
 }
 
+/* Un número editable adentro de la tabla. Muestra "$ 35.000" mientras
+   no se lo toca y deja tipear "35000" (o "35.000", o "35000,5") cuando
+   sí. Si el costo y el techo están uno al lado del otro en formatos
+   distintos, el ojo los compara mal. */
+function RevInline({ valor, onChange, prefijo }) {
+  const [foco, setFoco]   = useState(false);
+  const [texto, setTexto] = useState('');
+  const hay = valor !== undefined && valor !== null && valor !== '' && Number.isFinite(Number(valor));
+  const mostrado = foco ? texto : (hay ? (prefijo ? prefijo + ' ' : '') + revNum(valor) : '');
+  const entrar = () => { setTexto(hay ? String(valor).replace('.', ',') : ''); setFoco(true); };
+  const cambiar = (e) => {
+    const t = e.target.value;
+    setTexto(t);
+    const limpio = t.replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.');
+    if (limpio === '' || limpio === '-') { onChange(undefined); return; }
+    const n = Number(limpio);
+    if (Number.isFinite(n)) onChange(n);
+  };
+  return (
+    <input className="rev-inline" value={mostrado} placeholder="—" inputMode="decimal"
+           onFocus={entrar} onBlur={() => setFoco(false)} onChange={cambiar}/>
+  );
+}
+
 function RevLote({ cfg, ficha }) {
   const [filas, setFilas]   = useState(() => revLeer(REV_LS_LOTE, []));
   const [pegado, setPegado] = useState('');
@@ -611,6 +638,14 @@ function RevLote({ cfg, ficha }) {
     delete b.costo_proveedor; delete b.precio_venta; delete b.sku; delete b.nombre;
     return b;
   }, [cfg, ficha]);
+
+  /* Lo que la lista hereda de la ficha y todavía no está. Sin costo de
+     envío todas las filas salen grises, y la nota de abajo culparía al
+     costo o al precio de cada producto, que no tienen la culpa. */
+  const faltaBase = useMemo(() => {
+    const prueba = window.SELLER.calcular(Object.assign({}, base, { costo_proveedor: 1, precio_venta: 1 }));
+    return prueba.faltantes || [];
+  }, [base]);
 
   const resultados = useMemo(() => window.SELLER.calcularLote(filas, base), [filas, base]);
   const resumen    = useMemo(() => window.SELLER.resumenLote(resultados), [resultados]);
@@ -657,6 +692,15 @@ function RevLote({ cfg, ficha }) {
 
   return (
     <div className="rev-lote">
+      {faltaBase.length > 0 && (
+        <div className="rev-alerta nivel-ambar">
+          <Icon n="alert" s={15} c={REV_COLOR.ambar.c}/>
+          <span>
+            En la pestaña <strong>Producto</strong> falta cargar: <strong>{faltaBase.join(', ')}</strong>.
+            La lista lo hereda de ahí, y sin eso ninguna fila puede tener veredicto.
+          </span>
+        </div>
+      )}
       <div className="rev-panel">
         <div className="rev-panel-head">
           <h3>Cargar la lista del proveedor</h3>
@@ -700,12 +744,13 @@ function RevLote({ cfg, ficha }) {
                 <strong>{resumen[k]}</strong> {t}
               </div>
             ))}
-            <div style={{ flex: 1 }}/>
-            <div className="rev-resumen-item">
-              Utilidad del lote comprable <strong>{revMoney(resumen.utilidad_total)}</strong>
-            </div>
-            <div className="rev-resumen-item">
-              ROI de cartera <strong>{revPct(resumen.roi_cartera)}</strong>
+            <div className="rev-resumen-plata">
+              <div className="rev-resumen-item">
+                Utilidad del lote comprable <strong>{revMoney(resumen.utilidad_total)}</strong>
+              </div>
+              <div className="rev-resumen-item">
+                ROI de cartera <strong>{revPct(resumen.roi_cartera)}</strong>
+              </div>
             </div>
           </div>
 
@@ -739,26 +784,26 @@ function RevLote({ cfg, ficha }) {
                 <tbody>
                   {ordenados.map(x => {
                     const col = REV_COLOR[x.veredicto] || REV_COLOR.gris;
-                    const dif = (x.techo_costo !== null && x.costo_proveedor > 0)
+                    const dif = (Number.isFinite(x.techo_costo) && x.costo_proveedor > 0)
                       ? x.techo_costo - x.costo_proveedor : null;
                     return (
                       <tr key={x._fila} className={`rev-fila-${x.veredicto}`}>
                         <td><span className="rev-dot" style={{ background: col.c }} title={col.label}/></td>
-                        <td>
-                          <div className="rev-fila-nombre">{x.nombre || <em className="soft">sin nombre</em>}</div>
+                        <td className="rev-td-producto">
+                          <div className="rev-fila-nombre" title={x.nombre || ''}>{x.nombre || <em className="soft">sin nombre</em>}</div>
                           {x.sku && <div className="rev-fila-sku">{x.sku}</div>}
                         </td>
                         <td className="num">
-                          <input className="rev-inline" value={filas[x._fila].costo_proveedor ?? ''}
-                                 onChange={e => editar(x._fila, 'costo_proveedor', e.target.value === '' ? undefined : Number(e.target.value))}/>
+                          <RevInline prefijo="$" valor={filas[x._fila].costo_proveedor}
+                                     onChange={v => editar(x._fila, 'costo_proveedor', v)}/>
                         </td>
                         <td className="num strong" style={{ color: col.c }}>{revMoney(x.techo_costo)}</td>
                         <td className="num" style={{ color: dif === null ? 'var(--ink-faint)' : dif >= 0 ? '#16A34A' : '#DC2626' }}>
-                          {dif === null ? '—' : (dif >= 0 ? '+' : '') + revMoney(dif).replace('$ ', '$')}
+                          {dif === null ? '—' : (dif >= 0 ? '+' : '') + revMoney(dif)}
                         </td>
                         <td className="num">
-                          <input className="rev-inline" value={filas[x._fila].precio_venta ?? ''}
-                                 onChange={e => editar(x._fila, 'precio_venta', e.target.value === '' ? undefined : Number(e.target.value))}/>
+                          <RevInline prefijo="$" valor={filas[x._fila].precio_venta}
+                                     onChange={v => editar(x._fila, 'precio_venta', v)}/>
                         </td>
                         <td className="num">{x.veredicto === 'gris' ? '—' : revPct(x.margen)}</td>
                         <td className="num">{x.veredicto === 'gris' ? '—' : revMoney(x.utilidad)}</td>
@@ -991,6 +1036,22 @@ function CampModal({ abierto, fila, onGuardar, onCerrar, ref_ }) {
                     ayuda="Las que entraron por otra publicación. Opcional."/>
         </div>
 
+        {prev && (
+          <div className="camp-preview" style={{ background: col.bg, borderColor: col.c + '44' }}>
+            <div className="camp-preview-izq">
+              <span className="rev-dot" style={{ background: col.c }}/>
+              <strong style={{ color: col.c }}>{prev.estado}</strong>
+              {prev.decision && <span className="camp-preview-dec">· {prev.decision}</span>}
+            </div>
+            <div className="camp-preview-der">
+              <span>ROAS <b>{prev.roas === null ? '—' : revNum(prev.roas, 2) + 'x'}</b></span>
+              <span>Mínimo <b>{prev.roas_minimo === null || prev.roas_minimo === undefined
+                ? '—' : revNum(prev.roas_minimo, 2) + 'x'}</b></span>
+              <span>Ganancia <b>{prev.ganancia === null ? '—' : revMoney(prev.ganancia)}</b></span>
+            </div>
+          </div>
+        )}
+
         <div className="camp-modal-sec">
           <h4>Lo que vende sola</h4>
           <p className="camp-modal-nota">
@@ -1054,20 +1115,6 @@ function CampModal({ abierto, fila, onGuardar, onCerrar, ref_ }) {
           </div>
         </div>
 
-        {prev && (
-          <div className="camp-preview" style={{ background: col.bg, borderColor: col.c + '44' }}>
-            <div className="camp-preview-izq">
-              <span className="rev-dot" style={{ background: col.c }}/>
-              <strong style={{ color: col.c }}>{prev.estado}</strong>
-            </div>
-            <div className="camp-preview-der">
-              <span>ROAS <b>{prev.roas === null ? '—' : revNum(prev.roas, 2) + 'x'}</b></span>
-              <span>Objetivo <b>{prev.roas_minimo === null || prev.roas_minimo === undefined
-                ? '—' : revNum(prev.roas_minimo, 2) + 'x'}</b></span>
-              <span>Ganancia <b>{prev.ganancia === null ? '—' : revMoney(prev.ganancia)}</b></span>
-            </div>
-          </div>
-        )}
       </div>
     </Modal>
   );
@@ -1081,8 +1128,8 @@ function CampReferencias({ r }) {
   const hay = r && Number.isFinite(r.roas_equilibrio);
   if (!hay) {
     return (
-      <div className="rev-panel camp-ref-vacio">
-        <Icon n="alert" s={15} c={REV_COLOR.gris.c}/>
+      <div className="rev-alerta nivel-ambar camp-ref-vacio">
+        <Icon n="alert" s={15} c={REV_COLOR.ambar.c}/>
         <div>
           <strong>Todavía no hay objetivo.</strong>{' '}
           {r && r.faltante_para_publicar > 0
@@ -1137,22 +1184,32 @@ function CampReferencias({ r }) {
 }
 
 /* ══ UNA FILA ═══════════════════════════════════════════════════════════ */
-function CampFila({ d, onEditar, onBorrar, abierta, onAbrir }) {
+function CampFila({ d, objML, onEditar, onBorrar, abierta, onAbrir }) {
   const col = REV_COLOR[d.veredicto] || REV_COLOR.gris;
   const gan = d.ganancia;
   return (
     <>
       <tr className={`camp-fila ${abierta ? 'abierta' : ''}`} onClick={onAbrir}>
-        <td className="camp-td-nombre">
-          <Icon n={abierta ? 'chev-down' : 'chev-right'} s={13} c="var(--ink-muted)"/>
-          <span>{d.nombre || <em>sin nombre</em>}</span>
+        <td className="camp-td-nombre" title={d.nombre || ''}>
+          <div className="camp-nombre">
+            <Icon n={abierta ? 'chev-down' : 'chev-right'} s={13} c="var(--ink-muted)"/>
+            <span>{d.nombre || <em>sin nombre</em>}</span>
+          </div>
         </td>
-        <td className="num">{d.roas_minimo === null || d.roas_minimo === undefined
-          ? '—' : revNum(d.roas_minimo, 2) + 'x'}</td>
+        <td className="num">
+          {d.roas_minimo === null || d.roas_minimo === undefined
+            ? '—' : revNum(d.roas_minimo, 2) + 'x'}
+          {objML > 0 && d.roas_minimo > 0 && (
+            <span className="camp-rango" title="El objetivo que tiene cargado esta campaña en Mercado Libre"
+                  style={objML < d.roas_minimo ? { color: REV_COLOR.ambar.c } : undefined}>
+              en ML {revNum(objML, 2)}x
+            </span>
+          )}
+        </td>
         <td className="num">
           {d.roas === null ? '—' : <strong>{revNum(d.roas, 2)}x</strong>}
           {d.roas !== null && d.roas_alto !== null && (
-            <span className="camp-rango">{revNum(d.roas_bajo, 1)}–{revNum(d.roas_alto, 1)}</span>
+            <span className="camp-rango">{revNum(d.roas_bajo, 1)} – {revNum(d.roas_alto, 1)}</span>
           )}
         </td>
         <td className="num">
@@ -1234,7 +1291,12 @@ function CampFila({ d, onEditar, onBorrar, abierta, onAbrir }) {
 
 /* ══ LA PESTAÑA ═════════════════════════════════════════════════════════ */
 function CampPanel({ resultado }) {
-  const [filas, setFilas]   = useState(() => revLeer(CAMP_LS, []));
+  const [filas, setFilas]   = useState(() => {
+    const v = revLeer(CAMP_LS, []);
+    const base = Date.now();
+    return (Array.isArray(v) ? v : []).map((f, i) =>
+      f && f.id ? f : Object.assign({}, f, { id: 'c' + base + '-' + i }));
+  });
   const [modal, setModal]   = useState(null);   /* null | {} | fila */
   const [abierta, setAbierta] = useState(null);
   const toast = useToast();
@@ -1315,7 +1377,7 @@ function CampPanel({ resultado }) {
                 <thead>
                   <tr>
                     <th>Campaña</th>
-                    <th className="num">ROAS objetivo</th>
+                    <th className="num">ROAS mínimo</th>
                     <th className="num">ROAS real</th>
                     <th className="num">Ganancia</th>
                     <th>Estado</th>
@@ -1326,6 +1388,7 @@ function CampPanel({ resultado }) {
                 <tbody>
                   {orden.map(({ d, i }) => (
                     <CampFila key={filas[i].id || i} d={d}
+                              objML={Number(filas[i].roas_objetivo_ml) || 0}
                               abierta={abierta === i}
                               onAbrir={() => setAbierta(a => a === i ? null : i)}
                               onEditar={() => setModal(filas[i])}
@@ -1338,11 +1401,13 @@ function CampPanel({ resultado }) {
             <p className="rev-explica">
               <Icon n="info" s={13} c="var(--ink-muted)"/>
               <span>
-                La columna <strong>ROAS objetivo</strong> no se escribe: sale del costo y
-                el precio que cargaste en la pestaña Producto. El rango chiquito abajo del
-                ROAS real es dónde podría estar el número verdadero con la cantidad de
-                ventas que tenés — cuando ese rango cruza el objetivo, el estado es gris,
-                porque todavía no alcanza para decidir.
+                La columna <strong>ROAS mínimo</strong> no se escribe: sale del costo y
+                el precio que cargaste en la pestaña Producto, y es el umbral que debería
+                estar cargado en ML. Si cargaste el que tiene la campaña, aparece debajo —
+                en ámbar cuando está más bajo, porque entonces ML compra clics que a vos no
+                te cierran. El rango chiquito abajo del ROAS real es dónde podría estar el
+                número verdadero con la cantidad de ventas que tenés: cuando ese rango cruza
+                el umbral, el estado es gris, porque todavía no alcanza para decidir.
               </span>
             </p>
           </>
@@ -1395,7 +1460,7 @@ function MetricasSellerPage() {
         </div>
       </div>
 
-      {(tab === 'ficha' || tab === 'lote') && (
+      {tab === 'ficha' && (
         <>
           <RevHero r={resultado} costoPedido={Number(ficha.costo_proveedor) || 0}/>
           <RevMetricas r={resultado} cfg={cfg}/>

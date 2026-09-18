@@ -302,6 +302,9 @@ check('un costo muy por encima del techo da rojo', carisimo.veredicto === 'rojo'
   `dio ${carisimo.veredicto}, margen ${(carisimo.margen * 100).toFixed(1)}%`);
 check('y dice cuánto hay que negociar',
   carisimo.alertas.some(a => a.nivel === 'rojo' && /techo/i.test(a.texto)));
+check('y lo dice en plata, no en un número pelado',
+  carisimo.alertas.some(a => a.nivel === 'rojo' && /pide \$ [\d.]+ y el techo es \$ [\d.]+/.test(a.texto)),
+  carisimo.alertas.filter(a => a.nivel === 'rojo').map(a => a.texto).join(' | '));
 
 /* Cargos imposibles: comisión premium + IIBB + publicidad alta. El motor
    no puede devolver un precio, y el veredicto tiene que ser rojo. */
@@ -343,6 +346,9 @@ check('el barato da verde y el caro da rojo',
   lote.map(x => `${x.sku}:${x.veredicto}`).join(' '));
 check('al que le falta el precio le da gris, no lo tira',
   lote[3].veredicto === 'gris');
+check('cada fila trae lo que pide el proveedor, para la columna Diferencia',
+  lote.every(x => Number.isFinite(x.costo_proveedor)) && lote[0].costo_proveedor === LISTA[0].costo_proveedor,
+  lote.map(x => x.costo_proveedor).join(' '));
 
 const res = M.resumenLote(lote);
 check('el resumen cuenta los cuatro estados',
@@ -473,6 +479,14 @@ const diag = (o) => M.diagnosticarCampania(Object.assign({ dias_desde_fin: 30 },
 const muchas = diag({ nombre: 'ok', inversion: 120000, ingresos: 1200000, ventas: 40 });
 check('con muchas ventas y buen ROAS: verde',
   muchas.veredicto === 'verde', muchas.veredicto + ' / ' + muchas.estado);
+/* La fila dice lo mismo que la leyenda: si la leyenda promete "Para
+   escalar" y la fila dice "Muy eficiente", el dueño busca cuál es cuál. */
+check('el estado verde usa la misma palabra que la leyenda: "Para escalar"',
+  muchas.estado === 'Para escalar', muchas.estado);
+const alLimite = diag({ nombre: 'límite', inversion: 120000, ingresos: 600000, ventas: 40 });
+check('el estado ámbar usa la misma palabra que la leyenda: "Al límite"',
+  alLimite.veredicto === 'ambar' && alLimite.estado === 'Al límite',
+  alLimite.veredicto + ' / ' + alLimite.estado);
 
 const pocas = diag({ nombre: 'pocas', inversion: 9000, ingresos: 90000, ventas: 3 });
 check('el MISMO ROAS con 3 ventas ya no es verde: el ruido no se pinta',
@@ -492,6 +506,8 @@ const ceroBajo = diag({ nombre: 'cero', inversion: 2000, ingresos: 0, ventas: 0 
 check('cero ventas con poco gasto sí es gris, y dice cuánto gastar',
   ceroBajo.veredicto === 'gris' && /Gastar hasta/.test(ceroBajo.decision),
   ceroBajo.veredicto + ' / ' + ceroBajo.decision);
+check('y ese tope está en plata, con separador de miles',
+  /Gastar hasta \$ [\d.]+ o apagar/.test(ceroBajo.decision), ceroBajo.decision);
 
 /* La ventana de atribución: sesgo, no ruido. Ningún intervalo lo corrige. */
 const caliente = M.diagnosticarCampania(

@@ -211,6 +211,7 @@ body {
 .main-content {
   margin-left: var(--sidebar-w);
   flex: 1;
+  min-width: 0; /* sin esto, una tabla ancha estira la página entera en vez de scrollear en su panel */
   min-height: 100vh;
 }
 
@@ -3203,7 +3204,8 @@ tr.row-inactive:hover { opacity: 0.85; }
   font-family: var(--mono); font-size: 22px; font-weight: 700; letter-spacing: -.02em;
   margin: 5px 0 2px; font-variant-numeric: tabular-nums;
 }
-.rev-metrica-meta { font-size: 11px; color: var(--ink-faint); }
+.rev-metrica-meta { font-size: 11px; color: var(--ink-muted); }
+.rev-metrica-v.vacio { color: var(--ink-faint); }
 
 /* ── Alertas ── */
 .rev-alertas { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--rev-gap); }
@@ -3257,7 +3259,7 @@ tr.row-inactive:hover { opacity: 0.85; }
 .rev-campo-input::placeholder { color: var(--ink-faint); font-weight: 400; }
 select.rev-campo-input { font-family: var(--font); cursor: pointer; }
 .rev-campo-fijo { font-family: var(--mono); font-size: 12px; color: var(--ink-faint); flex-shrink: 0; }
-.rev-campo-ayuda { font-size: 10.5px; color: var(--ink-faint); line-height: 1.35; }
+.rev-campo-ayuda { font-size: 11px; color: var(--ink-muted); line-height: 1.35; }
 
 .rev-campo-bool { grid-column: span 2; flex-direction: row; align-items: flex-start; gap: 9px; }
 .rev-campo-bool input { margin-top: 2px; width: 15px; height: 15px; accent-color: var(--ink); cursor: pointer; }
@@ -3311,8 +3313,8 @@ select.rev-campo-input { font-family: var(--font); cursor: pointer; }
    El corazón de la herramienta, escrito donde se mira. Los cargos que se
    cobran como % de la venta van en el denominador: sumarlos al costo es
    el error que hace que una planilla prometa margen y entregue pérdida. */
-.rev-formula { padding: 16px 18px; background: #fafaff; border-top: 1px solid var(--border); }
-.rev-formula-tit { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--purple); margin-bottom: 7px; }
+.rev-formula { padding: 16px 18px; background: var(--paper-off); border-top: 1px solid var(--border); }
+.rev-formula-tit { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-muted); margin-bottom: 7px; }
 .rev-formula p { font-size: 11.5px; line-height: 1.5; color: var(--ink-soft); margin-bottom: 12px; }
 .rev-formula-linea {
   display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;
@@ -3320,7 +3322,7 @@ select.rev-campo-input { font-family: var(--font); cursor: pointer; }
   padding: 10px 0;
 }
 .rev-formula-linea .op { color: var(--ink-faint); }
-.rev-formula-linea .res { font-size: 17px; font-weight: 700; color: var(--purple); }
+.rev-formula-linea .res { font-size: 17px; font-weight: 700; color: var(--ink); }
 .rev-formula-linea .frac { display: inline-flex; flex-direction: column; text-align: center; }
 .rev-formula-linea .arriba { padding: 0 8px 3px; border-bottom: 1.5px solid var(--ink-soft); }
 .rev-formula-linea .abajo { padding: 3px 8px 0; font-size: 11.5px; }
@@ -3337,7 +3339,7 @@ select.rev-campo-input { font-family: var(--font); cursor: pointer; }
 .rev-inversa + .rev-inversa { border-left: 1px solid var(--border); }
 .rev-inversa-k { font-size: 9px; font-weight: 700; letter-spacing: .11em; text-transform: uppercase; color: var(--ink-muted); }
 .rev-inversa-v { font-family: var(--mono); font-size: 19px; font-weight: 700; letter-spacing: -.02em; margin: 4px 0 3px; font-variant-numeric: tabular-nums; }
-.rev-inversa-s { font-size: 10.5px; color: var(--ink-faint); line-height: 1.4; }
+.rev-inversa-s { font-size: 11px; color: var(--ink-muted); line-height: 1.4; }
 
 /* ── EL LOTE ──
    Nadie carga 40 productos de a uno dos veces. Si la carga masiva no
@@ -3359,6 +3361,7 @@ select.rev-campo-input { font-family: var(--font); cursor: pointer; }
   padding: 12px 18px; box-shadow: var(--shadow-xs); font-size: 12px; color: var(--ink-muted);
 }
 .rev-resumen-item { display: flex; align-items: center; gap: 6px; }
+.rev-resumen-plata { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-left: auto; }
 .rev-resumen-item strong { color: var(--ink); font-family: var(--mono); font-variant-numeric: tabular-nums; }
 
 .rev-orden { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--ink-faint); }
@@ -3369,7 +3372,18 @@ select.rev-campo-input { font-family: var(--font); cursor: pointer; }
 .rev-orden-btn:hover { background: var(--paper-dim); color: var(--ink); }
 .rev-orden-btn.activo { background: var(--ink); color: var(--paper); }
 
-.rev-tabla-scroll { overflow-x: auto; }
+.rev-tabla-scroll, .camp-tabla-wrap {
+  overflow-x: auto;
+  background:
+    linear-gradient(to right, var(--paper) 40%, rgba(255,255,255,0)) 0 0,
+    linear-gradient(to left,  var(--paper) 40%, rgba(255,255,255,0)) 100% 0,
+    linear-gradient(to right, rgba(0,0,0,.09), rgba(0,0,0,0)) 0 0,
+    linear-gradient(to left,  rgba(0,0,0,.09), rgba(0,0,0,0)) 100% 0;
+  background-repeat: no-repeat;
+  background-size: 48px 100%, 48px 100%, 16px 100%, 16px 100%;
+  background-attachment: local, local, scroll, scroll;
+}
+.rev-tabla-scroll::-webkit-scrollbar-thumb, .camp-tabla-wrap::-webkit-scrollbar-thumb { background: var(--ink-faint); }
 .rev-tabla-lote td { padding: 6px 12px; }
 .rev-tabla-lote th { padding: 9px 12px; }
 .rev-fila-nombre { font-weight: 600; }
@@ -3377,12 +3391,25 @@ select.rev-campo-input { font-family: var(--font); cursor: pointer; }
 .rev-fila-rojo td { background: rgba(220,38,38,.028); }
 .rev-fila-gris td { background: rgba(0,0,0,.018); }
 .rev-inline {
-  width: 92px; text-align: right; border: 1px solid transparent; border-radius: 4px;
+  width: 104px; text-align: right; border: 1px solid transparent; border-radius: 4px;
   background: transparent; padding: 4px 6px; font-family: var(--mono); font-size: 12px;
   color: var(--ink); outline: 0; font-variant-numeric: tabular-nums;
 }
 .rev-inline:hover { border-color: var(--border-md); }
 .rev-inline:focus { border-color: var(--ink); background: var(--paper); }
+.rev-inline::placeholder { color: var(--ink-faint); }
+/* La lista tiene diez columnas: en un notebook angosto el nombre se
+   partía en tres renglones y el SKU en dos. Que la tabla tenga su ancho
+   y se desplace de costado, como la de campañas. */
+.rev-tabla-lote { min-width: 860px; }
+/* max-width:0 en la celda es el truco para que una tabla automática deje
+   que esta columna se achique: sin eso, el nombre más largo fija el ancho
+   mínimo de toda la tabla. El width le da su parte cuando sobra lugar. */
+.rev-tabla-lote .rev-td-producto { width: 30%; max-width: 0; min-width: 210px; }
+.rev-tabla-lote .rev-fila-nombre { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rev-tabla-lote .rev-fila-sku { white-space: nowrap; }
+.rev-tabla-lote .btn-ghost-sm { opacity: .35; transition: opacity .12s; }
+.rev-tabla-lote tr:hover .btn-ghost-sm { opacity: 1; }
 
 /* ── Nota sobre los supuestos ── */
 .rev-nota-supuestos { padding: 16px 18px; border-top: 1px solid var(--border); background: #fffdf5; }
@@ -3426,12 +3453,8 @@ select.rev-campo-input { font-family: var(--font); cursor: pointer; }
   line-height: 1.1; font-variant-numeric: tabular-nums;
 }
 .camp-ref-gasto { font-size: 11px; color: var(--ink-soft); font-weight: 500; }
-.camp-ref-ayuda { font-size: 10.5px; color: var(--ink-faint); line-height: 1.35; margin-top: 2px; }
+.camp-ref-ayuda { font-size: 11px; color: var(--ink-muted); line-height: 1.35; margin-top: 2px; }
 
-.camp-ref-vacio {
-  display: flex; gap: 11px; align-items: flex-start;
-  padding: 15px 18px; font-size: 12.5px; line-height: 1.5; color: var(--ink-soft);
-}
 .camp-ref-vacio svg { flex-shrink: 0; margin-top: 2px; }
 
 /* ── Resumen de cartera ── */
@@ -3449,22 +3472,31 @@ select.rev-campo-input { font-family: var(--font); cursor: pointer; }
    overflow-x propio: con siete columnas y nombres largos, en un notebook
    angosto la página entera se desplazaba de costado y el lateral quedaba
    fuera de pantalla. Que el scroll sea de la tabla y no del documento. */
-.camp-tabla-wrap { overflow-x: auto; }
-.camp-tabla { min-width: 780px; }
+/* .camp-tabla-wrap: el scroll con sombra está junto a .rev-tabla-scroll */
+.camp-tabla { min-width: 840px; }
 .camp-fila { cursor: pointer; transition: background .1s; }
 .camp-fila:hover { background: var(--paper-dim); }
 .camp-fila.abierta { background: var(--paper-off); }
 .camp-fila.abierta td { border-bottom-color: transparent; }
 
-.camp-td-nombre {
-  display: flex; align-items: center; gap: 7px;
-  font-weight: 600; max-width: 230px;
-}
-.camp-td-nombre span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.camp-td-nombre em { color: var(--ink-faint); font-weight: 400; }
-.camp-td-decision { font-size: 12px; color: var(--ink-soft); }
+/* El flex va en un div adentro de la celda, no en el <td>: un td con
+   display:flex deja de ser celda de tabla y su borde inferior queda a
+   otra altura que el del resto de la fila. */
+.camp-td-nombre { font-weight: 600; width: 32%; max-width: 0; min-width: 200px; }
+.camp-nombre { display: flex; align-items: center; gap: 7px; }
+.camp-nombre span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.camp-nombre em { color: var(--ink-faint); font-weight: 400; }
+.camp-td-decision { font-size: 12px; color: var(--ink-soft); min-width: 230px; }
 .camp-td-acc { text-align: right; white-space: nowrap; }
-.camp-td-acc .icon-btn { opacity: 0; transition: opacity .12s; }
+.camp-td-acc .icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; padding: 0; margin-left: 4px;
+  background: none; border: 1px solid var(--border-md); border-radius: 4px;
+  color: var(--ink-soft); cursor: pointer; font-family: var(--font);
+  opacity: 0; transition: opacity .12s, background .12s, color .12s;
+}
+.camp-td-acc .icon-btn:hover { background: var(--paper-dim); color: var(--ink); }
+.camp-td-acc .icon-btn[title="Borrar"]:hover { background: var(--red-bg); color: var(--red); }
 .camp-fila:hover .camp-td-acc .icon-btn,
 .camp-fila.abierta .camp-td-acc .icon-btn { opacity: 1; }
 
@@ -3472,8 +3504,8 @@ select.rev-campo-input { font-family: var(--font); cursor: pointer; }
    número con su margen de error, y es lo único que impide leer "2,1x"
    con tres ventas como si fuera un hecho. */
 .camp-rango {
-  display: block; font-size: 10px; font-weight: 500;
-  color: var(--ink-faint); letter-spacing: -.01em; margin-top: 1px;
+  display: block; font-size: 10.5px; font-weight: 500;
+  color: var(--ink-muted); letter-spacing: 0; margin-top: 1px;
 }
 
 .camp-estado {
@@ -3483,7 +3515,7 @@ select.rev-campo-input { font-family: var(--font); cursor: pointer; }
 }
 
 /* ── El detalle desplegado ── */
-.camp-detalle-fila td { padding: 0 !important; background: var(--paper-off); }
+.camp-detalle-fila td { padding: 0 !important; background: var(--paper-off); max-width: 0; }
 .camp-detalle {
   display: flex; flex-direction: column; gap: 9px;
   padding: 4px 18px 16px;
@@ -3515,7 +3547,7 @@ select.rev-campo-input { font-family: var(--font); cursor: pointer; }
   padding: 40px 24px; text-align: center;
 }
 .camp-vacio strong { font-size: 13.5px; }
-.camp-vacio span { font-size: 12px; color: var(--ink-faint); max-width: 400px; line-height: 1.5; }
+.camp-vacio span { font-size: 12px; color: var(--ink-muted); max-width: 400px; line-height: 1.5; }
 
 /* ── El modal ── */
 .camp-modal { display: flex; flex-direction: column; gap: 15px; }
@@ -3525,7 +3557,7 @@ select.rev-campo-input { font-family: var(--font); cursor: pointer; }
   font-size: 9.5px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
   color: var(--ink-muted); padding-top: 12px; border-top: 1px solid var(--border);
 }
-.camp-modal-nota { font-size: 11.5px; color: var(--ink-faint); line-height: 1.45; margin: -3px 0 0; }
+.camp-modal-nota { font-size: 11.5px; color: var(--ink-muted); line-height: 1.45; margin: -3px 0 0; }
 
 /* El cotejo contra lo que el dueño cargó en ML. Es el hallazgo más
    accionable del módulo: casi nadie pone en ML un objetivo que salga de
@@ -3544,6 +3576,11 @@ select.rev-campo-input { font-family: var(--font); cursor: pointer; }
   gap: 10px 18px; padding: 11px 15px; border-radius: var(--radius); border: 1px solid;
 }
 .camp-preview-izq { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.camp-preview-dec { color: var(--ink-muted); font-size: 12px; }
+/* El pie con "Guardar" siempre a la vista: el formulario es más alto que
+   una pantalla de notebook, y un botón que hay que ir a buscar con el
+   scroll es un botón que a veces no se aprieta. */
+.modal:has(.camp-modal) .modal-ft { position: sticky; bottom: 0; z-index: 1; box-shadow: 0 -10px 16px -12px rgba(0,0,0,.18); }
 .camp-preview-der { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 11.5px; color: var(--ink-soft); }
 .camp-preview-der b { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--ink); }
 

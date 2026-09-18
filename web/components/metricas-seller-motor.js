@@ -555,7 +555,7 @@
       alertas.push({ nivel: 'gris', texto: `La comisión de ${A.canal.label} es un supuesto, no está verificada contra tu cuenta. Confirmala en la publicación real antes de comprar.` });
     }
     if (techo_costo !== null && num(f.costo_proveedor) > 0 && num(f.costo_proveedor) > techo_costo) {
-      alertas.push({ nivel: 'rojo', texto: `El proveedor pide ${r2(num(f.costo_proveedor))} y el techo es ${techo_costo}. Hay que negociar ${r2(num(f.costo_proveedor) - techo_costo)} o subir el precio.` });
+      alertas.push({ nivel: 'rojo', texto: `El proveedor pide ${plataMotor(num(f.costo_proveedor))} y el techo es ${plataMotor(techo_costo)}. Hay que negociar ${plataMotor(num(f.costo_proveedor) - techo_costo)} o subir el precio.` });
     }
 
     let veredicto;
@@ -655,7 +655,12 @@
       } catch (e) {
         res = { veredicto: 'gris', faltantes: ['Fila ilegible'], alertas: [], _error: String(e && e.message || e) };
       }
-      return Object.assign({ _fila: i, sku: fila.sku, nombre: fila.nombre }, res);
+      /* Lo que pide el proveedor viaja con el resultado: la columna
+         "Diferencia" (techo menos pedido) y el orden por "lo que sobra"
+         lo necesitan al lado del techo, no en otra lista. */
+      return Object.assign({ _fila: i, sku: fila.sku, nombre: fila.nombre,
+                             costo_proveedor: num(fila.costo_proveedor, 0),
+                             precio_venta: num(fila.precio_venta, 0) }, res);
     });
   }
 
@@ -886,14 +891,14 @@
       estado    = 'Sin evidencia';
       const umbral = R.precio_bruto > 0 && eq > 0
         ? Math.ceil(R.precio_bruto * ventasAlto(0) / eq) : null;
-      decision = umbral ? `Gastar hasta ${umbral} o apagar` : 'Seguir midiendo';
+      decision = umbral ? `Gastar hasta ${plataMotor(umbral)} o apagar` : 'Seguir midiendo';
     } else if (roas_bajo !== null && umbral_verde && roas_bajo >= umbral_verde) {
       veredicto = 'verde';
-      estado    = 'Muy eficiente';
+      estado    = 'Para escalar';
       decision  = 'Escalar';
     } else if (roas_bajo !== null && roas_bajo >= eq) {
       veredicto = 'ambar';
-      estado    = roas >= (min || eq) ? 'Eficiente' : 'Ineficiente moderada';
+      estado    = 'Al límite';
       decision  = 'Optimizar antes de escalar';
     } else {
       veredicto = 'gris';
@@ -986,8 +991,11 @@
     };
   }
 
-  /* Porcentaje corto, solo para los textos de alerta del motor. */
+  /* Porcentaje corto y plata en argentino, solo para los textos que el
+     motor arma él mismo. Un "265975" suelto adentro de una decisión se
+     lee como un código, no como plata. */
   function revPctMotor(x) { return (Number(x) * 100).toFixed(1).replace('.', ',') + '%'; }
+  function plataMotor(n) { return '$ ' + Math.round(Number(n) || 0).toLocaleString('es-AR'); }
 
   function diagnosticarCampanias(lista, ref) {
     const filas = Array.isArray(lista) ? lista : [];
