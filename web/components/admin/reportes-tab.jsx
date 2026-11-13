@@ -85,7 +85,34 @@ function ReportesTab() {
     return !!(t && l && t.employee_id === l.employee_id);
   }, [kpis]);
 
-  const onExport = async () => {
+  /* 0178 — Con un mes elegido el botón baja el reporte mensual: UNA hoja,
+     una fila por recibo, una columna por concepto y fila de totales
+     (recibos_AAAA-MM.xlsx). Entran los recibos EMITIDOS cuyo período
+     liquidado empieza en ese mes; ojo que los KPIs de arriba cuentan por
+     fecha de pago, así que pueden no coincidir con el Excel.
+     Con "Mes: todos" sigue bajando el Excel anual de siempre (Resumen +
+     una hoja por empleado, onExportAnual): ese formato no se tocó. */
+  const onExportMes = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const r = await A.exportRecibosMesXlsx(year, Number(mes));
+      const nombreMes = A.getMonthName(Number(mes));
+      if (r.vacio) {
+        toast.error(`No hay recibos emitidos con período en ${nombreMes} ${year}. No se descargó nada.`);
+        return;
+      }
+      toast.success(`Excel descargado: ${r.filas} recibo${r.filas === 1 ? '' : 's'} de ${nombreMes} ${year}`);
+    } catch (err) {
+      toast.error(err.message || 'No se pudo exportar');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const onExport = () => (mes === 'todos' ? onExportAnual() : onExportMes());
+
+  const onExportAnual = async () => {
     if (exporting || !payload) return;
     setExporting(true);
     try {
@@ -150,8 +177,11 @@ function ReportesTab() {
         </select>
         <div style={{flex:1}}/>
         <button className="btn-primary" onClick={onExport}
-                disabled={exporting || !payload || tabla.length === 0}>
-          {exporting ? 'Generando…' : (<><Icon n="download" s={13}/> Exportar Excel</>)}
+                disabled={exporting || (mes === 'todos' && (!payload || tabla.length === 0))}
+                title={mes === 'todos'
+                  ? `Excel del año ${year}: resumen y una hoja por empleado`
+                  : 'Una sola hoja: un recibo por fila (recibos emitidos cuyo período empieza en el mes)'}>
+          {exporting ? 'Generando…' : (<><Icon n="download" s={13}/> {mes === 'todos' ? 'Exportar Excel' : 'Exportar recibos del mes'}</>)}
         </button>
       </div>
 

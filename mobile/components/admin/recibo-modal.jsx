@@ -12,6 +12,14 @@
    (inmutables) y solo permite editar items, fecha_pago, notas.
    Si estado='anulado': todo read-only + banner rojo.
 
+   0178 — Valor del día editable, solo en ESTE recibo (recibos.valor_dia;
+   no toca al empleado ni a otros recibos). Sin tocarlo todo es como antes:
+   sueldo/30 y no se manda nada. Si se cambia, los items que lo usan como
+   valor unitario (marcados "linked", marca que vive solo en el front) se
+   recalculan y con ellos el total. Se edita donde se editan los items:
+   alta y edición, nunca en anulados (el backend además rechaza anulados y
+   períodos cerrados).
+
    Props: { mode: 'create'|'edit', initial?, onClose, onSuccess,
             onAfterCreatePdf? (opcional, dispara PDF tras crear) }
    ══ */
@@ -47,6 +55,13 @@ function ReciboModal({ mode, initial, onClose, onSuccess, onAfterCreatePdf }) {
   const [sueldoBasico, setSueldoBasico] = useState(
     initial && initial.sueldo_basico != null ? String(initial.sueldo_basico) : ''
   );
+  /* 0178: valor del día con el que se abrió el recibo (el propio, o sueldo/30). */
+  const vdInicial = (isEdit && initial) ? A.valorDiaDeRecibo(initial) : 0;
+  /* Misma cuenta con la que se precargó el item, antes y después de la 0178
+     (vd.toFixed(2)). Con Math.round(x*100) un sueldo/30 en medio centavo
+     (21,45 / 30 = 0,715: toFixed da 0,71, Math.round 0,72) dejaba al item
+     sin seguir el valor del día al reabrir el recibo. */
+  const aDosDec = (x) => Number(x).toFixed(2);
   const [items, setItems] = useState(
     Array.isArray(initial && initial.items) ? initial.items.map(it => ({
       concepto: it.concepto || '',
@@ -54,6 +69,9 @@ function ReciboModal({ mode, initial, onClose, onSuccess, onAfterCreatePdf }) {
       valor_unitario: it.valor_unitario != null ? String(it.valor_unitario) : '',
       subtotal: it.subtotal != null ? Number(it.subtotal) : 0,
       tipo: it.tipo || 'haber',
+      /* 0178: usa el valor del día como valor unitario → lo sigue si se edita. */
+      linked: vdInicial > 0 && it.valor_unitario != null && it.valor_unitario !== ''
+        && aDosDec(it.valor_unitario) === aDosDec(vdInicial),
     })) : []
   );
   const [notas, setNotas] = useState((initial && initial.notas) || '');
@@ -93,8 +111,52 @@ function ReciboModal({ mode, initial, onClose, onSuccess, onAfterCreatePdf }) {
     return employees.find(e => e.id === employeeId) || null;
   }, [employeeId, employees]);
 
-  /* Valor del día (calc en vivo) */
-  const valorDia = useMemo(() => A.calcValorDia(sueldoBasico), [sueldoBasico]);
+  /* Valor del día automático (sueldo / 30, calc en vivo) */
+  const valorDiaAuto = useMemo(() => A.calcValorDia(sueldoBasico), [sueldoBasico]);
+
+  /* 0178 — Valor del día propio del recibo */
+  const valorDiaPropio = (initial && initial.valor_dia != null && initial.valor_dia !== ''
+                          && Number(initial.valor_dia) > 0) ? Number(initial.valor_dia) : null;
+  const [valorDiaInput, setValorDiaInput] = useState(valorDiaPropio != null ? valorDiaPropio.toFixed(2) : '');
+  const [valorDiaTocado, setValorDiaTocado] = useState(false);
+  /* ¿La base ya tiene la columna? Un recibo leído con select('*') la trae
+     como clave (aunque sea null); si no, se pregunta. false = falta la 0178. */
+  const [colValorDia, setColValorDia] = useState(
+    (initial && Object.prototype.hasOwnProperty.call(initial, 'valor_dia')) ? true : null
+  );
+  useEffect(() => {
+    if (colValorDia !== null || isAnulado) return;
+    let cancelled = false;
+    A.reciboTieneValorDia().then(r => { if (!cancelled) setColValorDia(r); });
+    return () => { cancelled = true; };
+    /* eslint-disable-next-line */
+  }, []);
+  const valorDiaParse = valorDiaTocado ? A.parseValorDia(valorDiaInput) : null;
+  /* El que vale ahora: lo tipeado (si es válido) > el propio > sueldo/30 */
+  const valorDia = valorDiaTocado
+    ? (valorDiaParse.ok ? valorDiaParse.valor : null)
+    : (valorDiaPropio != null ? valorDiaPropio : valorDiaAuto);
+  const valorDiaBloqueado = isAnulado || colValorDia === false;
+  const valorDiaError = errors.valorDia || (valorDiaParse && !valorDiaParse.ok ? valorDiaParse.error : null);
+  const itemsLinked = items.filter(it => it.linked).length;
+
+  const onChangeValorDia = (txt) => {
+    setValorDiaInput(txt);
+    setValorDiaTocado(true);
+    if (errors.valorDia) setErrors(e => ({ ...e, valorDia: undefined }));
+    const r = A.parseValorDia(txt);
+    if (!r.ok) return; /* los items quedan como estaban hasta que el valor sea válido */
+    setItems(arr => arr.map(it => {
+      if (!it.linked) return it;
+      /* igual que si se tipeara el valor en su "Vlr. Unit." (ver updateItem) */
+      const c = Number(it.cantidad);
+      return { ...it, valor_unitario: r.valor.toFixed(2), subtotal: Number.isFinite(c) ? c * r.valor : 0 };
+    }));
+  };
+
+  /* Valor del día para items nuevos (precarga / insertar día). Sin tocar el
+     campo es exactamente lo de antes de la 0178: sueldo/30 sin redondear. */
+  const vdParaItemsNuevos = () => (valorDiaTocado ? valorDia : A.calcValorDia(sueldoBasico));
 
   /* Total = SUM(items.subtotal) */
   const total = useMemo(() => A.calcTotal(items), [items]);
@@ -116,15 +178,15 @@ function ReciboModal({ mode, initial, onClose, onSuccess, onAfterCreatePdf }) {
   const prefillItemsForTipo = (t) => {
     if (isEdit) return;
     if (items.length > 0) return; /* respetar carga manual */
-    const vd = A.calcValorDia(sueldoBasico);
+    const vd = vdParaItemsNuevos() || 0;
     if (t === 'adelanto') {
       setItems([{ concepto: 'Adelanto a cuenta de sueldo', cantidad: '1', valor_unitario: '', subtotal: 0, tipo: 'haber' }]);
     } else if (t === 'quincena') {
       const v = vd ? vd.toFixed(2) : '';
-      setItems([{ concepto: 'Días trabajados', cantidad: '15', valor_unitario: v, subtotal: vd * 15, tipo: 'haber' }]);
+      setItems([{ concepto: 'Días trabajados', cantidad: '15', valor_unitario: v, subtotal: vd * 15, tipo: 'haber', linked: true }]);
     } else if (t === 'sueldo') {
       const v = vd ? vd.toFixed(2) : '';
-      setItems([{ concepto: 'Días trabajados', cantidad: '30', valor_unitario: v, subtotal: vd * 30, tipo: 'haber' }]);
+      setItems([{ concepto: 'Días trabajados', cantidad: '30', valor_unitario: v, subtotal: vd * 30, tipo: 'haber', linked: true }]);
     }
   };
 
@@ -144,6 +206,7 @@ function ReciboModal({ mode, initial, onClose, onSuccess, onAfterCreatePdf }) {
     setItems(arr => arr.map((it, i) => {
       if (i !== idx) return it;
       const next = { ...it, [field]: value };
+      if (field === 'valor_unitario') next.linked = false; /* 0178: valor propio del item */
       const c = Number(next.cantidad);
       const v = Number(next.valor_unitario);
       next.subtotal = (Number.isFinite(c) && Number.isFinite(v)) ? c * v : 0;
@@ -152,14 +215,18 @@ function ReciboModal({ mode, initial, onClose, onSuccess, onAfterCreatePdf }) {
   };
 
   const insertarDiaComoItem = () => {
-    const vd = A.calcValorDia(sueldoBasico);
-    if (!vd) { toast.error('Cargá un sueldo básico válido primero'); return; }
+    const vd = vdParaItemsNuevos();
+    if (!vd) {
+      toast.error(valorDiaTocado ? 'Corregí el valor del día primero' : 'Cargá un sueldo básico válido primero');
+      return;
+    }
     setItems(arr => [...arr, {
       concepto: 'Días trabajados',
       cantidad: '1',
       valor_unitario: vd.toFixed(2),
       subtotal: vd,
       tipo: 'haber',
+      linked: true,
     }]);
   };
 
@@ -184,6 +251,10 @@ function ReciboModal({ mode, initial, onClose, onSuccess, onAfterCreatePdf }) {
       if (malo >= 0) e.items = `Item #${malo+1}: concepto requerido`;
     }
     if (notas.length > 500) e.notas = 'Máximo 500 caracteres';
+    if (valorDiaTocado) {
+      const r = A.parseValorDia(valorDiaInput);
+      if (!r.ok) e.valorDia = r.error;
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -216,6 +287,10 @@ function ReciboModal({ mode, initial, onClose, onSuccess, onAfterCreatePdf }) {
     try {
       let result;
       const payload = buildPayload();
+      /* 0178: la clave solo viaja si se tocó el campo. Sin ella el backend
+         no escribe la columna (alta: NULL; edición: conserva lo guardado). */
+      const mandaValorDia = valorDiaTocado;
+      if (mandaValorDia) payload.valor_dia = String(A.parseValorDia(valorDiaInput).valor);
       if (isEdit) {
         payload.id = initial.id;
         /* En edit, NO mandamos employee_id/tipo/periodo (snapshot inmutable). */
@@ -228,7 +303,13 @@ function ReciboModal({ mode, initial, onClose, onSuccess, onAfterCreatePdf }) {
       } else {
         result = await A.createRecibo(payload);
       }
-      toast.success(okMsg);
+      /* 0178: las RPC nuevas devuelven valor_dia. Si no vino, la base todavía
+         no tiene la migración y el valor se ignoró: decirlo, no taparlo. */
+      if (mandaValorDia && !(result && Object.prototype.hasOwnProperty.call(result, 'valor_dia'))) {
+        toast.error('Se guardó el recibo, pero el valor del día NO: falta aplicar la migración 0178 en la base.');
+      } else {
+        toast.success(okMsg);
+      }
 
       if (alsoGeneratePdf && typeof onAfterCreatePdf === 'function') {
         const reciboId = (result && (result.recibo_id || result.id)) || (isEdit && initial && initial.id);
@@ -392,11 +473,32 @@ function ReciboModal({ mode, initial, onClose, onSuccess, onAfterCreatePdf }) {
             {errors.sueldoBasico && <div className="field-error">{errors.sueldoBasico}</div>}
           </div>
           <div className="field-group">
-            <label className="field-label">Valor del día (calc.)</label>
-            <input className="field-input is-readonly" readOnly
-                   value={window.ReciboPDF ? window.ReciboPDF.fmtMoney(valorDia) : valorDia.toFixed(2)}
-                   title="sueldo básico / 30"/>
+            <label className="field-label">Valor del día</label>
+            {valorDiaBloqueado ? (
+              <input className="field-input is-readonly" readOnly
+                     value={window.ReciboPDF ? window.ReciboPDF.fmtMoney(valorDia || 0) : Number(valorDia || 0).toFixed(2)}
+                     title={valorDiaPropio != null ? 'Valor del día cargado en este recibo' : 'sueldo básico / 30'}/>
+            ) : (
+              <input type="number" step="0.01" min="0.01"
+                     className={`field-input ${valorDiaError ? 'has-error' : ''}`}
+                     value={valorDiaTocado ? valorDiaInput : (valorDia ? valorDia.toFixed(2) : '')}
+                     placeholder="sueldo básico / 30"
+                     title="Cambia solo en este recibo: no toca al empleado ni a otros recibos"
+                     onChange={e => onChangeValorDia(e.target.value)}/>
+            )}
+            {valorDiaError && !valorDiaBloqueado && <div className="field-error">{valorDiaError}</div>}
             <div className="field-help">
+              {colValorDia === false && !isAnulado && (
+                <div>Para editarlo falta aplicar la migración 0178 en la base. Mientras tanto es sueldo básico / 30.</div>
+              )}
+              {!valorDiaBloqueado && (
+                <div>
+                  {(valorDiaTocado || valorDiaPropio != null)
+                    ? `Cargado a mano, solo para este recibo (automático: ${window.ReciboPDF ? window.ReciboPDF.fmtMoney(valorDiaAuto) : valorDiaAuto.toFixed(2)}).`
+                    : 'Automático: sueldo básico / 30. Si lo cambiás, cambia solo en este recibo.'}
+                  {itemsLinked > 0 && ` Lo usa${itemsLinked > 1 ? 'n' : ''} ${itemsLinked} item${itemsLinked > 1 ? 's' : ''} como valor unitario: se recalcula${itemsLinked > 1 ? 'n' : ''} solo${itemsLinked > 1 ? 's' : ''}.`}
+                </div>
+              )}
               {!readOnly && !isEdit && (
                 <button type="button" className="btn-link" onClick={insertarDiaComoItem}>
                   + Insertar día como item

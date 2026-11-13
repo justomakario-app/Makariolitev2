@@ -48,9 +48,13 @@
   /* ── Construye el content[] de pdfmake para 1 recibo ────────────── */
   function buildReciboContent(recibo, cs) {
     const items = Array.isArray(recibo.items) ? recibo.items : [];
-    const valorDia = Number(recibo.sueldo_basico) > 0
-      ? Number(recibo.sueldo_basico) / 30
-      : 0;
+    /* 0178: si el recibo tiene valor del día propio (editado a mano), ese es el
+       que se imprime. NULL = recibo anterior o no editado → sueldo/30 como siempre. */
+    const valorDia = (recibo.valor_dia != null && Number(recibo.valor_dia) > 0)
+      ? Number(recibo.valor_dia)
+      : (Number(recibo.sueldo_basico) > 0
+        ? Number(recibo.sueldo_basico) / 30
+        : 0);
     const totalNegativo = Number(recibo.total) < 0;
     const anulado = recibo.estado === 'anulado';
 

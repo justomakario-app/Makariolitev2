@@ -1428,6 +1428,162 @@
     window.XLSX.writeFile(wb, `reporte-import-empleados-${fecha}.xlsx`);
   }
 
+  /* ══ RRHH 0178 — celdas de Excel con tipo explícito ══════════════════
+     Los exportes de RRHH arman la hoja celda por celda en vez de usar
+     aoa_to_sheet, para que nada quede librado a lo que adivine Excel:
+       · texto: DNI, teléfono, CP, CBU, alias. Con formato "@" Excel no les
+         saca ceros adelante ni muestra el CBU como 1,23E+21.
+       · fecha: número de serie con formato dd/mm/yyyy. Se calcula con
+         Date.UTC: la zona horaria del navegador no corre el día.
+       · número: sin formato (General) cuando el archivo se tiene que poder
+         volver a importar; con #,##0.00 en el reporte de recibos. El
+         sueldo del export de empleados va como texto (ver 'importe_ar').
+     Encabezado en la fila 1, sin la banda de marca (brandedAoaToSheet):
+     el importador lee la fila 1 como encabezado. */
+  function isoToExcelSerial(iso) {
+    const m = String(iso == null ? '' : iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return null;
+    const ms = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    return Number.isFinite(ms) ? ms / 86400000 + 25569 : null;
+  }
+  /* timestamptz → serie de Excel en hora LOCAL (la que ve quien exporta). */
+  function tsToExcelSerialLocal(ts) {
+    if (!ts) return null;
+    const d = new Date(ts);
+    if (isNaN(d.getTime())) return null;
+    return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(),
+                    d.getHours(), d.getMinutes(), d.getSeconds()) / 86400000 + 25569;
+  }
+  function _fechaLocalISO(d) {
+    const x = d || new Date();
+    return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+  }
+  function _celdaTexto(v)        { return { t: 's', v: String(v), z: '@' }; }
+  function _celdaEncabezado(v)   { return { t: 's', v: String(v) }; }
+  function _celdaFecha(serial, z) { return { t: 'n', v: serial, z: z || 'dd/mm/yyyy' }; }
+  function _anchoCelda(c) {
+    if (!c) return 0;
+    if (c.z && /yyyy/.test(c.z)) return c.z.length;
+    return String(c.v).length;
+  }
+  /* filas: array de arrays de celdas (null = celda vacía). */
+  function _hojaDesdeCeldas(XL, filas, opts) {
+    const ws = {};
+    let maxC = 0;
+    const anchos = [];
+    filas.forEach((fila, r) => {
+      fila.forEach((cel, c) => {
+        if (c > maxC) maxC = c;
+        if (cel == null) return;
+        ws[XL.utils.encode_cell({ r, c })] = cel;
+        anchos[c] = Math.max(anchos[c] || 0, _anchoCelda(cel));
+      });
+    });
+    ws['!ref'] = XL.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(filas.length - 1, 0), c: maxC } });
+    const tope = (opts && opts.anchoMax) || 40;
+    ws['!cols'] = Array.from({ length: maxC + 1 }, (_, c) => ({ wch: Math.min(tope, Math.max(8, (anchos[c] || 0) + 2)) }));
+    return ws;
+  }
+
+  /* ══ RRHH 0178 — Exportar empleados ═════════════════════════════════
+     Las 22 primeras columnas son las de la plantilla de importación
+     (downloadEmployeesTemplate), con el mismo nombre y en el mismo orden:
+     el archivo exportado se puede volver a subir por "Importar masivo".
+     Después, lo que la tabla tiene y la plantilla no. Ninguno de esos
+     encabezados es sinónimo de un campo del importador (EMPLOYEE_HEADER_
+     SYNONYMS), así que al reimportar se ignoran. tests/rrhh-export-test.js
+     controla las dos cosas.
+     No hay legajo ni CUIL en el sistema (la 0076 renombró cuil → dni): no
+     se inventan columnas para eso. */
+  const EMPLOYEE_EXPORT_COLS = [
+    ['dni', 'texto'], ['nombre', 'texto'], ['fecha_nacimiento', 'fecha'], ['email', 'texto'],
+    ['telefono', 'texto'], ['direccion', 'texto'], ['ciudad', 'texto'], ['provincia', 'texto'],
+    ['codigo_postal', 'texto'], ['fecha_ingreso', 'fecha'], ['categoria', 'texto'],
+    ['modalidad', 'texto'], ['tipo_contratacion', 'texto'], ['lugar_trabajo', 'texto'],
+    ['convenio', 'texto'], ['sueldo_bruto_base', 'importe_ar'], ['dias_vacaciones_anuales', 'numero'],
+    ['banco', 'texto'], ['cbu', 'texto'], ['alias_cbu', 'texto'], ['forma_cobro', 'texto'],
+    ['notas', 'texto'],
+    /* ── fuera de la plantilla ── */
+    ['estado_empleado', 'estado', 'activo'],
+    ['valor_hora_extra', 'numero'],
+    ['creado_por', 'perfil', 'created_by'],
+    ['fecha_alta_sistema', 'momento', 'created_at'],
+    ['ultima_modificacion', 'momento', 'updated_at'],
+    ['id_sistema', 'texto', 'id'],
+  ];
+
+  /* Puro: lista de empleados (filas de employees) → hoja. opts.perfiles =
+     { uuid: nombre } para resolver created_by; opts.XLSX para los tests. */
+  function buildEmployeesExportSheet(list, opts) {
+    const XL = (opts && opts.XLSX) || window.XLSX;
+    const perfiles = (opts && opts.perfiles) || {};
+    const filas = [EMPLOYEE_EXPORT_COLS.map(([h]) => _celdaEncabezado(h))];
+    (Array.isArray(list) ? list : []).forEach(e => {
+      filas.push(EMPLOYEE_EXPORT_COLS.map(([h, tipo, campo]) => {
+        const v = e ? e[campo || h] : null;
+        switch (tipo) {
+          case 'fecha': {
+            const s = isoToExcelSerial(v);
+            return s == null ? null : _celdaFecha(s);
+          }
+          case 'momento': {
+            const s = tsToExcelSerialLocal(v);
+            return s == null ? null : _celdaFecha(s, 'dd/mm/yyyy hh:mm');
+          }
+          case 'numero': {
+            if (v == null || v === '') return null;
+            const n = Number(v);
+            return Number.isFinite(n) ? { t: 'n', v: n } : _celdaTexto(v);
+          }
+          case 'importe_ar': {
+            /* Texto con coma decimal y sin separador de miles (450000 /
+               450000,50), como el ejemplo de la plantilla. Como número, el
+               importador (que no se toca) lee "450000.5", saca el punto y
+               carga 4500005: al volver a subir el archivo multiplicaría
+               por 10 todo sueldo con centavos. */
+            /* String(n) y no toFixed: la columna es numeric sin escala y no
+               se redondea nada que esté guardado. */
+            if (v == null || v === '') return null;
+            const n = Number(v);
+            if (!Number.isFinite(n) || /e/i.test(String(n))) return _celdaTexto(v);
+            return _celdaTexto(String(n).replace('.', ','));
+          }
+          case 'estado':
+            return v === true ? _celdaTexto('activo') : (v === false ? _celdaTexto('inactivo') : null);
+          case 'perfil':
+            return (v && perfiles[v]) ? _celdaTexto(perfiles[v]) : null;
+          default:
+            return (v == null || v === '') ? null : _celdaTexto(v);
+        }
+      }));
+    });
+    return _hojaDesdeCeldas(XL, filas, { anchoMax: 40 });
+  }
+
+  /* Descarga empleados_AAAA-MM-DD.xlsx (fecha local). Se arma en el navegador
+     y se baja directo: no se sube a ningún lado ni queda en una URL. */
+  function exportEmployeesXlsx(list) {
+    if (typeof window.XLSX === 'undefined') {
+      throw new Error('SheetJS (XLSX) no esta cargado. Recargá la página.');
+    }
+    const arr = Array.isArray(list) ? list : [];
+    if (arr.length === 0) throw new Error('No hay empleados para exportar.');
+    const perfiles = {};
+    ((window.MOCK && window.MOCK.users) || []).forEach(u => {
+      if (u && u.id && u.name) perfiles[u.id] = u.name;
+    });
+    const ws = buildEmployeesExportSheet(arr, { perfiles });
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, 'Empleados');
+    const filename = `empleados_${_fechaLocalISO(new Date())}.xlsx`;
+    window.XLSX.writeFile(wb, filename);
+    return {
+      filename,
+      filas: arr.length,
+      inactivos: arr.filter(e => e && e.activo === false).length,
+    };
+  }
+
   /* ────────────────────────────────────────────────────────────────
      S2.12 — Recibos de sueldo + Company settings
      ──────────────────────────────────────────────────────────────── */
@@ -1681,6 +1837,240 @@
       const s = Number(it && it.subtotal);
       return acc + (Number.isFinite(s) ? s : 0);
     }, 0);
+  }
+
+  /* 0178 — El valor del día de UN recibo. Si el recibo tiene uno propio
+     (recibos.valor_dia, cargado a mano en ese recibo) es ése. Si no (NULL:
+     recibo anterior a la 0178 o que nadie editó) es sueldo_basico/30, que
+     es lo que ese recibo mostró siempre. Lo usan el modal, el PDF y el
+     reporte mensual: los tres tienen que decir lo mismo. */
+  function valorDiaDeRecibo(recibo) {
+    if (recibo && recibo.valor_dia != null && recibo.valor_dia !== '') {
+      const propio = Number(recibo.valor_dia);
+      if (Number.isFinite(propio) && propio > 0) return propio;
+    }
+    return calcValorDia(recibo && recibo.sueldo_basico);
+  }
+
+  /* 0178 — Valida lo que se tipeó como valor del día. Mismas reglas y en el
+     mismo orden que el backend (rpc_admin_create/update_recibo); el backend
+     es el que manda, esto es para avisar antes de mandar. Punto decimal
+     (lo que entrega <input type="number">). */
+  function parseValorDia(input) {
+    const s = String(input == null ? '' : input).trim();
+    if (s === '') return { ok: false, error: 'Cargá el valor del día.' };
+    if (!/^-?[0-9]+(\.[0-9]+)?$/.test(s)) {
+      return { ok: false, error: 'El valor del día tiene que ser un número (ej: 1500.50).' };
+    }
+    const v = Number(s);
+    if (!(v > 0)) return { ok: false, error: 'El valor del día tiene que ser mayor a 0.' };
+    if (v >= 1e12) return { ok: false, error: 'El valor del día está fuera de rango.' };
+    const dec = (s.split('.')[1] || '').replace(/0+$/, '');
+    if (dec.length > 2) return { ok: false, error: 'El valor del día admite hasta 2 decimales.' };
+    return { ok: true, valor: v };
+  }
+
+  /* 0178 — ¿La base ya tiene recibos.valor_dia? Si el front llega antes que
+     la migración, las RPC viejas ignorarían el valor del día en silencio:
+     con esto el modal deja el campo bloqueado y avisa.
+     true = existe · false = falta la migración · null = no se pudo saber
+     (sin red, etc.: no se bloquea; el chequeo post-guardado sigue avisando). */
+  async function reciboTieneValorDia() {
+    try {
+      const { error } = await supa.from('recibos').select('valor_dia').limit(1);
+      if (!error) return true;
+      const txt = `${error.code || ''} ${error.message || ''}`;
+      return (/42703/.test(txt) || /valor_dia/.test(txt)) ? false : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /* ══ 0178 — Reporte mensual de recibos ═══════════════════════════════
+     Qué recibos entran: los EMITIDOS cuyo período liquidado empieza en el
+     mes elegido (periodo_desde >= día 1 y < día 1 del mes siguiente). No la
+     fecha de pago: una quincena del 16 al 31 de marzo pagada el 3 de abril
+     es de marzo. Los anulados no se liquidan y no entran.
+     El filtro lo hace la base (índice recibos_periodo_desde_idx); RLS de
+     recibos solo deja leer a owner/admin. Se pagina de a 1000 y se compara
+     contra el count exacto: si no cierra, error en vez de un reporte corto. */
+  function _rangoMes(year, mes) {
+    const y = Number(year), m = Number(mes);
+    if (!Number.isInteger(y) || y < 2000 || y > 2100 || !Number.isInteger(m) || m < 1 || m > 12) {
+      throw new Error('Elegí un mes y un año válidos.');
+    }
+    const ny = m === 12 ? y + 1 : y, nm = m === 12 ? 1 : m + 1;
+    return {
+      y, m,
+      desde: `${y}-${String(m).padStart(2, '0')}-01`,
+      hasta: `${ny}-${String(nm).padStart(2, '0')}-01`,
+    };
+  }
+
+  async function loadRecibosMes(year, mes) {
+    const { desde, hasta } = _rangoMes(year, mes);
+    const PAGE = 1000;
+    const out = [];
+    let total = null;
+    for (let from = 0; ; from += PAGE) {
+      const { data, error, count } = await supa.from('recibos')
+        .select('*', { count: 'exact' })
+        .eq('estado', 'emitido')
+        .gte('periodo_desde', desde)
+        .lt('periodo_desde', hasta)
+        .order('empleado_nombre', { ascending: true })
+        .order('periodo_desde', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) throw new Error(error.message || 'No se pudieron cargar los recibos del mes');
+      if (total == null && typeof count === 'number') total = count;
+      const rows = data || [];
+      out.push(...rows);
+      if (rows.length < PAGE) break;
+    }
+    if (total != null && out.length !== total) {
+      throw new Error(`Se leyeron ${out.length} recibos de ${total}. Probá de nuevo.`);
+    }
+    return { recibos: out, desde, hasta, count: total };
+  }
+
+  function _normConcepto(s) {
+    return String(s == null ? '' : s).toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/\s+/g, ' ').trim();
+  }
+  /* A centavos como lo hacen la base (numeric(14,2): mitad para afuera) y el
+     PDF. toPrecision(15) borra el ruido binario: 1.005 * 100 da
+     100.49999999999999 y Math.round solo daría 1.00 (el PDF dice 1,01). */
+  const _aCentavos = (n) => {
+    const v = Number(n);
+    if (!Number.isFinite(v)) return 0;
+    const c = Math.round(Number((Math.abs(v) * 100).toPrecision(15)));
+    return (v < 0 && c) ? -c : c;
+  };
+
+  /* Puro: recibos → hoja con 1 fila por recibo + fila TOTAL.
+     Columnas de concepto: una por cada concepto que aparece en el mes, tal
+     cual se cargó (mayúsculas/tildes/espacios no los separan). Primero los
+     haberes, después los descuentos (con "(descuento)"), cada grupo en orden
+     alfabético. Cada celda es la suma de los subtotales guardados de ese
+     concepto en ese recibo, con el signo con que se guardaron; vacía si el
+     recibo no lo tiene. Neto = recibos.total (lo que se pagó).
+     La fila TOTAL usa SUM() con el valor ya calculado al centavo. Sueldo
+     básico y valor del día no se suman: no son importes del mes. */
+  function buildRecibosMesSheet(recibos, opts) {
+    const XL = (opts && opts.XLSX) || window.XLSX;
+    const tipoLabels = (opts && opts.tipoLabels) || {};
+    const lista = Array.isArray(recibos) ? recibos : [];
+    const MONEY = '#,##0.00';
+    const keyDe = (it) => (it.tipo === 'descuento' ? 'd|' : 'h|') + (_normConcepto(it.concepto) || '(sin concepto)');
+
+    const conceptos = new Map();
+    lista.forEach(r => (Array.isArray(r.items) ? r.items : []).forEach(it => {
+      if (!it) return;
+      const k = keyDe(it);
+      if (!conceptos.has(k)) {
+        conceptos.set(k, {
+          key: k,
+          label: String(it.concepto == null ? '' : it.concepto).trim().replace(/\s+/g, ' ') || '(sin concepto)',
+          descuento: it.tipo === 'descuento',
+        });
+      }
+    }));
+    const porNombre = (a, b) => a.label.localeCompare(b.label, 'es', { sensitivity: 'base' });
+    const todos = [...conceptos.values()];
+    const colsConcepto = todos.filter(c => !c.descuento).sort(porNombre)
+      .concat(todos.filter(c => c.descuento).sort(porNombre));
+
+    /* Por recibo: centavos por concepto, totales y días. */
+    const calc = lista.map(r => {
+      const porConcepto = new Map();
+      let hab = 0, des = 0, dias = null;
+      (Array.isArray(r.items) ? r.items : []).forEach(it => {
+        if (!it) return;
+        const k = keyDe(it);
+        const c = _aCentavos(it.subtotal);
+        porConcepto.set(k, (porConcepto.get(k) || 0) + c);
+        if (it.tipo === 'descuento') des += c; else hab += c;
+        if (k === 'h|dias trabajados') {
+          const q = Number(it.cantidad);
+          if (Number.isFinite(q)) dias = (dias || 0) + q;
+        }
+      });
+      return { r, porConcepto, hab, des, dias };
+    });
+
+    const plata = (cent) => ({ t: 'n', v: cent / 100, z: MONEY });
+    /* suma: 'cent' (importes, se suman en centavos enteros) | 'num' | null */
+    const columnas = [
+      { h: 'Empleado',      cel: x => x.r.empleado_nombre ? _celdaTexto(x.r.empleado_nombre) : null },
+      { h: 'DNI',           cel: x => x.r.empleado_dni ? _celdaTexto(x.r.empleado_dni) : null },
+      { h: 'Categoría',     cel: x => x.r.empleado_categoria ? _celdaTexto(x.r.empleado_categoria) : null },
+      { h: 'Tipo',          cel: x => x.r.tipo ? _celdaTexto(tipoLabels[x.r.tipo] || x.r.tipo) : null },
+      { h: 'Período desde', cel: x => { const s = isoToExcelSerial(x.r.periodo_desde); return s == null ? null : _celdaFecha(s); } },
+      { h: 'Período hasta', cel: x => { const s = isoToExcelSerial(x.r.periodo_hasta); return s == null ? null : _celdaFecha(s); } },
+      { h: 'Fecha de pago', cel: x => { const s = isoToExcelSerial(x.r.fecha_pago); return s == null ? null : _celdaFecha(s); } },
+      { h: 'Sueldo básico', cel: x => (x.r.sueldo_basico == null ? null : plata(_aCentavos(x.r.sueldo_basico))) },
+      { h: 'Valor del día', cel: x => plata(_aCentavos(valorDiaDeRecibo(x.r))) },
+      { h: 'Días trabajados (cantidad)', suma: 'num', val: x => x.dias,
+        cel: x => (x.dias == null ? null : { t: 'n', v: Math.round(x.dias * 100) / 100 }) },
+      ...colsConcepto.map(c => ({
+        h: c.descuento ? `${c.label} (descuento)` : c.label,
+        suma: 'cent',
+        val: x => (x.porConcepto.has(c.key) ? x.porConcepto.get(c.key) : null),
+        cel: x => (x.porConcepto.has(c.key) ? plata(x.porConcepto.get(c.key)) : null),
+      })),
+      { h: 'Total haberes',    suma: 'cent', val: x => x.hab, cel: x => plata(x.hab) },
+      { h: 'Total descuentos', suma: 'cent', val: x => x.des, cel: x => plata(x.des) },
+      { h: 'Neto',             suma: 'cent', val: x => _aCentavos(x.r.total), cel: x => plata(_aCentavos(x.r.total)) },
+      { h: 'N° recibo',        cel: x => x.r.id ? _celdaTexto(String(x.r.id).split('-')[0].toUpperCase()) : null },
+    ];
+
+    const filas = [columnas.map(c => _celdaEncabezado(c.h))];
+    calc.forEach(x => filas.push(columnas.map(c => c.cel(x))));
+
+    /* Fila TOTAL */
+    const n = calc.length;
+    const totales = {};
+    const filaTotal = columnas.map((c, ci) => {
+      if (ci === 0) return _celdaEncabezado(`TOTAL (${n} recibo${n === 1 ? '' : 's'})`);
+      if (!c.suma || n === 0) return null;
+      const col = XL.utils.encode_col(ci);
+      const f = `SUM(${col}2:${col}${n + 1})`;
+      if (c.suma === 'cent') {
+        const cent = calc.reduce((a, x) => a + (c.val(x) || 0), 0);
+        totales[c.h] = cent / 100;
+        return { t: 'n', v: cent / 100, f, z: MONEY };
+      }
+      const s = Math.round(calc.reduce((a, x) => a + (c.val(x) || 0), 0) * 100) / 100;
+      totales[c.h] = s;
+      return { t: 'n', v: s, f };
+    });
+    filas.push(filaTotal);
+
+    const ws = _hojaDesdeCeldas(XL, filas, { anchoMax: 32 });
+    if (n > 0) {
+      ws['!autofilter'] = { ref: XL.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: n, c: columnas.length - 1 } }) };
+    }
+    return { ws, columnas: columnas.map(c => c.h), totales, filas: n };
+  }
+
+  /* Baja recibos_AAAA-MM.xlsx. Mes sin recibos → { vacio: true } y no baja nada. */
+  async function exportRecibosMesXlsx(year, mes) {
+    if (typeof window.XLSX === 'undefined') {
+      throw new Error('SheetJS (XLSX) no esta cargado. Recargá la página.');
+    }
+    const { y, m } = _rangoMes(year, mes);
+    const { recibos } = await loadRecibosMes(y, m);
+    if (recibos.length === 0) return { vacio: true, filas: 0 };
+    const tipoLabels = {};
+    RECIBO_TIPO_OPTIONS.forEach(o => { tipoLabels[o.value] = o.label; });
+    const { ws, columnas } = buildRecibosMesSheet(recibos, { tipoLabels });
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, `Recibos ${MES_NAMES_ES[m - 1]} ${y}`);
+    const filename = `recibos_${y}-${String(m).padStart(2, '0')}.xlsx`;
+    window.XLSX.writeFile(wb, filename);
+    return { vacio: false, filas: recibos.length, filename, columnas: columnas.length };
   }
 
   /* Validador CUIT formato XX-XXXXXXXX-X (alias del existente para
@@ -2418,6 +2808,10 @@
     validateEmployeeRow,
     downloadEmployeesTemplate,
     generateEmployeesBulkReportXlsx,
+    // 0178 exportar empleados
+    EMPLOYEE_EXPORT_COLS,
+    buildEmployeesExportSheet,
+    exportEmployeesXlsx,
     EMPLOYEE_HEADER_SYNONYMS,
     MODALIDAD_OPTIONS,
     TIPO_CONTRATACION_OPTIONS,
@@ -2451,6 +2845,13 @@
     calcValorDia,
     calcSubtotal,
     calcTotal,
+    // 0178 valor del dia por recibo + reporte mensual
+    valorDiaDeRecibo,
+    parseValorDia,
+    reciboTieneValorDia,
+    loadRecibosMes,
+    buildRecibosMesSheet,
+    exportRecibosMesXlsx,
     // S2.15 histórico + reportes
     getHistorialEmpleado,
     getReportesGlobal,

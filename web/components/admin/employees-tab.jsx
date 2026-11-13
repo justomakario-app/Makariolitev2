@@ -85,6 +85,33 @@ function EmployeesTab() {
     }
   };
 
+  /* 0178 — Exportar empleados.
+     Con algún filtro puesto (búsqueda, modalidad o categoría) baja
+     exactamente lo que se ve en la tabla. Sin filtros baja a TODOS,
+     activos e inactivos (columna estado_empleado), aunque el tilde
+     "Mostrar inactivos" esté apagado: ese tilde es de la vista, no del
+     padrón. La lectura pasa por RLS de employees (owner/admin). */
+  const [exporting, setExporting] = useState(false);
+  const hayFiltros = !!searchQuery.trim() || modalidadFilter !== 'todas' || categoriaFilter !== 'todas';
+  const onExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const lista = hayFiltros ? filtered : await A.loadEmployees({ includeInactive: true });
+      if (!lista || lista.length === 0) {
+        toast.error(hayFiltros ? 'Ningún empleado coincide con los filtros: no hay nada para exportar.' : 'No hay empleados para exportar.');
+        return;
+      }
+      const r = A.exportEmployeesXlsx(lista);
+      const inact = r.inactivos ? ` (${r.inactivos} inactivo${r.inactivos === 1 ? '' : 's'})` : '';
+      toast.success(`Excel descargado: ${r.filas} empleado${r.filas === 1 ? '' : 's'}${inact}${hayFiltros ? ', con los filtros aplicados' : ''}`);
+    } catch (err) {
+      toast.error(err.message || 'No se pudo exportar');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const labelModalidad = (v) => {
     const o = (A.MODALIDAD_OPTIONS || []).find(x => x.value === v);
     return o ? o.label : (v || '—');
@@ -128,6 +155,11 @@ function EmployeesTab() {
         </label>
         <button className="btn-ghost" onClick={() => setBulkImportOpen(true)}>
           <Icon n="upload" s={13}/> Importar masivo
+        </button>
+        <button className="btn-ghost" onClick={onExport}
+                disabled={exporting || loading || !!error}
+                title={hayFiltros ? 'Baja los empleados que se ven con los filtros aplicados' : 'Baja todos los empleados, activos e inactivos'}>
+          {exporting ? 'Generando…' : (<><Icon n="download" s={13}/> Exportar empleados</>)}
         </button>
         <button className="btn-primary" onClick={() => setModalState({ mode: 'create' })}>
           <Icon n="plus" s={13}/> Nuevo empleado
